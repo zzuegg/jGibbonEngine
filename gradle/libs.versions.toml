@@ -1,63 +1,13 @@
 [versions]
-java = "21"
-
-# LWJGL
-lwjgl = "3.3.4"
-
-# Math
-joml = "1.10.8"
-
-# Logging
-slf4j = "2.0.16"
-logback = "1.5.12"
+java = "26"
 
 # Testing
 junit = "5.11.3"
 
 [libraries]
-# LWJGL BOM
-lwjgl-bom = { module = "org.lwjgl:lwjgl-bom", version.ref = "lwjgl" }
-
-# LWJGL core
-lwjgl = { module = "org.lwjgl:lwjgl" }
-lwjgl-natives = { module = "org.lwjgl:lwjgl", classifier = "natives-linux" }
-
-# LWJGL - GLFW (windowing & input)
-lwjgl-glfw = { module = "org.lwjgl:lwjgl-glfw" }
-lwjgl-glfw-natives = { module = "org.lwjgl:lwjgl-glfw", classifier = "natives-linux" }
-
-# LWJGL - OpenGL
-lwjgl-opengl = { module = "org.lwjgl:lwjgl-opengl" }
-lwjgl-opengl-natives = { module = "org.lwjgl:lwjgl-opengl", classifier = "natives-linux" }
-
-# LWJGL - STB (image loading, fonts)
-lwjgl-stb = { module = "org.lwjgl:lwjgl-stb" }
-lwjgl-stb-natives = { module = "org.lwjgl:lwjgl-stb", classifier = "natives-linux" }
-
-# LWJGL - Assimp (model loading)
-lwjgl-assimp = { module = "org.lwjgl:lwjgl-assimp" }
-lwjgl-assimp-natives = { module = "org.lwjgl:lwjgl-assimp", classifier = "natives-linux" }
-
-# LWJGL - OpenAL (audio)
-lwjgl-openal = { module = "org.lwjgl:lwjgl-openal" }
-lwjgl-openal-natives = { module = "org.lwjgl:lwjgl-openal", classifier = "natives-linux" }
-
-# Math
-joml = { module = "org.joml:joml", version.ref = "joml" }
-
-# Logging
-slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
-logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
-
-# Testing
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
-junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api" }
-junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine" }
 
 [bundles]
-lwjgl = ["lwjgl", "lwjgl-glfw", "lwjgl-opengl", "lwjgl-stb"]
-lwjgl-natives = ["lwjgl-natives", "lwjgl-glfw-natives", "lwjgl-opengl-natives", "lwjgl-stb-natives"]
-testing = ["junit-jupiter", "junit-jupiter-api", "junit-jupiter-engine"]
 
 [plugins]
