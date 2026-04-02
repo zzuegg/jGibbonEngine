@@ -2,6 +2,7 @@ package dev.engine.core.scene;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.core.material.Material;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.mesh.MeshData;
 import dev.engine.core.property.PropertyKey;
@@ -43,8 +44,10 @@ public abstract class AbstractScene {
                 transactions.meshChanged(entity.handle(), m);
             case Material m ->
                 transactions.materialChanged(entity.handle(), m);
+            case MaterialData md ->
+                transactions.materialDataChanged(entity.handle(), md);
             default -> {
-                // Custom components — no built-in transaction, but could be extended
+                // Custom components — no built-in transaction
             }
         }
     }

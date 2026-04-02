@@ -36,25 +36,28 @@ public class Entity {
 
     // --- Component management ---
 
-    /** Adds or replaces a component. Emits a transaction. */
+    /**
+     * Adds or replaces a component. Uses {@link Component#slotType()}
+     * as the key — families like MaterialData share one slot.
+     */
     public <T extends Component> Entity add(T component) {
-        components.put(component.getClass(), component);
+        components.put(component.slotType(), component);
         scene.componentChanged(this, component);
         return this;
     }
 
-    /** Gets a component by type, or null. */
+    /** Gets a component by slot type, or null. */
     @SuppressWarnings("unchecked")
     public <T extends Component> T get(Class<T> type) {
         return (T) components.get(type);
     }
 
-    /** Checks if entity has a component type. */
+    /** Checks if entity has a component in the given slot. */
     public boolean has(Class<? extends Component> type) {
         return components.containsKey(type);
     }
 
-    /** Removes a component. */
+    /** Removes a component by slot type. */
     public <T extends Component> Entity remove(Class<T> type) {
         components.remove(type);
         return this;

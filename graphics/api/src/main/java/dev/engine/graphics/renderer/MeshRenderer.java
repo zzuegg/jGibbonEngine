@@ -2,6 +2,7 @@ package dev.engine.graphics.renderer;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.core.material.Material;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.mesh.MeshData;
 import dev.engine.core.property.MutablePropertyMap;
@@ -30,6 +31,7 @@ public class MeshRenderer {
     private final Map<Handle<?>, MutablePropertyMap> materials = new HashMap<>();
     private final Map<Handle<?>, MeshData> meshDataAssignments = new HashMap<>();
     private final Map<Handle<?>, Material> materialDataAssignments = new HashMap<>();
+    private final Map<Handle<?>, MaterialData> typedMaterialData = new HashMap<>();
     private final Map<Handle<?>, Handle<MeshTag>> meshAssignments = new HashMap<>();
     private final Map<Handle<?>, Handle<MaterialTag>> materialAssignments = new HashMap<>();
 
@@ -72,6 +74,10 @@ public class MeshRenderer {
             }
             case Transaction.MaterialChanged changed ->
                     materialDataAssignments.put(changed.entity(), changed.material());
+            case Transaction.MaterialDataChanged changed -> {
+                typedMaterialData.put(changed.entity(), changed.materialData());
+                renderables.remove(changed.entity()); // force re-resolve with new material
+            }
             case Transaction.MeshAssigned assigned ->
                     meshAssignments.put(assigned.entity(), assigned.mesh());
             case Transaction.MaterialAssigned assigned ->
@@ -105,6 +111,10 @@ public class MeshRenderer {
 
     public MutablePropertyMap getMaterial(Handle<?> entity) {
         return materials.get(entity);
+    }
+
+    public MaterialData getTypedMaterialData(Handle<?> entity) {
+        return typedMaterialData.get(entity);
     }
 
     public MeshData getMeshData(Handle<?> entity) {
