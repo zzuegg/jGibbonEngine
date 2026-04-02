@@ -2,6 +2,7 @@ package dev.engine.examples;
 
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
+import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.common.material.Material;
 import dev.engine.graphics.common.material.MaterialType;
@@ -35,7 +36,7 @@ public class SlangExample {
                 HighLevelSceneExample.cubeIndices(), format);
 
         // Create scene entities with unlit material (compiled from Slang)
-        var scene = renderer.scene();
+        var scene = (HierarchicalScene) renderer.scene();
         var root = scene.createEntity();
         var cube1 = scene.createEntity(); scene.setParent(cube1, root);
         var cube2 = scene.createEntity(); scene.setParent(cube2, root);

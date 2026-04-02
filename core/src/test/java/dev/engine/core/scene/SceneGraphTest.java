@@ -5,6 +5,7 @@ import dev.engine.core.math.Vec3;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.core.transaction.Transaction;
 import org.junit.jupiter.api.BeforeEach;
+import static dev.engine.core.scene.SceneAccess.drainTransactions;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -29,16 +30,16 @@ class SceneGraphTest {
 
         @Test void createEntityEmitsAddedTransaction() {
             var entity = scene.createEntity();
-            var txns = scene.drainTransactions();
+            var txns = drainTransactions(scene);
             assertEquals(1, txns.size());
             assertInstanceOf(Transaction.EntityAdded.class, txns.getFirst());
         }
 
         @Test void destroyEntityEmitsRemovedTransaction() {
             var entity = scene.createEntity();
-            scene.drainTransactions(); // clear
+            drainTransactions(scene); // clear
             scene.destroyEntity(entity);
-            var txns = scene.drainTransactions();
+            var txns = drainTransactions(scene);
             assertEquals(1, txns.size());
             assertInstanceOf(Transaction.EntityRemoved.class, txns.getFirst());
         }
@@ -77,9 +78,9 @@ class SceneGraphTest {
 
         @Test void settingTransformEmitsTransaction() {
             var entity = scene.createEntity();
-            scene.drainTransactions();
+            drainTransactions(scene);
             scene.setLocalTransform(entity, Mat4.translation(1f, 0f, 0f));
-            var txns = scene.drainTransactions();
+            var txns = drainTransactions(scene);
             assertTrue(txns.stream().anyMatch(t -> t instanceof Transaction.TransformChanged));
         }
 
@@ -116,10 +117,10 @@ class SceneGraphTest {
             var parent = scene.createEntity();
             var child = scene.createEntity();
             scene.setParent(child, parent);
-            scene.drainTransactions();
+            drainTransactions(scene);
 
             scene.destroyEntity(parent);
-            var txns = scene.drainTransactions();
+            var txns = drainTransactions(scene);
             // Should have removed both parent and child
             long removals = txns.stream()
                     .filter(t -> t instanceof Transaction.EntityRemoved)
@@ -134,9 +135,9 @@ class SceneGraphTest {
 
         @Test void setMaterialPropertyEmitsTransaction() {
             var entity = scene.createEntity();
-            scene.drainTransactions();
+            drainTransactions(scene);
             scene.setMaterialProperty(entity, ROUGHNESS, 0.5f);
-            var txns = scene.drainTransactions();
+            var txns = drainTransactions(scene);
             assertEquals(1, txns.size());
             assertInstanceOf(Transaction.MaterialPropertyChanged.class, txns.getFirst());
         }

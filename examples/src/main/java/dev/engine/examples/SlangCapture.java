@@ -2,6 +2,7 @@ package dev.engine.examples;
 
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
+import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.common.material.Material;
 import dev.engine.graphics.common.material.MaterialType;
@@ -25,7 +26,7 @@ public class SlangCapture {
                 HighLevelSceneExample.cubeVertices(0.5f),
                 HighLevelSceneExample.cubeIndices(), format);
 
-        var scene = renderer.scene();
+        var scene = (HierarchicalScene) renderer.scene();
         var root = scene.createEntity();
         var c1 = scene.createEntity(); scene.setParent(c1, root);
         var c2 = scene.createEntity(); scene.setParent(c2, root);

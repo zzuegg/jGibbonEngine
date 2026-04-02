@@ -4,6 +4,7 @@ import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.Scene;
+import dev.engine.core.scene.SceneAccess;
 import dev.engine.core.scene.camera.Camera;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
@@ -96,7 +97,7 @@ public class SceneExample {
         scene.setParent(cube3, root);
 
         // Process initial transactions
-        meshRenderer.processTransactions(scene.drainTransactions());
+        meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
 
         // Assign renderables
         meshRenderer.setRenderable(cube1, new Renderable(cubeVbo, cubeIbo, vertexInput, pipeline, 8, 36));
@@ -118,7 +119,7 @@ public class SceneExample {
             scene.setLocalTransform(cube3, Mat4.translation(2f, 0f, 0f).mul(Mat4.rotationY(time * 2f)));
 
             // Push transactions to renderer
-            meshRenderer.processTransactions(scene.drainTransactions());
+            meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
 
             // Camera
             camera.setPerspective((float) Math.toRadians(60), aspect, 0.1f, 100f);

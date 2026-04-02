@@ -2,6 +2,7 @@ package dev.engine.examples;
 
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
+import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
@@ -61,7 +62,7 @@ public class HighLevelSceneExample {
         var cubeMesh = renderer.createMesh(vertices, indices, format);
 
         // Create entities via scene — no manual GPU resource management
-        var scene = renderer.scene();
+        var scene = (HierarchicalScene) renderer.scene();
         var root = scene.createEntity();
         var cube1 = scene.createEntity();
         var cube2 = scene.createEntity();

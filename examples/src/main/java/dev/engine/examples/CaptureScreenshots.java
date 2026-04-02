@@ -4,6 +4,7 @@ import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.Scene;
+import dev.engine.core.scene.SceneAccess;
 import dev.engine.core.scene.camera.Camera;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
@@ -152,7 +153,7 @@ public class CaptureScreenshots {
         var c1 = scene.createEntity(); scene.setParent(c1, root);
         var c2 = scene.createEntity(); scene.setParent(c2, root);
         var c3 = scene.createEntity(); scene.setParent(c3, root);
-        meshRenderer.processTransactions(scene.drainTransactions());
+        meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
 
         // Reuse the same cube mesh for all 3 entities
         meshRenderer.setRenderable(c1, new Renderable(cubeVbo, cubeIbo, vertexInput, cubePipeline, 24, 36));
@@ -164,7 +165,7 @@ public class CaptureScreenshots {
         scene.setLocalTransform(c1, Mat4.translation(-2f, 0f, 0f).mul(Mat4.rotationX(time)));
         scene.setLocalTransform(c2, Mat4.translation(0f, (float) Math.sin(time) * 1.5f, 0f).mul(Mat4.rotationZ(time * 1.5f)));
         scene.setLocalTransform(c3, Mat4.translation(2f, 0f, 0f).mul(Mat4.rotationY(time * 2f)));
-        meshRenderer.processTransactions(scene.drainTransactions());
+        meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
 
         camera.setPerspective((float) Math.toRadians(60), 800f / 600f, 0.1f, 100f);
         camera.lookAt(new Vec3(0f, 3f, 7f), Vec3.ZERO, Vec3.UNIT_Y);

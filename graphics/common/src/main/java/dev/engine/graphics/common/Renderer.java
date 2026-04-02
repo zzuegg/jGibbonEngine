@@ -3,7 +3,9 @@ package dev.engine.graphics.common;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
+import dev.engine.core.scene.AbstractScene;
 import dev.engine.core.scene.Scene;
+import dev.engine.core.scene.SceneAccess;
 import dev.engine.core.scene.EntityTag;
 import dev.engine.core.scene.camera.Camera;
 import dev.engine.graphics.*;
@@ -39,7 +41,7 @@ import java.util.Map;
 public class Renderer implements AutoCloseable {
 
     private final RenderDevice device;
-    private final Scene scene;
+    private final AbstractScene scene;
     private final MeshRenderer meshRenderer;
     private final List<Camera> cameras = new ArrayList<>();
     private Camera activeCamera;
@@ -64,12 +66,16 @@ public class Renderer implements AutoCloseable {
     private int viewportHeight = 600;
 
     public Renderer(RenderDevice device) {
-        this(device, SlangCompiler.find());
+        this(device, new Scene(), SlangCompiler.find());
     }
 
-    public Renderer(RenderDevice device, SlangCompiler slangCompiler) {
+    public Renderer(RenderDevice device, AbstractScene scene) {
+        this(device, scene, SlangCompiler.find());
+    }
+
+    public Renderer(RenderDevice device, AbstractScene scene, SlangCompiler slangCompiler) {
         this.device = device;
-        this.scene = new Scene();
+        this.scene = scene;
         this.meshRenderer = new MeshRenderer();
         this.shaderManager = new ShaderManager(slangCompiler, device);
         this.mvpUbo = device.createBuffer(
@@ -95,7 +101,7 @@ public class Renderer implements AutoCloseable {
 
     // --- Scene access ---
 
-    public Scene scene() { return scene; }
+    public AbstractScene scene() { return scene; }
 
     // --- Camera management ---
 
@@ -203,7 +209,7 @@ public class Renderer implements AutoCloseable {
 
     public void renderFrame() {
         // Process scene transactions
-        meshRenderer.processTransactions(scene.drainTransactions());
+        meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
 
         // Sync entity meshes → renderables, resolve pipeline from material
         for (var entry : entityMeshes.entrySet()) {

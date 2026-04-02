@@ -115,7 +115,7 @@ class SceneRenderVerificationTest {
         // Create entity and assign renderable
         var entity = scene.createEntity();
         scene.setLocalTransform(entity, Mat4.IDENTITY); // centered
-        meshRenderer.processTransactions(scene.drainTransactions());
+        meshRenderer.processTransactions(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
         meshRenderer.setRenderable(entity, new Renderable(vbo, ibo, vertexInput, pipeline, 4, 6));
 
         // Camera looking straight at the quad
