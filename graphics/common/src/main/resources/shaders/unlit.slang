@@ -17,7 +17,7 @@ cbuffer Matrices : register(b0) {
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput input) {
     VertexOutput output;
-    output.position = mul(mvp, float4(input.position, 1.0));
+    output.position = mul(float4(input.position, 1.0), mvp);
     output.color = input.color;
     return output;
 }

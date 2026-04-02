@@ -33,8 +33,8 @@ cbuffer LightData : register(b2) {
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput input) {
     VertexOutput output;
-    output.position = mul(mvp, float4(input.position, 1.0));
-    output.worldPos = mul(model, float4(input.position, 1.0)).xyz;
+    output.position = mul(float4(input.position, 1.0), mvp);
+    output.worldPos = mul(float4(input.position, 1.0), model).xyz;
     output.color = input.color;
     return output;
 }
