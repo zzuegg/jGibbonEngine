@@ -102,8 +102,13 @@ class GlRenderContext implements RenderContext {
 
     @Override
     public void setCullFace(boolean enabled) {
-        if (enabled) GL45.glEnable(GL45.GL_CULL_FACE);
-        else GL45.glDisable(GL45.GL_CULL_FACE);
+        if (enabled) {
+            GL45.glEnable(GL45.GL_CULL_FACE);
+            GL45.glCullFace(GL45.GL_BACK);
+            GL45.glFrontFace(GL45.GL_CW);
+        } else {
+            GL45.glDisable(GL45.GL_CULL_FACE);
+        }
     }
 
     @Override
