@@ -104,8 +104,18 @@ public class NativeLibraryLoader {
             var path = dir.resolve(exe + Platform.current().os().executableExtension());
             if (!Files.isExecutable(path)) return false;
         }
+        // For libraries, check if any file starts with the library name
+        // (handles versioned files like libslang-compiler.so.0.2026.5.2)
         for (var lib : spec.libraries()) {
-            if (!Files.exists(dir.resolve(lib))) return false;
+            try (var files = Files.list(dir)) {
+                boolean found = files.anyMatch(f -> {
+                    var name = f.getFileName().toString();
+                    return name.equals(lib) || name.startsWith(lib + ".");
+                });
+                if (!found) return false;
+            } catch (IOException e) {
+                return false;
+            }
         }
         return true;
     }
@@ -136,7 +146,7 @@ public class NativeLibraryLoader {
         Files.createDirectories(targetDir);
         log.info("Downloading native library from {}...", url);
 
-        var client = HttpClient.newHttpClient();
+        var client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.ALWAYS).build();
         var request = HttpRequest.newBuilder().uri(URI.create(url)).build();
         var response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
@@ -144,18 +154,56 @@ public class NativeLibraryLoader {
             throw new IOException("Download failed with HTTP " + response.statusCode());
         }
 
-        if (url.endsWith(".tar.gz") || url.endsWith(".tgz")) {
-            extractTarGz(response.body(), targetDir);
-        } else if (url.endsWith(".zip")) {
-            extractZip(response.body(), targetDir);
-        } else {
-            throw new IOException("Unsupported archive format: " + url);
+        // Extract to a temp staging dir first
+        var staging = Files.createTempDirectory("native_staging_");
+        try {
+            if (url.endsWith(".tar.gz") || url.endsWith(".tgz")) {
+                extractTarGz(response.body(), staging);
+            } else if (url.endsWith(".zip")) {
+                extractZip(response.body(), staging);
+            } else {
+                throw new IOException("Unsupported archive format: " + url);
+            }
+
+            // Flatten: find bin/ and lib/ dirs and copy contents to targetDir
+            flattenToTarget(staging, targetDir);
+        } finally {
+            deleteRecursive(staging);
         }
 
-        // Make executables executable
+        // Make all files in target executable
         try (var stream = Files.walk(targetDir)) {
             stream.filter(Files::isRegularFile).forEach(this::tryMakeExecutable);
         }
+    }
+
+    private void flattenToTarget(Path staging, Path targetDir) throws IOException {
+        // Find all files recursively and copy executables/libraries to target
+        try (var stream = Files.walk(staging)) {
+            stream.filter(Files::isRegularFile).forEach(file -> {
+                try {
+                    var name = file.getFileName().toString();
+                    // Copy executables and shared libraries
+                    if (name.endsWith(".so") || name.contains(".so.") ||
+                            name.endsWith(".dll") || name.endsWith(".dylib") ||
+                            name.endsWith(".slang-module") ||
+                            !name.contains(".") || // executables without extension
+                            name.endsWith(".exe")) {
+                        Files.copy(file, targetDir.resolve(name), StandardCopyOption.REPLACE_EXISTING);
+                    }
+                } catch (IOException e) {
+                    log.warn("Failed to copy {}: {}", file, e.getMessage());
+                }
+            });
+        }
+    }
+
+    private void deleteRecursive(Path dir) {
+        try (var stream = Files.walk(dir)) {
+            stream.sorted(java.util.Comparator.reverseOrder()).forEach(p -> {
+                try { Files.delete(p); } catch (IOException ignored) {}
+            });
+        } catch (IOException ignored) {}
     }
 
     private void extractTarGz(InputStream is, Path targetDir) throws IOException {

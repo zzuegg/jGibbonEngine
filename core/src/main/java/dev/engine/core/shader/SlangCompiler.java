@@ -174,12 +174,14 @@ public class SlangCompiler {
     private record ProcessResult(int exitCode, String stdout, String stderr) {}
 
     private ProcessResult runSlangc(List<String> cmd) throws IOException, InterruptedException {
-        // Set LD_LIBRARY_PATH to include slangc's lib directory
-        var libDir = slangcPath.getParent().getParent().resolve("lib");
+        // Set LD_LIBRARY_PATH to include slangc's directory and parent lib/
+        var slangDir = slangcPath.getParent();
+        var libDir = slangDir.getParent().resolve("lib");
         var pb = new ProcessBuilder(cmd);
         var env = pb.environment();
         var existingLdPath = env.getOrDefault("LD_LIBRARY_PATH", "");
-        env.put("LD_LIBRARY_PATH", libDir + (existingLdPath.isEmpty() ? "" : ":" + existingLdPath));
+        var newPath = slangDir + ":" + libDir;
+        env.put("LD_LIBRARY_PATH", newPath + (existingLdPath.isEmpty() ? "" : ":" + existingLdPath));
 
         var proc = pb.start();
         var stdout = new String(proc.getInputStream().readAllBytes());
