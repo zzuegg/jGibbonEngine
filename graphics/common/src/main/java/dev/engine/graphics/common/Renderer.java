@@ -173,7 +173,7 @@ public class Renderer implements AutoCloseable {
             for (var cmd : meshRenderer.collectBatch()) {
                 var mvp = vp.mul(cmd.transform());
                 try (var w = device.writeBuffer(mvpUbo)) {
-                    mat4Layout.write(w.segment(), 0, mvp.transpose());
+                    mat4Layout.write(w.segment(), 0, mvp);
                 }
                 var draw = new CommandRecorder();
                 draw.bindUniformBuffer(0, mvpUbo);

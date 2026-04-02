@@ -29,7 +29,7 @@ public class CaptureScreenshots {
             #version 450 core
             layout(location = 0) in vec3 position;
             layout(location = 1) in vec3 color;
-            layout(std140, binding = 0) uniform Matrices { mat4 mvp; };
+            layout(row_major, std140, binding = 0) uniform Matrices { mat4 mvp; };
             out vec3 vColor;
             void main() {
                 gl_Position = mvp * vec4(position, 1.0);
@@ -126,7 +126,7 @@ public class CaptureScreenshots {
         var view = Mat4.lookAt(new Vec3(0f, 0f, 3f), Vec3.ZERO, Vec3.UNIT_Y);
         var proj = Mat4.perspective((float) Math.toRadians(45), 800f / 600f, 0.1f, 100f);
         var mvp = proj.mul(view).mul(model);
-        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, mvp.transpose()); }
+        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, mvp); }
 
         device.beginFrame();
         rec = new CommandRecorder();
@@ -180,7 +180,7 @@ public class CaptureScreenshots {
         device.submit(setup2.finish());
         for (var cmd : meshRenderer.collectBatch()) {
             var m = vp.mul(cmd.transform());
-            try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, m.transpose()); }
+            try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, m); }
             var draw = new CommandRecorder();
             draw.bindUniformBuffer(0, ubo);
             draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());

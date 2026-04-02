@@ -37,7 +37,7 @@ public class SceneExample {
             #version 450 core
             layout(location = 0) in vec3 position;
             layout(location = 1) in vec3 color;
-            layout(std140, binding = 0) uniform Matrices { mat4 mvp; };
+            layout(row_major, std140, binding = 0) uniform Matrices { mat4 mvp; };
             out vec3 vColor;
             void main() {
                 gl_Position = mvp * vec4(position, 1.0);
@@ -141,7 +141,7 @@ public class SceneExample {
             for (var cmd : meshRenderer.collectBatch()) {
                 var mvp = vp.mul(cmd.transform());
                 try (var writer = device.writeBuffer(ubo)) {
-                    matLayout.write(writer.segment(), 0, mvp.transpose());
+                    matLayout.write(writer.segment(), 0, mvp);
                 }
                 var draw = new CommandRecorder();
                 draw.bindUniformBuffer(0, ubo);

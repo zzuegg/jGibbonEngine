@@ -440,7 +440,7 @@ public class GlRenderDevice implements RenderDevice {
                 if (cmd.enabled()) {
                     GL45.glEnable(GL45.GL_CULL_FACE);
                     GL45.glCullFace(GL45.GL_BACK);
-                    GL45.glFrontFace(GL45.GL_CW);
+                    GL45.glFrontFace(GL45.GL_CCW);
                 } else {
                     GL45.glDisable(GL45.GL_CULL_FACE);
                 }

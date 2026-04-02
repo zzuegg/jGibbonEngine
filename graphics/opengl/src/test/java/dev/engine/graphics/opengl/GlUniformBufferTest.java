@@ -28,7 +28,7 @@ class GlUniformBufferTest {
     static final String VS = """
             #version 450 core
             layout(location = 0) in vec3 position;
-            layout(std140, binding = 0) uniform Matrices {
+            layout(row_major, std140, binding = 0) uniform Matrices {
                 mat4 mvp;
             };
             void main() {

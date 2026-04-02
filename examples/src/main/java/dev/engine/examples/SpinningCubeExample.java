@@ -25,7 +25,7 @@ public class SpinningCubeExample {
             #version 450 core
             layout(location = 0) in vec3 position;
             layout(location = 1) in vec3 color;
-            layout(std140, binding = 0) uniform Matrices { mat4 mvp; };
+            layout(row_major, std140, binding = 0) uniform Matrices { mat4 mvp; };
             out vec3 vColor;
             void main() {
                 gl_Position = mvp * vec4(position, 1.0);
@@ -141,7 +141,7 @@ public class SpinningCubeExample {
 
             // Upload MVP (transpose for OpenGL column-major layout)
             try (var writer = device.writeBuffer(ubo)) {
-                matLayout.write(writer.segment(), 0, mvp.transpose());
+                matLayout.write(writer.segment(), 0, mvp);
             }
 
             device.beginFrame();
