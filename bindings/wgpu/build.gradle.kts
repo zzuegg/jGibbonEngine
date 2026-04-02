@@ -1,4 +1,3 @@
 dependencies {
     api(project(":graphics:api"))
-    implementation(project(":bindings:wgpu"))
 }
