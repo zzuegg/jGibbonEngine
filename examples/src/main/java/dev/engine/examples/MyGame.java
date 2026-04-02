@@ -1,9 +1,8 @@
 package dev.engine.examples;
 
-import dev.engine.core.math.Mat4;
+import dev.engine.core.math.Quat;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.Entity;
-import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
@@ -18,21 +17,23 @@ public class MyGame extends BaseApplication {
 
     @Override
     protected void init() {
-        var scene = scene();
         var cube = PrimitiveMeshes.cube();
 
-        root = scene.createEntity();
-        cube1 = scene.createEntity();
+        root = scene().createEntity();
+
+        cube1 = scene().createEntity();
         cube1.setParent(root);
         cube1.add(cube);
+        cube1.setPosition(-2, 0, 0);
 
-        cube2 = scene.createEntity();
+        cube2 = scene().createEntity();
         cube2.setParent(root);
         cube2.add(cube);
 
-        cube3 = scene.createEntity();
+        cube3 = scene().createEntity();
         cube3.setParent(root);
         cube3.add(cube);
+        cube3.setPosition(2, 0, 0);
 
         camera().lookAt(new Vec3(0, 3, 7), Vec3.ZERO, Vec3.UNIT_Y);
     }
@@ -43,10 +44,16 @@ public class MyGame extends BaseApplication {
         float aspect = (float) window().width() / Math.max(window().height(), 1);
         camera().setPerspective((float) Math.toRadians(60), aspect, 0.1f, 100f);
 
-        scene().setLocalTransform(root, Mat4.rotationY(t * 0.3f));
-        scene().setLocalTransform(cube1, Mat4.translation(-2, 0, 0).mul(Mat4.rotationX(t)));
-        scene().setLocalTransform(cube2, Mat4.translation(0, (float) Math.sin(t) * 1.5f, 0).mul(Mat4.rotationZ(t * 1.5f)));
-        scene().setLocalTransform(cube3, Mat4.translation(2, 0, 0).mul(Mat4.rotationY(t * 2)));
+        root.rotateY(deltaTime * 0.3f);
+
+        cube1.setPosition(-2, 0, 0);
+        cube1.rotateX(deltaTime);
+
+        cube2.setPosition(0, (float) Math.sin(t) * 1.5f, 0);
+        cube2.rotateZ(deltaTime * 1.5f);
+
+        cube3.setPosition(2, 0, 0);
+        cube3.rotateY(deltaTime * 2);
     }
 
     public static void main(String[] args) {
