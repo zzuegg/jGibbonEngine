@@ -3,6 +3,9 @@ package dev.engine.core.material;
 import dev.engine.core.asset.TextureData;
 import dev.engine.core.math.Vec3;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * PBR (Physically Based Rendering) material.
  * All fields optional — nulls use defaults (white albedo, 0.5 roughness, 0 metallic).
@@ -50,4 +53,23 @@ public record PbrMaterial(
 
     public boolean hasAlbedoMap() { return albedoMap != null; }
     public boolean hasNormalMap() { return normalMap != null; }
+
+    public record ScalarData(Vec3 albedoColor, float roughness, float metallic, Vec3 emissive, float opacity, float normalStrength) {}
+
+    @Override
+    public Record scalarData() {
+        return new ScalarData(albedoColor, roughness, metallic, emissive, opacity, normalStrength);
+    }
+
+    @Override
+    public Map<String, TextureData> textures() {
+        var map = new HashMap<String, TextureData>();
+        if (albedoMap != null) map.put("albedoMap", albedoMap);
+        if (normalMap != null) map.put("normalMap", normalMap);
+        if (roughnessMap != null) map.put("roughnessMap", roughnessMap);
+        if (metallicMap != null) map.put("metallicMap", metallicMap);
+        if (emissiveMap != null) map.put("emissiveMap", emissiveMap);
+        if (aoMap != null) map.put("aoMap", aoMap);
+        return map;
+    }
 }

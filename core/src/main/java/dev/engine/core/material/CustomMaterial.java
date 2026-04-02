@@ -7,4 +7,7 @@ package dev.engine.core.material;
 public record CustomMaterial(
         String shaderPath,
         Record data
-) implements MaterialData {}
+) implements MaterialData {
+
+    @Override public Record scalarData() { return data; }
+}

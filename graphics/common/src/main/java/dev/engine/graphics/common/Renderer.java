@@ -73,6 +73,9 @@ public class Renderer implements AutoCloseable {
     // Texture auto-upload cache: TextureData identity hash → GPU texture handle
     private final Map<Integer, Handle<TextureResource>> textureCache = new HashMap<>();
 
+    // Material type → shader mapping (PbrMaterial.class → "PBR", etc.)
+    private final Map<Class<? extends dev.engine.core.material.MaterialData>, String> materialShaderMap = new HashMap<>();
+
     // Material data UBO (binding 1) — lazily created per material key
     private final Map<String, Handle<BufferResource>> materialUbos = new HashMap<>();
 
@@ -96,6 +99,10 @@ public class Renderer implements AutoCloseable {
         this.mvpUbo = device.createBuffer(
                 new BufferDescriptor(mat4Layout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
 
+        // Register built-in material type → shader mappings
+        registerMaterialShader(dev.engine.core.material.PbrMaterial.class, "PBR");
+        registerMaterialShader(dev.engine.core.material.UnlitMaterial.class, "UNLIT");
+
         // Auto-compile default unlit pipeline if Slang is available
         if (slangCompiler.isAvailable()) {
             try {
@@ -105,6 +112,15 @@ public class Renderer implements AutoCloseable {
                         .warn("Failed to compile default shader: {}", e.getMessage());
             }
         }
+    }
+
+    /**
+     * Registers a material type → shader name mapping.
+     * The shader name maps to a .slang file via ShaderManager.
+     * Built-in: PbrMaterial → "PBR", UnlitMaterial → "UNLIT".
+     */
+    public void registerMaterialShader(Class<? extends dev.engine.core.material.MaterialData> type, String shaderName) {
+        materialShaderMap.put(type, shaderName);
     }
 
     /**
@@ -263,23 +279,37 @@ public class Renderer implements AutoCloseable {
 
             if (resolvedMesh == null) continue; // no mesh assigned yet
 
-            // Resolve pipeline from material — prefer transaction-driven Material first
+            // Resolve pipeline from material
             Handle<PipelineResource> pipeline = defaultPipeline;
-            Material material = meshRenderer.getMaterialData(entity);
-            if (material == null) {
-                // Fall back to handle-based registry lookup
-                var matHandle = meshRenderer.getMaterialAssignment(entity);
-                if (matHandle != null) material = materialRegistry.get(matHandle.index());
-            }
-            if (material != null) {
-                try {
-                    if (material.shaderSource() != null) {
-                        pipeline = shaderManager.compileSlangFile(material.shaderSource());
-                    } else {
-                        pipeline = shaderManager.getPipeline(material.type());
-                    }
-                } catch (Exception e) {
-                    // Fall back to default
+
+            // Check typed MaterialData first (PbrMaterial, UnlitMaterial, etc.)
+            var typedMat = meshRenderer.getTypedMaterialData(entity);
+            if (typedMat != null) {
+                var shaderName = materialShaderMap.get(typedMat.getClass());
+                if (shaderName != null) {
+                    try {
+                        pipeline = shaderManager.getPipeline(MaterialType.of(shaderName));
+                    } catch (Exception e) { /* fall back to default */ }
+                } else if (typedMat instanceof dev.engine.core.material.CustomMaterial cm) {
+                    try {
+                        pipeline = shaderManager.compileSlangFile(cm.shaderPath());
+                    } catch (Exception e) { /* fall back to default */ }
+                }
+            } else {
+                // Legacy Material path
+                Material material = meshRenderer.getMaterialData(entity);
+                if (material == null) {
+                    var matHandle = meshRenderer.getMaterialAssignment(entity);
+                    if (matHandle != null) material = materialRegistry.get(matHandle.index());
+                }
+                if (material != null) {
+                    try {
+                        if (material.shaderSource() != null) {
+                            pipeline = shaderManager.compileSlangFile(material.shaderSource());
+                        } else {
+                            pipeline = shaderManager.getPipeline(material.type());
+                        }
+                    } catch (Exception e) { /* fall back to default */ }
                 }
             }
 
@@ -318,8 +348,13 @@ public class Renderer implements AutoCloseable {
                 draw.bindPipeline(cmd.renderable().pipeline());
                 draw.bindUniformBuffer(0, mvpUbo);
 
-                // Upload material data from transaction-driven snapshot to binding 1
-                uploadMaterialSnapshot(cmd.entity(), cmd.materialData(), draw);
+                // Upload material data to binding 1
+                var typedMaterial = meshRenderer.getTypedMaterialData(cmd.entity());
+                if (typedMaterial != null) {
+                    uploadTypedMaterialData(typedMaterial, draw);
+                } else {
+                    uploadMaterialSnapshot(cmd.entity(), cmd.materialData(), draw);
+                }
 
                 draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
                 if (cmd.renderable().indexBuffer() != null) {
@@ -333,6 +368,33 @@ public class Renderer implements AutoCloseable {
         }
 
         device.endFrame();
+    }
+
+    /** Uploads typed MaterialData scalar data as UBO at binding 1. */
+    private void uploadTypedMaterialData(dev.engine.core.material.MaterialData matData, CommandRecorder draw) {
+        var scalarRecord = matData.scalarData();
+        if (scalarRecord == null) return;
+
+        var layout = StructLayout.of(scalarRecord.getClass());
+        var key = "typedmat_" + scalarRecord.getClass().getName();
+        var ubo = materialUbos.computeIfAbsent(key, k ->
+                device.createBuffer(new BufferDescriptor(
+                        Math.max(layout.size(), 16), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
+        try (var w = device.writeBuffer(ubo)) {
+            layout.write(w.segment(), 0, scalarRecord);
+        }
+        draw.bindUniformBuffer(1, ubo);
+
+        // Bind textures via bindless handles (if supported and textures present)
+        var textures = matData.textures();
+        if (!textures.isEmpty() && device.supports(DeviceCapability.BINDLESS_TEXTURES)) {
+            for (var entry : textures.entrySet()) {
+                var gpuTex = uploadTexture(entry.getValue());
+                long bindlessHandle = device.getBindlessTextureHandle(gpuTex);
+                // Bindless handles would be written into an SSBO or the material UBO
+                // For now, textures are available via the handle
+            }
+        }
     }
 
     // --- Capabilities ---
