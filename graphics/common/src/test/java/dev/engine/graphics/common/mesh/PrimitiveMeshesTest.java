@@ -1,6 +1,6 @@
 package dev.engine.graphics.common.mesh;
 
-import dev.engine.graphics.mesh.MeshData;
+import dev.engine.core.mesh.MeshData;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

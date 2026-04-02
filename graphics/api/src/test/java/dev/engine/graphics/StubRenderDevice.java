@@ -11,7 +11,7 @@ import dev.engine.graphics.command.CommandList;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
-import dev.engine.graphics.vertex.VertexFormat;
+import dev.engine.core.mesh.VertexFormat;
 
 import java.lang.foreign.Arena;
 import java.nio.ByteBuffer;

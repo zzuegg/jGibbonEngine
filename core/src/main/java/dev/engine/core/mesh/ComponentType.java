@@ -1,4 +1,4 @@
-package dev.engine.graphics.vertex;
+package dev.engine.core.mesh;
 
 public interface ComponentType {
     String name();

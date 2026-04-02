@@ -1,4 +1,4 @@
-package dev.engine.graphics.mesh;
+package dev.engine.core.mesh;
 
 import dev.engine.core.asset.AssetManager;
 import dev.engine.core.asset.FileSystemAssetSource;

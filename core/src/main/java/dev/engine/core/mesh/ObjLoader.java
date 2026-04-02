@@ -1,10 +1,7 @@
-package dev.engine.graphics.mesh;
+package dev.engine.core.mesh;
 
 import dev.engine.core.asset.AssetLoader;
 import dev.engine.core.asset.AssetSource;
-import dev.engine.graphics.vertex.ComponentType;
-import dev.engine.graphics.vertex.VertexAttribute;
-import dev.engine.graphics.vertex.VertexFormat;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;

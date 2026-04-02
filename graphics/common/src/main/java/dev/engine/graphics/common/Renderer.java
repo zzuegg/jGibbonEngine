@@ -20,12 +20,12 @@ import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.common.material.Material;
 import dev.engine.graphics.common.material.MaterialCompiler;
 import dev.engine.graphics.common.material.MaterialType;
-import dev.engine.graphics.mesh.MeshData;
+import dev.engine.core.mesh.MeshData;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.renderer.DrawCommand;
 import dev.engine.graphics.renderer.MeshRenderer;
 import dev.engine.graphics.renderer.Renderable;
-import dev.engine.graphics.vertex.VertexFormat;
+import dev.engine.core.mesh.VertexFormat;
 
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -65,6 +65,9 @@ public class Renderer implements AutoCloseable {
     // Material registry: Handle<MaterialTag> → Material
     private final HandlePool<MaterialTag> materialPool = new HandlePool<>();
     private final Map<Integer, Material> materialRegistry = new HashMap<>();
+
+    // Auto-upload cache: MeshData identity hash → MeshHandle (GPU resources)
+    private final Map<Integer, MeshHandle> meshDataCache = new HashMap<>();
 
     // Material data UBO (binding 1) — lazily created per material key
     private final Map<String, Handle<BufferResource>> materialUbos = new HashMap<>();
@@ -236,15 +239,25 @@ public class Renderer implements AutoCloseable {
         meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
 
         // Resolve mesh/material assignments → renderables
-        // MeshRenderer tracks which entities have mesh/material handles assigned via transactions
         for (var entity : meshRenderer.getEntities()) {
             if (meshRenderer.getRenderable(entity) != null) continue; // already resolved
 
-            var meshHandle = meshRenderer.getMeshAssignment(entity);
-            if (meshHandle == null) continue; // no mesh assigned yet
+            // Try MeshData first (from scene.setMesh(entity, MeshData))
+            MeshHandle resolvedMesh = null;
+            var data = meshRenderer.getMeshData(entity);
+            if (data != null) {
+                resolvedMesh = meshDataCache.computeIfAbsent(
+                        System.identityHashCode(data),
+                        k -> uploadMeshData(data));
+            }
 
-            var meshData = meshRegistry.get(meshHandle.index());
-            if (meshData == null) continue; // invalid mesh handle
+            // Fall back to pre-registered handle
+            if (resolvedMesh == null) {
+                var meshHandle = meshRenderer.getMeshAssignment(entity);
+                if (meshHandle != null) resolvedMesh = meshRegistry.get(meshHandle.index());
+            }
+
+            if (resolvedMesh == null) continue; // no mesh assigned yet
 
             // Resolve pipeline from material
             Handle<PipelineResource> pipeline = defaultPipeline;
@@ -265,8 +278,8 @@ public class Renderer implements AutoCloseable {
             }
 
             meshRenderer.setRenderable(entity, new Renderable(
-                    meshData.vertexBuffer(), meshData.indexBuffer(), meshData.vertexInput(),
-                    pipeline, meshData.vertexCount(), meshData.indexCount()));
+                    resolvedMesh.vertexBuffer(), resolvedMesh.indexBuffer(), resolvedMesh.vertexInput(),
+                    pipeline, resolvedMesh.vertexCount(), resolvedMesh.indexCount()));
         }
 
         device.beginFrame();
@@ -332,6 +345,34 @@ public class Renderer implements AutoCloseable {
     }
 
     // --- Internal helpers ---
+
+    private MeshHandle uploadMeshData(MeshData data) {
+        var buf = data.vertexData();
+        float[] vertices = new float[buf.remaining() / Float.BYTES];
+        buf.mark();
+        buf.asFloatBuffer().get(vertices);
+        buf.reset();
+
+        long vbSize = (long) vertices.length * Float.BYTES;
+        var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
+        try (var w = device.writeBuffer(vbo)) {
+            for (int i = 0; i < vertices.length; i++)
+                w.segment().setAtIndex(ValueLayout.JAVA_FLOAT, i, vertices[i]);
+        }
+
+        Handle<BufferResource> ibo = null;
+        if (data.isIndexed()) {
+            long ibSize = (long) data.indices().length * Integer.BYTES;
+            ibo = device.createBuffer(new BufferDescriptor(ibSize, BufferUsage.INDEX, AccessPattern.STATIC));
+            try (var w = device.writeBuffer(ibo)) {
+                for (int i = 0; i < data.indices().length; i++)
+                    w.segment().setAtIndex(ValueLayout.JAVA_INT, i, data.indices()[i]);
+            }
+        }
+
+        var vertexInput = device.createVertexInput(data.format());
+        return new MeshHandle(vbo, ibo, vertexInput, data.format(), data.vertexCount(), data.indexCount());
+    }
 
     /**
      * Uploads material data from a transaction-driven PropertyMap snapshot.

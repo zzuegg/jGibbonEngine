@@ -1,11 +1,11 @@
 package dev.engine.graphics.common.mesh;
 
-import dev.engine.graphics.mesh.MeshData;
+import dev.engine.core.mesh.MeshData;
 
 
-import dev.engine.graphics.vertex.ComponentType;
-import dev.engine.graphics.vertex.VertexAttribute;
-import dev.engine.graphics.vertex.VertexFormat;
+import dev.engine.core.mesh.ComponentType;
+import dev.engine.core.mesh.VertexAttribute;
+import dev.engine.core.mesh.VertexFormat;
 
 import java.util.ArrayList;
 

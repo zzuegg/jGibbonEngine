@@ -7,9 +7,9 @@ import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.common.material.MaterialType;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
-import dev.engine.graphics.vertex.ComponentType;
-import dev.engine.graphics.vertex.VertexAttribute;
-import dev.engine.graphics.vertex.VertexFormat;
+import dev.engine.core.mesh.ComponentType;
+import dev.engine.core.mesh.VertexAttribute;
+import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.window.WindowDescriptor;
 
 public class SlangCapture {

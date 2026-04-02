@@ -2,6 +2,7 @@ package dev.engine.graphics.renderer;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.core.math.Mat4;
+import dev.engine.core.mesh.MeshData;
 import dev.engine.core.property.MutablePropertyMap;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.core.property.PropertyMap;
@@ -26,6 +27,7 @@ public class MeshRenderer {
     private final Map<Handle<?>, Mat4> transforms = new HashMap<>();
     private final Map<Handle<?>, Renderable> renderables = new HashMap<>();
     private final Map<Handle<?>, MutablePropertyMap> materials = new HashMap<>();
+    private final Map<Handle<?>, MeshData> meshDataAssignments = new HashMap<>();
     private final Map<Handle<?>, Handle<MeshTag>> meshAssignments = new HashMap<>();
     private final Map<Handle<?>, Handle<MaterialTag>> materialAssignments = new HashMap<>();
 
@@ -61,7 +63,10 @@ public class MeshRenderer {
                     }
                 }
             }
-            case Transaction.MeshChanged ignored -> {}
+            case Transaction.MeshChanged changed -> {
+                meshDataAssignments.put(changed.entity(), changed.meshData());
+                renderables.remove(changed.entity()); // force re-resolve
+            }
             case Transaction.MeshAssigned assigned ->
                     meshAssignments.put(assigned.entity(), assigned.mesh());
             case Transaction.MaterialAssigned assigned ->
@@ -95,6 +100,10 @@ public class MeshRenderer {
 
     public MutablePropertyMap getMaterial(Handle<?> entity) {
         return materials.get(entity);
+    }
+
+    public MeshData getMeshData(Handle<?> entity) {
+        return meshDataAssignments.get(entity);
     }
 
     public Handle<MeshTag> getMeshAssignment(Handle<?> entity) {

@@ -8,7 +8,7 @@ import dev.engine.core.scene.MeshTag;
 import dev.engine.core.scene.MaterialTag;
 import dev.engine.graphics.common.material.Material;
 import dev.engine.graphics.common.material.MaterialType;
-import dev.engine.graphics.mesh.MeshData;
+import dev.engine.core.mesh.MeshData;
 import dev.engine.core.module.ModuleManager;
 import dev.engine.core.module.Time;
 import dev.engine.core.module.VariableTimestep;
@@ -19,7 +19,7 @@ import dev.engine.core.scene.Scene;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.common.HeadlessRenderDevice;
 import dev.engine.graphics.common.Renderer;
-import dev.engine.graphics.mesh.ObjLoader;
+import dev.engine.core.mesh.ObjLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

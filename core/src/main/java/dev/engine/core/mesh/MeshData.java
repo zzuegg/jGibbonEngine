@@ -1,6 +1,4 @@
-package dev.engine.graphics.mesh;
-
-import dev.engine.graphics.vertex.VertexFormat;
+package dev.engine.core.mesh;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;

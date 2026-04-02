@@ -10,7 +10,7 @@ import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.target.RenderTargetDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
-import dev.engine.graphics.vertex.VertexFormat;
+import dev.engine.core.mesh.VertexFormat;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;

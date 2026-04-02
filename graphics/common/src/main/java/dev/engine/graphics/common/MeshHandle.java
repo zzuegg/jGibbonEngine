@@ -3,7 +3,7 @@ package dev.engine.graphics.common;
 import dev.engine.core.handle.Handle;
 import dev.engine.graphics.BufferResource;
 import dev.engine.graphics.VertexInputResource;
-import dev.engine.graphics.vertex.VertexFormat;
+import dev.engine.core.mesh.VertexFormat;
 
 /**
  * A registered mesh in the renderer. Holds GPU resources for vertex/index data.

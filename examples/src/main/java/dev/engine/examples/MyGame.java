@@ -19,22 +19,17 @@ public class MyGame extends BaseApplication {
 
     @Override
     protected void init() {
-        // Create mesh data (pure data, no GPU)
-        var cubeData = PrimitiveMeshes.cube();
-
-        // Register with engine (GPU upload happens here, returns opaque handle)
-        var cubeMesh = registerMesh(cubeData);
-
-        // Create entities and assign mesh — all through scene
         var scene = (HierarchicalScene) scene();
+        var cube = PrimitiveMeshes.cube();
+
         root = scene.createEntity();
         cube1 = scene.createEntity(); scene.setParent(cube1, root);
         cube2 = scene.createEntity(); scene.setParent(cube2, root);
         cube3 = scene.createEntity(); scene.setParent(cube3, root);
 
-        scene.setMesh(cube1, cubeMesh);
-        scene.setMesh(cube2, cubeMesh);
-        scene.setMesh(cube3, cubeMesh);
+        scene.setMesh(cube1, cube);
+        scene.setMesh(cube2, cube);
+        scene.setMesh(cube3, cube);
 
         camera().lookAt(new Vec3(0, 3, 7), Vec3.ZERO, Vec3.UNIT_Y);
     }

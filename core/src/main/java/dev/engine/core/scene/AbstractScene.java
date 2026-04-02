@@ -2,6 +2,7 @@ package dev.engine.core.scene;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.core.math.Mat4;
+import dev.engine.core.mesh.MeshData;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.core.property.PropertyMap;
 import dev.engine.core.transaction.Transaction;
@@ -57,12 +58,19 @@ public abstract class AbstractScene {
         transactions.materialReplaced(entity, properties);
     }
 
-    /** Assigns a mesh to an entity. The handle is opaque — created by the Renderer. */
+    /**
+     * Assigns mesh data to an entity. The engine auto-uploads to GPU on first use.
+     */
+    public void setMesh(Handle<EntityTag> entity, MeshData meshData) {
+        transactions.meshChanged(entity, meshData);
+    }
+
+    /** Assigns a pre-uploaded mesh handle to an entity. */
     public void setMesh(Handle<EntityTag> entity, Handle<MeshTag> mesh) {
         transactions.meshAssigned(entity, mesh);
     }
 
-    /** Assigns a material to an entity. The handle is opaque — created by the Renderer. */
+    /** Assigns a material handle to an entity. */
     public void setMaterial(Handle<EntityTag> entity, Handle<MaterialTag> material) {
         transactions.materialAssigned(entity, material);
     }

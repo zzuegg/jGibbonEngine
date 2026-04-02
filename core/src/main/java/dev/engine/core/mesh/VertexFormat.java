@@ -1,4 +1,4 @@
-package dev.engine.graphics.vertex;
+package dev.engine.core.mesh;
 
 import java.util.List;
 
