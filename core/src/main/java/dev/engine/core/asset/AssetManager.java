@@ -8,7 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 
 public class AssetManager {
 
@@ -17,6 +19,7 @@ public class AssetManager {
     private final List<AssetSource> sources = new ArrayList<>();
     private final List<AssetLoader<?>> loaders = new ArrayList<>();
     private final Map<String, Object> cache = new ConcurrentHashMap<>();
+    private final Map<String, List<ReloadCallback<?>>> reloadCallbacks = new ConcurrentHashMap<>();
     private final Executor executor;
 
     public AssetManager(Executor executor) {
@@ -57,6 +60,26 @@ public class AssetManager {
     public void evict(String path) {
         cache.remove(path);
     }
+
+    public <T> void onReload(String path, Class<T> type, Consumer<T> callback) {
+        reloadCallbacks.computeIfAbsent(path, k -> new CopyOnWriteArrayList<>())
+                .add(new ReloadCallback<>(type, callback));
+    }
+
+    @SuppressWarnings("unchecked")
+    public void reloadChanged(String path) {
+        cache.remove(path);
+        var callbacks = reloadCallbacks.get(path);
+        if (callbacks != null) {
+            for (var cb : callbacks) {
+                var asset = loadSync(path, cb.type);
+                ((Consumer<Object>) cb.callback).accept(asset);
+            }
+        }
+        log.debug("Reloaded asset: {}", path);
+    }
+
+    private record ReloadCallback<T>(Class<T> type, Consumer<T> callback) {}
 
     private AssetSource.AssetData loadFromSources(String path) {
         for (var source : sources) {

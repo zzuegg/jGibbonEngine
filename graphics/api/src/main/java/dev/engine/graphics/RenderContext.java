@@ -10,6 +10,7 @@ public interface RenderContext {
     void bindVertexBuffer(Handle<BufferResource> buffer, Handle<VertexInputResource> vertexInput);
     void bindIndexBuffer(Handle<BufferResource> buffer);
     void bindUniformBuffer(int binding, Handle<BufferResource> buffer);
+    void bindTexture(int unit, Handle<TextureResource> texture);
     void draw(int vertexCount, int firstVertex);
     void drawIndexed(int indexCount, int firstIndex);
     void bindRenderTarget(Handle<RenderTargetResource> renderTarget);

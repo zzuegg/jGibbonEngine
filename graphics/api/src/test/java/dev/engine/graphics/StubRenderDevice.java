@@ -105,6 +105,7 @@ class StubRenderDevice implements RenderDevice {
             @Override public void bindVertexBuffer(Handle<BufferResource> buffer, Handle<VertexInputResource> vertexInput) {}
             @Override public void bindIndexBuffer(Handle<BufferResource> buffer) {}
             @Override public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) {}
+            @Override public void bindTexture(int unit, Handle<TextureResource> texture) {}
             @Override public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) {}
             @Override public void bindDefaultRenderTarget() {}
             @Override public void setDepthTest(boolean enabled) {}

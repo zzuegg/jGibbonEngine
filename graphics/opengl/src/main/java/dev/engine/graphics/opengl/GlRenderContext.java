@@ -5,6 +5,7 @@ import dev.engine.graphics.BufferResource;
 import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.RenderContext;
 import dev.engine.graphics.RenderTargetResource;
+import dev.engine.graphics.TextureResource;
 import dev.engine.graphics.VertexInputResource;
 import org.lwjgl.opengl.GL45;
 
@@ -47,6 +48,12 @@ class GlRenderContext implements RenderContext {
     public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) {
         int ubo = device.getGlBufferName(buffer);
         GL45.glBindBufferBase(GL45.GL_UNIFORM_BUFFER, binding, ubo);
+    }
+
+    @Override
+    public void bindTexture(int unit, Handle<TextureResource> texture) {
+        int glTex = device.getGlTextureName(texture);
+        GL45.glBindTextureUnit(unit, glTex);
     }
 
     @Override
