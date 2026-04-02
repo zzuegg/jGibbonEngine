@@ -3,6 +3,7 @@ package dev.engine.core.asset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,7 @@ public class AssetManager {
     private final Map<String, Object> cache = new ConcurrentHashMap<>();
     private final Map<String, List<ReloadCallback<?>>> reloadCallbacks = new ConcurrentHashMap<>();
     private final Executor executor;
+    private volatile FileWatcher fileWatcher;
 
     public AssetManager(Executor executor) {
         this.executor = executor;
@@ -88,6 +90,38 @@ public class AssetManager {
             }
         }
         throw new AssetNotFoundException(path);
+    }
+
+    /**
+     * Enables hot-reload by watching the given directory for file changes.
+     * When a watched file is modified, it is evicted from cache, reloaded,
+     * and all registered onReload callbacks are fired.
+     */
+    public void enableHotReload(Path watchDir) {
+        if (fileWatcher != null) {
+            fileWatcher.stop();
+        }
+        fileWatcher = new FileWatcher(watchDir);
+        fileWatcher.start();
+    }
+
+    /**
+     * Registers a file for hot-reload watching. When the file changes,
+     * the cache is evicted and the asset is reloaded, firing callbacks.
+     */
+    public void watchForReload(String path) {
+        if (fileWatcher == null) return;
+        fileWatcher.addListener(path, () -> reloadChanged(path));
+    }
+
+    /**
+     * Shuts down the asset manager, stopping the file watcher if active.
+     */
+    public void shutdown() {
+        if (fileWatcher != null) {
+            fileWatcher.stop();
+            fileWatcher = null;
+        }
     }
 
     private <T> AssetLoader<?> findLoader(String path, Class<T> type) {

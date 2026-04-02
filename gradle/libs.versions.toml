@@ -27,6 +27,10 @@ lwjgl-shaderc = { module = "org.lwjgl:lwjgl-shaderc" }
 lwjgl-shaderc-natives = { module = "org.lwjgl:lwjgl-shaderc", version.ref = "lwjgl" }
 lwjgl-sdl = { module = "org.lwjgl:lwjgl-sdl" }
 lwjgl-sdl-natives = { module = "org.lwjgl:lwjgl-sdl", version.ref = "lwjgl" }
+lwjgl-assimp = { module = "org.lwjgl:lwjgl-assimp" }
+lwjgl-assimp-natives = { module = "org.lwjgl:lwjgl-assimp", version.ref = "lwjgl" }
+lwjgl-stb = { module = "org.lwjgl:lwjgl-stb" }
+lwjgl-stb-natives = { module = "org.lwjgl:lwjgl-stb", version.ref = "lwjgl" }
 
 # Testing
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
