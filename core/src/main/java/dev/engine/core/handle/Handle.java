@@ -1,6 +1,16 @@
 package dev.engine.core.handle;
 
-public record Handle(int index, int generation) {
+/**
+ * Generational opaque handle with a phantom type parameter for compile-time safety.
+ *
+ * @param <T> phantom type tag — prevents mixing handles of different resource types
+ */
+public record Handle<T>(int index, int generation) {
 
-    public static final Handle INVALID = new Handle(-1, 0);
+    @SuppressWarnings("unchecked")
+    public static <T> Handle<T> invalid() {
+        return (Handle<T>) INVALID_RAW;
+    }
+
+    private static final Handle<?> INVALID_RAW = new Handle<>(-1, 0);
 }

@@ -13,10 +13,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class HandlePoolTest {
 
-    private HandlePool pool;
+    private HandlePool<Void> pool;
 
     @BeforeEach
-    void setUp() { pool = new HandlePool(); }
+    void setUp() { pool = new HandlePool<>(); }
 
     @Nested
     class Allocation {
@@ -60,7 +60,7 @@ class HandlePoolTest {
         @Test void concurrentAllocateAndRelease() throws InterruptedException {
             int threads = 8;
             int opsPerThread = 1000;
-            var allHandles = new ConcurrentLinkedQueue<Handle>();
+            var allHandles = new ConcurrentLinkedQueue<Handle<Void>>();
             var latch = new CountDownLatch(threads);
 
             try (var executor = Executors.newFixedThreadPool(threads)) {

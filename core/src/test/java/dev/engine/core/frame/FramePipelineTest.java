@@ -22,8 +22,8 @@ class FramePipelineTest {
     class FrameSnapshotTests {
         @Test void snapshotCapturesTransactions() {
             var buffer = new TransactionBuffer();
-            buffer.added(new Handle(0, 0));
-            buffer.transformChanged(new Handle(0, 0), Mat4.IDENTITY);
+            buffer.added(new Handle<>(0, 0));
+            buffer.transformChanged(new Handle<>(0, 0), Mat4.IDENTITY);
 
             var snapshot = new FrameSnapshot(1, buffer.drain());
             assertEquals(1, snapshot.frameNumber());
@@ -52,7 +52,7 @@ class FramePipelineTest {
 
             // Producer publishes
             var snapshot = new FrameSnapshot(42, List.of(
-                    new Transaction.EntityAdded(new Handle(0, 0))
+                    new Transaction.EntityAdded(new Handle<>(0, 0))
             ));
             pipeline.publishSnapshot(snapshot);
 

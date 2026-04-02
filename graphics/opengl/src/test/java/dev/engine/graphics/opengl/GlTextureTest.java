@@ -38,7 +38,7 @@ class GlTextureTest {
         void createTextureReturnsValidHandle() {
             var desc = new TextureDescriptor(64, 64, TextureFormat.RGBA8);
             var handle = device.createTexture(desc);
-            assertNotEquals(Handle.INVALID, handle);
+            assertNotEquals(Handle.invalid(), handle);
             assertTrue(device.isValidTexture(handle));
         }
 

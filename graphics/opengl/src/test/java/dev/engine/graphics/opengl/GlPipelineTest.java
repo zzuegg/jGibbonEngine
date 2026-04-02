@@ -61,7 +61,7 @@ class GlPipelineTest {
                     new ShaderSource(ShaderStage.FRAGMENT, FRAGMENT_SHADER)
             );
             var handle = device.createPipeline(desc);
-            assertNotEquals(Handle.INVALID, handle);
+            assertNotEquals(Handle.invalid(), handle);
             assertTrue(device.isValidPipeline(handle));
         }
 

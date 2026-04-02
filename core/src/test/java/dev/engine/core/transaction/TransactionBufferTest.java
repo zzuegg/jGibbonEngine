@@ -26,7 +26,7 @@ class TransactionBufferTest {
         }
 
         @Test void recordEntityAdded() {
-            var entity = new Handle(0, 0);
+            var entity = new Handle<>(0, 0);
             buffer.added(entity);
             var txns = buffer.drain();
             assertEquals(1, txns.size());
@@ -35,7 +35,7 @@ class TransactionBufferTest {
         }
 
         @Test void recordEntityRemoved() {
-            var entity = new Handle(1, 0);
+            var entity = new Handle<>(1, 0);
             buffer.removed(entity);
             var txns = buffer.drain();
             assertEquals(1, txns.size());
@@ -43,7 +43,7 @@ class TransactionBufferTest {
         }
 
         @Test void recordTransformChanged() {
-            var entity = new Handle(2, 0);
+            var entity = new Handle<>(2, 0);
             var transform = Mat4.translation(1f, 2f, 3f);
             buffer.transformChanged(entity, transform);
             var txns = buffer.drain();
@@ -54,7 +54,7 @@ class TransactionBufferTest {
         }
 
         @Test void recordMaterialPropertyChanged() {
-            var entity = new Handle(3, 0);
+            var entity = new Handle<>(3, 0);
             var key = PropertyKey.of("roughness", Float.class);
             buffer.materialPropertyChanged(entity, key, 0.8f);
             var txns = buffer.drain();
@@ -66,8 +66,8 @@ class TransactionBufferTest {
         }
 
         @Test void multipleTransactionsPreserveOrder() {
-            var e1 = new Handle(0, 0);
-            var e2 = new Handle(1, 0);
+            var e1 = new Handle<>(0, 0);
+            var e2 = new Handle<>(1, 0);
             buffer.added(e1);
             buffer.transformChanged(e1, Mat4.IDENTITY);
             buffer.added(e2);
@@ -82,13 +82,13 @@ class TransactionBufferTest {
     @Nested
     class Draining {
         @Test void drainClearsBuffer() {
-            buffer.added(new Handle(0, 0));
+            buffer.added(new Handle<>(0, 0));
             buffer.drain();
             assertTrue(buffer.drain().isEmpty());
         }
 
         @Test void drainReturnsUnmodifiableList() {
-            buffer.added(new Handle(0, 0));
+            buffer.added(new Handle<>(0, 0));
             var txns = buffer.drain();
             assertThrows(UnsupportedOperationException.class, () -> txns.add(null));
         }

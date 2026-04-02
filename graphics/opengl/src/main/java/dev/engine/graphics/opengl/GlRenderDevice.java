@@ -2,9 +2,14 @@ package dev.engine.graphics.opengl;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.core.handle.HandlePool;
+import dev.engine.graphics.BufferResource;
+import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.RenderCapability;
 import dev.engine.graphics.RenderContext;
 import dev.engine.graphics.RenderDevice;
+import dev.engine.graphics.RenderTargetResource;
+import dev.engine.graphics.TextureResource;
+import dev.engine.graphics.VertexInputResource;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderCompilationException;
 import dev.engine.graphics.pipeline.ShaderSource;
@@ -38,19 +43,19 @@ public class GlRenderDevice implements RenderDevice {
 
     private static final Logger log = LoggerFactory.getLogger(GlRenderDevice.class);
 
-    private final HandlePool bufferPool = new HandlePool();
+    private final HandlePool<BufferResource> bufferPool = new HandlePool<>();
     private final Map<Integer, Integer> bufferGlNames = new HashMap<>();
     private final Map<Integer, Long> bufferSizes = new HashMap<>();
-    private final HandlePool texturePool = new HandlePool();
+    private final HandlePool<TextureResource> texturePool = new HandlePool<>();
     private final Map<Integer, Integer> textureGlNames = new HashMap<>();
     private final Map<Integer, TextureDescriptor> textureDescs = new HashMap<>();
-    private final HandlePool vertexInputPool = new HandlePool();
+    private final HandlePool<VertexInputResource> vertexInputPool = new HandlePool<>();
     private final Map<Integer, Integer> vertexInputVaos = new HashMap<>();
     private final Map<Integer, Integer> vertexInputStrides = new HashMap<>();
-    private final HandlePool renderTargetPool = new HandlePool();
+    private final HandlePool<RenderTargetResource> renderTargetPool = new HandlePool<>();
     private final Map<Integer, Integer> renderTargetFbos = new HashMap<>();
-    private final Map<Integer, List<Handle>> renderTargetColorTextures = new HashMap<>();
-    private final HandlePool pipelinePool = new HandlePool();
+    private final Map<Integer, List<Handle<TextureResource>>> renderTargetColorTextures = new HashMap<>();
+    private final HandlePool<PipelineResource> pipelinePool = new HandlePool<>();
     private final Map<Integer, Integer> pipelineGlPrograms = new HashMap<>();
     private final AtomicLong frameCounter = new AtomicLong(0);
     private final long glfwWindow;
@@ -63,7 +68,7 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public Handle createBuffer(BufferDescriptor descriptor) {
+    public Handle<BufferResource> createBuffer(BufferDescriptor descriptor) {
         int glBuffer = GL45.glCreateBuffers();
         int usage = mapUsage(descriptor.accessPattern());
         GL45.glNamedBufferData(glBuffer, descriptor.size(), usage);
@@ -75,7 +80,7 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public void destroyBuffer(Handle buffer) {
+    public void destroyBuffer(Handle<BufferResource> buffer) {
         if (!bufferPool.isValid(buffer)) return;
         Integer glName = bufferGlNames.remove(buffer.index());
         if (glName != null) {
@@ -85,18 +90,18 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public boolean isValidBuffer(Handle buffer) {
+    public boolean isValidBuffer(Handle<BufferResource> buffer) {
         return bufferPool.isValid(buffer);
     }
 
     @Override
-    public BufferWriter writeBuffer(Handle buffer) {
+    public BufferWriter writeBuffer(Handle<BufferResource> buffer) {
         long size = bufferSizes.getOrDefault(buffer.index(), 0L);
         return writeBuffer(buffer, 0, size);
     }
 
     @Override
-    public BufferWriter writeBuffer(Handle buffer, long offset, long length) {
+    public BufferWriter writeBuffer(Handle<BufferResource> buffer, long offset, long length) {
         int glName = bufferGlNames.get(buffer.index());
         var arena = Arena.ofConfined();
         var segment = arena.allocate(length);
@@ -113,7 +118,7 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public Handle createTexture(TextureDescriptor descriptor) {
+    public Handle<TextureResource> createTexture(TextureDescriptor descriptor) {
         int glTex = GL45.glCreateTextures(GL45.GL_TEXTURE_2D);
         int internalFormat = mapTextureFormat(descriptor.format());
         GL45.glTextureStorage2D(glTex, 1, internalFormat, descriptor.width(), descriptor.height());
@@ -125,7 +130,7 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public void uploadTexture(Handle texture, ByteBuffer pixels) {
+    public void uploadTexture(Handle<TextureResource> texture, ByteBuffer pixels) {
         int glName = textureGlNames.get(texture.index());
         var desc = textureDescs.get(texture.index());
         int[] formatAndType = mapUploadFormat(desc.format());
@@ -134,7 +139,7 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public void destroyTexture(Handle texture) {
+    public void destroyTexture(Handle<TextureResource> texture) {
         if (!texturePool.isValid(texture)) return;
         Integer glName = textureGlNames.remove(texture.index());
         textureDescs.remove(texture.index());
@@ -143,14 +148,14 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public boolean isValidTexture(Handle texture) {
+    public boolean isValidTexture(Handle<TextureResource> texture) {
         return texturePool.isValid(texture);
     }
 
     @Override
-    public Handle createRenderTarget(RenderTargetDescriptor descriptor) {
+    public Handle<RenderTargetResource> createRenderTarget(RenderTargetDescriptor descriptor) {
         int fbo = GL45.glCreateFramebuffers();
-        var colorTextures = new ArrayList<Handle>();
+        var colorTextures = new ArrayList<Handle<TextureResource>>();
 
         for (int i = 0; i < descriptor.colorAttachments().size(); i++) {
             var format = descriptor.colorAttachments().get(i);
@@ -179,12 +184,12 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public Handle getRenderTargetColorTexture(Handle renderTarget, int index) {
+    public Handle<TextureResource> getRenderTargetColorTexture(Handle<RenderTargetResource> renderTarget, int index) {
         return renderTargetColorTextures.get(renderTarget.index()).get(index);
     }
 
     @Override
-    public void destroyRenderTarget(Handle renderTarget) {
+    public void destroyRenderTarget(Handle<RenderTargetResource> renderTarget) {
         if (!renderTargetPool.isValid(renderTarget)) return;
         Integer fbo = renderTargetFbos.remove(renderTarget.index());
         var textures = renderTargetColorTextures.remove(renderTarget.index());
@@ -195,12 +200,12 @@ public class GlRenderDevice implements RenderDevice {
         renderTargetPool.release(renderTarget);
     }
 
-    int getGlFboName(Handle renderTarget) {
+    int getGlFboName(Handle<RenderTargetResource> renderTarget) {
         return renderTargetFbos.getOrDefault(renderTarget.index(), 0);
     }
 
     @Override
-    public Handle createVertexInput(VertexFormat format) {
+    public Handle<VertexInputResource> createVertexInput(VertexFormat format) {
         int vao = GL45.glCreateVertexArrays();
         for (var attr : format.attributes()) {
             GL45.glEnableVertexArrayAttrib(vao, attr.location());
@@ -217,7 +222,7 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public void destroyVertexInput(Handle vertexInput) {
+    public void destroyVertexInput(Handle<VertexInputResource> vertexInput) {
         if (!vertexInputPool.isValid(vertexInput)) return;
         Integer vao = vertexInputVaos.remove(vertexInput.index());
         vertexInputStrides.remove(vertexInput.index());
@@ -225,15 +230,15 @@ public class GlRenderDevice implements RenderDevice {
         vertexInputPool.release(vertexInput);
     }
 
-    int getGlVaoName(Handle vertexInput) {
+    int getGlVaoName(Handle<VertexInputResource> vertexInput) {
         return vertexInputVaos.getOrDefault(vertexInput.index(), 0);
     }
 
-    int getVertexInputStride(Handle vertexInput) {
+    int getVertexInputStride(Handle<VertexInputResource> vertexInput) {
         return vertexInputStrides.getOrDefault(vertexInput.index(), 0);
     }
 
-    int getGlProgramName(Handle pipeline) {
+    int getGlProgramName(Handle<PipelineResource> pipeline) {
         return pipelineGlPrograms.getOrDefault(pipeline.index(), 0);
     }
 
@@ -245,7 +250,7 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public Handle createPipeline(PipelineDescriptor descriptor) {
+    public Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor) {
         int program = GL45.glCreateProgram();
         var shaderIds = new java.util.ArrayList<Integer>();
 
@@ -285,7 +290,7 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public void destroyPipeline(Handle pipeline) {
+    public void destroyPipeline(Handle<PipelineResource> pipeline) {
         if (!pipelinePool.isValid(pipeline)) return;
         Integer program = pipelineGlPrograms.remove(pipeline.index());
         if (program != null) GL45.glDeleteProgram(program);
@@ -293,7 +298,7 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public boolean isValidPipeline(Handle pipeline) {
+    public boolean isValidPipeline(Handle<PipelineResource> pipeline) {
         return pipelinePool.isValid(pipeline);
     }
 
@@ -305,11 +310,11 @@ public class GlRenderDevice implements RenderDevice {
         throw new IllegalArgumentException("Unknown shader stage: " + stage.name());
     }
 
-    public int getGlTextureName(Handle texture) {
+    public int getGlTextureName(Handle<TextureResource> texture) {
         return textureGlNames.getOrDefault(texture.index(), 0);
     }
 
-    public int getGlBufferName(Handle buffer) {
+    public int getGlBufferName(Handle<BufferResource> buffer) {
         return bufferGlNames.getOrDefault(buffer.index(), 0);
     }
 

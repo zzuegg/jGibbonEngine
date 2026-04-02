@@ -41,7 +41,7 @@ class GlRenderDeviceTest {
         void createBufferReturnsValidHandle() {
             var desc = new BufferDescriptor(1024, BufferUsage.VERTEX, AccessPattern.STATIC);
             var handle = device.createBuffer(desc);
-            assertNotEquals(Handle.INVALID, handle);
+            assertNotEquals(Handle.invalid(), handle);
             assertTrue(device.isValidBuffer(handle));
         }
 

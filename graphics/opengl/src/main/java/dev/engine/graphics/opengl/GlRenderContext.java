@@ -1,7 +1,11 @@
 package dev.engine.graphics.opengl;
 
 import dev.engine.core.handle.Handle;
+import dev.engine.graphics.BufferResource;
+import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.RenderContext;
+import dev.engine.graphics.RenderTargetResource;
+import dev.engine.graphics.VertexInputResource;
 import org.lwjgl.opengl.GL45;
 
 class GlRenderContext implements RenderContext {
@@ -18,13 +22,13 @@ class GlRenderContext implements RenderContext {
     public long frameNumber() { return frameNumber; }
 
     @Override
-    public void bindPipeline(Handle pipeline) {
+    public void bindPipeline(Handle<PipelineResource> pipeline) {
         int program = device.getGlProgramName(pipeline);
         GL45.glUseProgram(program);
     }
 
     @Override
-    public void bindVertexBuffer(Handle buffer, Handle vertexInput) {
+    public void bindVertexBuffer(Handle<BufferResource> buffer, Handle<VertexInputResource> vertexInput) {
         int vao = device.getGlVaoName(vertexInput);
         int vbo = device.getGlBufferName(buffer);
         GL45.glBindVertexArray(vao);
@@ -34,13 +38,13 @@ class GlRenderContext implements RenderContext {
     }
 
     @Override
-    public void bindIndexBuffer(Handle buffer) {
+    public void bindIndexBuffer(Handle<BufferResource> buffer) {
         int ibo = device.getGlBufferName(buffer);
         GL45.glBindBuffer(GL45.GL_ELEMENT_ARRAY_BUFFER, ibo);
     }
 
     @Override
-    public void bindUniformBuffer(int binding, Handle buffer) {
+    public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) {
         int ubo = device.getGlBufferName(buffer);
         GL45.glBindBufferBase(GL45.GL_UNIFORM_BUFFER, binding, ubo);
     }
@@ -57,7 +61,7 @@ class GlRenderContext implements RenderContext {
     }
 
     @Override
-    public void bindRenderTarget(Handle renderTarget) {
+    public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) {
         int fbo = device.getGlFboName(renderTarget);
         GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
     }

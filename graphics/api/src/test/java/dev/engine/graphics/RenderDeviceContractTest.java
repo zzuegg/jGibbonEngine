@@ -18,7 +18,7 @@ class RenderDeviceContractTest {
             var desc = new BufferDescriptor(1024, BufferUsage.VERTEX, AccessPattern.STATIC);
             var handle = device.createBuffer(desc);
             assertNotNull(handle);
-            assertNotEquals(Handle.INVALID, handle);
+            assertNotEquals(Handle.invalid(), handle);
         }
 
         @Test void destroyBufferInvalidatesHandle() {

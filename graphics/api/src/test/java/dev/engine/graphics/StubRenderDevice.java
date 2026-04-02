@@ -16,7 +16,11 @@ import java.util.concurrent.atomic.AtomicLong;
 
 class StubRenderDevice implements RenderDevice {
 
-    private final HandlePool bufferPool = new HandlePool();
+    private final HandlePool<BufferResource> bufferPool = new HandlePool<>();
+    private final HandlePool<TextureResource> texturePool = new HandlePool<>();
+    private final HandlePool<RenderTargetResource> renderTargetPool = new HandlePool<>();
+    private final HandlePool<VertexInputResource> vertexInputPool = new HandlePool<>();
+    private final HandlePool<PipelineResource> pipelinePool = new HandlePool<>();
     private final AtomicLong frameCounter = new AtomicLong(0);
     private final Map<RenderCapability<?>, Object> capabilities = new ConcurrentHashMap<>();
 
@@ -27,22 +31,22 @@ class StubRenderDevice implements RenderDevice {
     }
 
     @Override
-    public Handle createBuffer(BufferDescriptor descriptor) {
+    public Handle<BufferResource> createBuffer(BufferDescriptor descriptor) {
         return bufferPool.allocate();
     }
 
     @Override
-    public void destroyBuffer(Handle buffer) {
+    public void destroyBuffer(Handle<BufferResource> buffer) {
         bufferPool.release(buffer);
     }
 
     @Override
-    public boolean isValidBuffer(Handle buffer) {
+    public boolean isValidBuffer(Handle<BufferResource> buffer) {
         return bufferPool.isValid(buffer);
     }
 
     @Override
-    public BufferWriter writeBuffer(Handle buffer) {
+    public BufferWriter writeBuffer(Handle<BufferResource> buffer) {
         var arena = Arena.ofConfined();
         var seg = arena.allocate(1024);
         return new BufferWriter() {
@@ -52,56 +56,56 @@ class StubRenderDevice implements RenderDevice {
     }
 
     @Override
-    public BufferWriter writeBuffer(Handle buffer, long offset, long length) {
+    public BufferWriter writeBuffer(Handle<BufferResource> buffer, long offset, long length) {
         return writeBuffer(buffer);
     }
 
     @Override
-    public Handle createTexture(TextureDescriptor descriptor) { return bufferPool.allocate(); }
+    public Handle<TextureResource> createTexture(TextureDescriptor descriptor) { return texturePool.allocate(); }
 
     @Override
-    public void uploadTexture(Handle texture, ByteBuffer pixels) {}
+    public void uploadTexture(Handle<TextureResource> texture, ByteBuffer pixels) {}
 
     @Override
-    public void destroyTexture(Handle texture) { bufferPool.release(texture); }
+    public void destroyTexture(Handle<TextureResource> texture) { texturePool.release(texture); }
 
     @Override
-    public boolean isValidTexture(Handle texture) { return bufferPool.isValid(texture); }
+    public boolean isValidTexture(Handle<TextureResource> texture) { return texturePool.isValid(texture); }
 
     @Override
-    public Handle createRenderTarget(dev.engine.graphics.target.RenderTargetDescriptor descriptor) { return bufferPool.allocate(); }
+    public Handle<RenderTargetResource> createRenderTarget(dev.engine.graphics.target.RenderTargetDescriptor descriptor) { return renderTargetPool.allocate(); }
 
     @Override
-    public Handle getRenderTargetColorTexture(Handle renderTarget, int index) { return Handle.INVALID; }
+    public Handle<TextureResource> getRenderTargetColorTexture(Handle<RenderTargetResource> renderTarget, int index) { return Handle.invalid(); }
 
     @Override
-    public void destroyRenderTarget(Handle renderTarget) { bufferPool.release(renderTarget); }
+    public void destroyRenderTarget(Handle<RenderTargetResource> renderTarget) { renderTargetPool.release(renderTarget); }
 
     @Override
-    public Handle createVertexInput(VertexFormat format) { return bufferPool.allocate(); }
+    public Handle<VertexInputResource> createVertexInput(VertexFormat format) { return vertexInputPool.allocate(); }
 
     @Override
-    public void destroyVertexInput(Handle vertexInput) { bufferPool.release(vertexInput); }
+    public void destroyVertexInput(Handle<VertexInputResource> vertexInput) { vertexInputPool.release(vertexInput); }
 
     @Override
-    public Handle createPipeline(PipelineDescriptor descriptor) { return bufferPool.allocate(); }
+    public Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor) { return pipelinePool.allocate(); }
 
     @Override
-    public void destroyPipeline(Handle pipeline) { bufferPool.release(pipeline); }
+    public void destroyPipeline(Handle<PipelineResource> pipeline) { pipelinePool.release(pipeline); }
 
     @Override
-    public boolean isValidPipeline(Handle pipeline) { return bufferPool.isValid(pipeline); }
+    public boolean isValidPipeline(Handle<PipelineResource> pipeline) { return pipelinePool.isValid(pipeline); }
 
     @Override
     public RenderContext beginFrame() {
         long frame = frameCounter.incrementAndGet();
         return new RenderContext() {
             @Override public long frameNumber() { return frame; }
-            @Override public void bindPipeline(Handle pipeline) {}
-            @Override public void bindVertexBuffer(Handle buffer, Handle vertexInput) {}
-            @Override public void bindIndexBuffer(Handle buffer) {}
-            @Override public void bindUniformBuffer(int binding, Handle buffer) {}
-            @Override public void bindRenderTarget(Handle renderTarget) {}
+            @Override public void bindPipeline(Handle<PipelineResource> pipeline) {}
+            @Override public void bindVertexBuffer(Handle<BufferResource> buffer, Handle<VertexInputResource> vertexInput) {}
+            @Override public void bindIndexBuffer(Handle<BufferResource> buffer) {}
+            @Override public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) {}
+            @Override public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) {}
             @Override public void bindDefaultRenderTarget() {}
             @Override public void draw(int vertexCount, int firstVertex) {}
             @Override public void drawIndexed(int indexCount, int firstIndex) {}

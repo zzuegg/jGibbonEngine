@@ -4,6 +4,7 @@ import dev.engine.core.handle.Handle;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferWriter;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
+import dev.engine.graphics.target.RenderTargetDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.vertex.VertexFormat;
 
@@ -11,27 +12,27 @@ import java.nio.ByteBuffer;
 
 public interface RenderDevice extends AutoCloseable {
 
-    Handle createBuffer(BufferDescriptor descriptor);
-    void destroyBuffer(Handle buffer);
-    boolean isValidBuffer(Handle buffer);
-    BufferWriter writeBuffer(Handle buffer);
-    BufferWriter writeBuffer(Handle buffer, long offset, long length);
+    Handle<BufferResource> createBuffer(BufferDescriptor descriptor);
+    void destroyBuffer(Handle<BufferResource> buffer);
+    boolean isValidBuffer(Handle<BufferResource> buffer);
+    BufferWriter writeBuffer(Handle<BufferResource> buffer);
+    BufferWriter writeBuffer(Handle<BufferResource> buffer, long offset, long length);
 
-    Handle createTexture(TextureDescriptor descriptor);
-    void uploadTexture(Handle texture, ByteBuffer pixels);
-    void destroyTexture(Handle texture);
-    boolean isValidTexture(Handle texture);
+    Handle<TextureResource> createTexture(TextureDescriptor descriptor);
+    void uploadTexture(Handle<TextureResource> texture, ByteBuffer pixels);
+    void destroyTexture(Handle<TextureResource> texture);
+    boolean isValidTexture(Handle<TextureResource> texture);
 
-    Handle createVertexInput(VertexFormat format);
-    void destroyVertexInput(Handle vertexInput);
+    Handle<RenderTargetResource> createRenderTarget(RenderTargetDescriptor descriptor);
+    Handle<TextureResource> getRenderTargetColorTexture(Handle<RenderTargetResource> renderTarget, int index);
+    void destroyRenderTarget(Handle<RenderTargetResource> renderTarget);
 
-    Handle createRenderTarget(dev.engine.graphics.target.RenderTargetDescriptor descriptor);
-    Handle getRenderTargetColorTexture(Handle renderTarget, int index);
-    void destroyRenderTarget(Handle renderTarget);
+    Handle<VertexInputResource> createVertexInput(VertexFormat format);
+    void destroyVertexInput(Handle<VertexInputResource> vertexInput);
 
-    Handle createPipeline(PipelineDescriptor descriptor);
-    void destroyPipeline(Handle pipeline);
-    boolean isValidPipeline(Handle pipeline);
+    Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor);
+    void destroyPipeline(Handle<PipelineResource> pipeline);
+    boolean isValidPipeline(Handle<PipelineResource> pipeline);
 
     RenderContext beginFrame();
     void endFrame(RenderContext context);

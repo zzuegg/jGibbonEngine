@@ -5,26 +5,26 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 
-public class HandlePool {
+public class HandlePool<T> {
 
     private final List<Integer> generations = new ArrayList<>();
     private final Deque<Integer> freeIndices = new ArrayDeque<>();
     private final Object lock = new Object();
 
-    public Handle allocate() {
+    public Handle<T> allocate() {
         synchronized (lock) {
             if (!freeIndices.isEmpty()) {
                 int index = freeIndices.poll();
                 int gen = generations.get(index);
-                return new Handle(index, gen);
+                return new Handle<>(index, gen);
             }
             int index = generations.size();
             generations.add(0);
-            return new Handle(index, 0);
+            return new Handle<>(index, 0);
         }
     }
 
-    public void release(Handle handle) {
+    public void release(Handle<T> handle) {
         synchronized (lock) {
             if (handle.index() < 0 || handle.index() >= generations.size()) return;
             if (generations.get(handle.index()) != handle.generation()) return;
@@ -33,7 +33,7 @@ public class HandlePool {
         }
     }
 
-    public boolean isValid(Handle handle) {
+    public boolean isValid(Handle<T> handle) {
         synchronized (lock) {
             if (handle.index() < 0 || handle.index() >= generations.size()) return false;
             return generations.get(handle.index()) == handle.generation();
