@@ -7,6 +7,7 @@ val lwjglNatives = "natives-linux"
 dependencies {
     implementation(project(":core"))
     implementation(project(":graphics:api"))
+    implementation(project(":graphics:common"))
     implementation(project(":graphics:opengl"))
     implementation(platform(libs.lwjgl.bom))
     implementation(libs.lwjgl.opengl)
