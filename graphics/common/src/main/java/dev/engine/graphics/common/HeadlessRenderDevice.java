@@ -22,7 +22,7 @@ import java.util.Map;
  * A render device that does nothing — for testing without a GPU.
  * All resource operations return valid handles. Submit is a no-op.
  */
-class HeadlessRenderDevice implements RenderDevice {
+public class HeadlessRenderDevice implements RenderDevice {
 
     private final HandlePool<BufferResource> bufferPool = new HandlePool<>();
     private final HandlePool<TextureResource> texturePool = new HandlePool<>();
