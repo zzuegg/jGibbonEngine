@@ -3,6 +3,7 @@ package dev.engine.graphics.opengl;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.BufferResource;
+import dev.engine.graphics.CapabilityRegistry;
 import dev.engine.graphics.DeviceCapability;
 import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.RenderDevice;
@@ -67,6 +68,7 @@ public class GlRenderDevice implements RenderDevice {
     private final HandlePool<PipelineResource> pipelinePool = new HandlePool<>();
     private final Map<Integer, Integer> pipelineGlPrograms = new HashMap<>();
     private final AtomicLong frameCounter = new AtomicLong(0);
+    private final CapabilityRegistry capabilities = new CapabilityRegistry();
     private final long glfwWindow;
 
     public GlRenderDevice(GlfwWindowToolkit.GlfwWindowHandle window) {
@@ -74,6 +76,29 @@ public class GlRenderDevice implements RenderDevice {
         GLFW.glfwMakeContextCurrent(glfwWindow);
         GL.createCapabilities();
         log.info("OpenGL context created: {}", GL45.glGetString(GL45.GL_VERSION));
+        registerCapabilities();
+    }
+
+    private void registerCapabilities() {
+        // Limits (lazy — queried each time, cached by caller if needed)
+        capabilities.register(DeviceCapability.MAX_TEXTURE_SIZE, () -> GL45.glGetInteger(GL45.GL_MAX_TEXTURE_SIZE));
+        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_WIDTH, () -> GL45.glGetInteger(GL45.GL_MAX_FRAMEBUFFER_WIDTH));
+        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_HEIGHT, () -> GL45.glGetInteger(GL45.GL_MAX_FRAMEBUFFER_HEIGHT));
+        capabilities.register(DeviceCapability.MAX_ANISOTROPY, () -> GL45.glGetFloat(0x84FF));
+        capabilities.register(DeviceCapability.MAX_UNIFORM_BUFFER_SIZE, () -> GL45.glGetInteger(GL45.GL_MAX_UNIFORM_BLOCK_SIZE));
+        capabilities.register(DeviceCapability.MAX_STORAGE_BUFFER_SIZE, () -> GL45.glGetInteger(GL45.GL_MAX_SHADER_STORAGE_BLOCK_SIZE));
+
+        // Features
+        capabilities.registerStatic(DeviceCapability.COMPUTE_SHADERS, true);
+        capabilities.registerStatic(DeviceCapability.GEOMETRY_SHADERS, true);
+        capabilities.registerStatic(DeviceCapability.TESSELLATION, true);
+        capabilities.registerStatic(DeviceCapability.ANISOTROPIC_FILTERING, true);
+        capabilities.register(DeviceCapability.BINDLESS_TEXTURES, this::hasBindlessTextures);
+
+        // Device info
+        capabilities.registerStatic(DeviceCapability.BACKEND_NAME, "OpenGL");
+        capabilities.register(DeviceCapability.DEVICE_NAME, () -> GL45.glGetString(GL45.GL_RENDERER));
+        capabilities.register(DeviceCapability.API_VERSION, () -> GL45.glGetString(GL45.GL_VERSION));
     }
 
     @Override
@@ -468,46 +493,19 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> T queryCapability(DeviceCapability<T> capability) {
-        if (capability == DeviceCapability.MAX_TEXTURE_SIZE) {
-            return (T) Integer.valueOf(GL45.glGetInteger(GL45.GL_MAX_TEXTURE_SIZE));
-        }
-        if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) {
-            return (T) Integer.valueOf(GL45.glGetInteger(GL45.GL_MAX_FRAMEBUFFER_WIDTH));
-        }
-        if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) {
-            return (T) Integer.valueOf(GL45.glGetInteger(GL45.GL_MAX_FRAMEBUFFER_HEIGHT));
-        }
-        if (capability == DeviceCapability.COMPUTE_SHADERS) {
-            return (T) Boolean.TRUE;
-        }
-        if (capability == DeviceCapability.GEOMETRY_SHADERS) {
-            return (T) Boolean.TRUE;
-        }
-        if (capability == DeviceCapability.TESSELLATION) {
-            return (T) Boolean.TRUE;
-        }
-        if (capability == DeviceCapability.ANISOTROPIC_FILTERING) {
-            return (T) Boolean.TRUE;
-        }
-        if (capability == DeviceCapability.MAX_ANISOTROPY) {
-            return (T) Float.valueOf(GL45.glGetFloat(0x84FF /* GL_MAX_TEXTURE_MAX_ANISOTROPY */));
-        }
-        if (capability == DeviceCapability.DEVICE_NAME) {
-            return (T) GL45.glGetString(GL45.GL_RENDERER);
-        }
-        if (capability == DeviceCapability.API_VERSION) {
-            return (T) GL45.glGetString(GL45.GL_VERSION);
-        }
-        if (capability == DeviceCapability.BACKEND_NAME) {
-            return (T) "OpenGL";
-        }
-        if (capability == DeviceCapability.BINDLESS_TEXTURES) {
-            return (T) Boolean.valueOf(hasBindlessTextures());
-        }
-        return null;
+        return capabilities.query(capability);
     }
+
+    /**
+     * Returns the capability registry for this device.
+     * Users can register custom capabilities without modifying engine code:
+     * <pre>
+     *   var MY_CAP = DeviceCapability.intCap("MY_CUSTOM_LIMIT");
+     *   device.capabilities().register(MY_CAP, () -> GL45.glGetInteger(MY_GL_CONSTANT));
+     * </pre>
+     */
+    public CapabilityRegistry capabilities() { return capabilities; }
 
     private boolean hasBindlessTextures() {
         var extensions = GL45.glGetString(GL45.GL_EXTENSIONS);
