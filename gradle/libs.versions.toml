@@ -5,7 +5,7 @@ java = "25"
 slf4j = "2.0.16"
 
 # Native
-lwjgl = "3.3.6"
+lwjgl = "3.4.1"
 
 # Testing
 junit = "5.11.3"
@@ -25,6 +25,8 @@ lwjgl-glfw-natives = { module = "org.lwjgl:lwjgl-glfw", version.ref = "lwjgl" }
 lwjgl-vulkan = { module = "org.lwjgl:lwjgl-vulkan" }
 lwjgl-shaderc = { module = "org.lwjgl:lwjgl-shaderc" }
 lwjgl-shaderc-natives = { module = "org.lwjgl:lwjgl-shaderc", version.ref = "lwjgl" }
+lwjgl-sdl = { module = "org.lwjgl:lwjgl-sdl" }
+lwjgl-sdl-natives = { module = "org.lwjgl:lwjgl-sdl", version.ref = "lwjgl" }
 
 # Testing
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
