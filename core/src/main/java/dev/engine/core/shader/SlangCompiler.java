@@ -1,5 +1,7 @@
 package dev.engine.core.shader;
 
+import dev.engine.core.native_.NativeLibraryLoader;
+import dev.engine.core.native_.NativeLibraryResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,6 +69,22 @@ public class SlangCompiler {
                 return new SlangCompiler(Path.of(output));
             }
         } catch (Exception ignored) {}
+
+        // Auto-download via NativeLibraryLoader
+        log.info("slangc not found locally — attempting auto-download...");
+        try {
+            var loader = NativeLibraryLoader.defaultLoader();
+            var result = loader.resolve(SlangSpec.spec());
+            if (result.isAvailable()) {
+                var slangcPath = result.executablePath("slangc");
+                if (slangcPath != null && Files.isExecutable(slangcPath)) {
+                    log.info("Found slangc via native loader at {}", slangcPath);
+                    return new SlangCompiler(slangcPath);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Auto-download of slangc failed: {}", e.getMessage());
+        }
 
         log.warn("slangc not found — Slang compilation unavailable");
         return new SlangCompiler(null);
