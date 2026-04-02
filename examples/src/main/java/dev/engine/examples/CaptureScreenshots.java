@@ -171,21 +171,23 @@ public class CaptureScreenshots {
         var vp = camera.viewProjectionMatrix();
 
         device.beginFrame();
-        rec = new CommandRecorder();
-        rec.viewport(0, 0, 800, 600);
-        rec.setDepthTest(true);
-        rec.setCullFace(true);
-        rec.clear(0.05f, 0.05f, 0.08f, 1f);
-        rec.bindPipeline(cubePipeline);
+        var setup2 = new CommandRecorder();
+        setup2.viewport(0, 0, 800, 600);
+        setup2.setDepthTest(true);
+        setup2.setCullFace(true);
+        setup2.clear(0.05f, 0.05f, 0.08f, 1f);
+        setup2.bindPipeline(cubePipeline);
+        device.submit(setup2.finish());
         for (var cmd : meshRenderer.collectBatch()) {
             var m = vp.mul(cmd.transform());
             try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, m.transpose()); }
-            rec.bindUniformBuffer(0, ubo);
-            rec.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
-            rec.bindIndexBuffer(cmd.renderable().indexBuffer());
-            rec.drawIndexed(cmd.renderable().indexCount(), 0);
+            var draw = new CommandRecorder();
+            draw.bindUniformBuffer(0, ubo);
+            draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
+            draw.bindIndexBuffer(cmd.renderable().indexBuffer());
+            draw.drawIndexed(cmd.renderable().indexCount(), 0);
+            device.submit(draw.finish());
         }
-        device.submit(rec.finish());
         device.endFrame();
         ScreenshotUtil.capture(800, 600, "/tmp/engine_scene.png");
         System.out.println("Saved /tmp/engine_scene.png");

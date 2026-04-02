@@ -127,25 +127,30 @@ public class SceneExample {
 
             // Render
             device.beginFrame();
-            var rec = new CommandRecorder();
-            rec.viewport(0, 0, w, h);
-            rec.setDepthTest(true);
-            rec.setCullFace(true);
-            rec.clear(0.05f, 0.05f, 0.08f, 1f);
-            rec.bindPipeline(pipeline);
 
+            // Setup pass
+            var setup = new CommandRecorder();
+            setup.viewport(0, 0, w, h);
+            setup.setDepthTest(true);
+            setup.setCullFace(true);
+            setup.clear(0.05f, 0.05f, 0.08f, 1f);
+            setup.bindPipeline(pipeline);
+            device.submit(setup.finish());
+
+            // Draw each object: update UBO then submit draw commands
             for (var cmd : meshRenderer.collectBatch()) {
                 var mvp = vp.mul(cmd.transform());
                 try (var writer = device.writeBuffer(ubo)) {
                     matLayout.write(writer.segment(), 0, mvp.transpose());
                 }
-                rec.bindUniformBuffer(0, ubo);
-                rec.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
-                rec.bindIndexBuffer(cmd.renderable().indexBuffer());
-                rec.drawIndexed(cmd.renderable().indexCount(), 0);
+                var draw = new CommandRecorder();
+                draw.bindUniformBuffer(0, ubo);
+                draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
+                draw.bindIndexBuffer(cmd.renderable().indexBuffer());
+                draw.drawIndexed(cmd.renderable().indexCount(), 0);
+                device.submit(draw.finish());
             }
 
-            device.submit(rec.finish());
             device.endFrame();
         }
 
