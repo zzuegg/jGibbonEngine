@@ -1,4 +1,4 @@
-// PBR material shader with basic directional lighting
+// PBR material shader with directional lighting
 
 struct VertexInput {
     float3 position : POSITION;
@@ -16,7 +16,7 @@ cbuffer Matrices {
     float4x4 mvp;
 };
 
-// __MATERIAL_STRUCT__ (auto-generated from PbrMaterial.ScalarData)
+// __MATERIAL_STRUCT__
 
 [shader("vertex")]
 VertexOutput vertexMain(VertexInput input) {
@@ -33,7 +33,13 @@ float4 fragmentMain(VertexOutput input) : SV_Target {
     float3 L = normalize(float3(0.5, 1.0, 0.3));
     float NdotL = max(dot(N, L), 0.0);
 
-    float3 color = N * 0.5 + 0.5; // normal visualization for now
-    color = color * (0.2 + 0.8 * NdotL);
-    return float4(color, 1.0);
+    float3 diffuse = albedoColor * (0.15 + 0.85 * NdotL);
+    float3 V = float3(0, 0, 1);
+    float3 H = normalize(L + V);
+    float shininess = lerp(8.0, 256.0, 1.0 - roughness);
+    float spec = pow(max(dot(N, H), 0.0), shininess);
+    float3 specular = float3(spec * metallic, spec * metallic, spec * metallic);
+
+    float3 color = diffuse + specular + emissive;
+    return float4(color, opacity);
 }

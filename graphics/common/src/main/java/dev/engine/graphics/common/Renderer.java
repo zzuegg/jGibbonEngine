@@ -376,6 +376,7 @@ public class Renderer implements AutoCloseable {
     private void uploadTypedMaterialData(dev.engine.core.material.MaterialData matData, CommandRecorder draw) {
         var scalarRecord = matData.scalarData();
         if (scalarRecord == null) return;
+        org.slf4j.LoggerFactory.getLogger(Renderer.class).info("Uploading typed material: {}", scalarRecord);
 
         var layout = StructLayout.of(scalarRecord.getClass());
         var key = "typedmat_" + scalarRecord.getClass().getName();

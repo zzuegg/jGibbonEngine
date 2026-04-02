@@ -54,11 +54,13 @@ public record PbrMaterial(
     public boolean hasAlbedoMap() { return albedoMap != null; }
     public boolean hasNormalMap() { return normalMap != null; }
 
-    public record ScalarData(Vec3 albedoColor, float roughness, float metallic, Vec3 emissive, float opacity, float normalStrength) {}
+    // Ordered for std140 layout: vec3 always followed by float to fill 16-byte alignment
+    public record ScalarData(Vec3 albedoColor, float roughness, Vec3 emissive, float metallic, float opacity, float normalStrength, float _pad0, float _pad1) {}
+
 
     @Override
     public Record scalarData() {
-        return new ScalarData(albedoColor, roughness, metallic, emissive, opacity, normalStrength);
+        return new ScalarData(albedoColor, roughness, emissive, metallic, opacity, normalStrength, 0f, 0f);
     }
 
     @Override
