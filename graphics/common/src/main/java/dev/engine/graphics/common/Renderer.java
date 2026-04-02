@@ -13,6 +13,7 @@ import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.core.shader.SlangCompiler;
 import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.common.material.Material;
+import dev.engine.graphics.common.material.MaterialCompiler;
 import dev.engine.graphics.common.material.MaterialType;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.renderer.DrawCommand;
@@ -54,6 +55,9 @@ public class Renderer implements AutoCloseable {
     // Entity → MeshHandle + Material mapping
     private final Map<Handle<EntityTag>, MeshHandle> entityMeshes = new HashMap<>();
     private final Map<Handle<EntityTag>, Material> entityMaterials = new HashMap<>();
+
+    // Material data UBO (binding 1) — lazily created per material key
+    private final Map<String, Handle<BufferResource>> materialUbos = new HashMap<>();
 
     // Viewport
     private int viewportWidth = 800;
@@ -215,15 +219,31 @@ public class Renderer implements AutoCloseable {
         device.submit(setup.finish());
 
         // Draw each object
-        if (activeCamera != null && defaultPipeline != null) {
+        if (activeCamera != null) {
             var vp = activeCamera.viewProjectionMatrix();
             for (var cmd : meshRenderer.collectBatch()) {
+                // Skip if no pipeline
+                if (cmd.renderable().pipeline() == null) continue;
+
+                // Upload MVP to binding 0
                 var mvp = vp.mul(cmd.transform());
                 try (var w = device.writeBuffer(mvpUbo)) {
                     mat4Layout.write(w.segment(), 0, mvp);
                 }
+
                 var draw = new CommandRecorder();
+                draw.bindPipeline(cmd.renderable().pipeline());
                 draw.bindUniformBuffer(0, mvpUbo);
+
+                // Upload material data to binding 1 if material has properties
+                var entity = findEntityForRenderable(cmd);
+                if (entity != null) {
+                    var material = entityMaterials.get(entity);
+                    if (material != null) {
+                        uploadMaterialData(material, draw);
+                    }
+                }
+
                 draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
                 if (cmd.renderable().indexBuffer() != null) {
                     draw.bindIndexBuffer(cmd.renderable().indexBuffer());
@@ -253,6 +273,50 @@ public class Renderer implements AutoCloseable {
         return queryCapability(DeviceCapability.BACKEND_NAME);
     }
 
+    // --- Internal helpers ---
+
+    private void uploadMaterialData(Material material, CommandRecorder draw) {
+        if (material.hasRecordData()) {
+            // Record-based: use StructLayout to serialize
+            var record = material.data();
+            var layout = dev.engine.core.layout.StructLayout.of(record.getClass());
+            var key = "record_" + record.getClass().getName();
+            var ubo = materialUbos.computeIfAbsent(key, k ->
+                    device.createBuffer(new dev.engine.graphics.buffer.BufferDescriptor(
+                            layout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
+            try (var w = device.writeBuffer(ubo)) {
+                layout.write(w.segment(), 0, record);
+            }
+            draw.bindUniformBuffer(1, ubo);
+        } else {
+            // Property bag: use MaterialCompiler to serialize
+            var data = MaterialCompiler.serializeMaterialData(material);
+            if (data.remaining() > 0) {
+                var key = MaterialCompiler.shaderKey(material);
+                var ubo = materialUbos.computeIfAbsent(key, k ->
+                        device.createBuffer(new dev.engine.graphics.buffer.BufferDescriptor(
+                                data.remaining(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
+                try (var w = device.writeBuffer(ubo)) {
+                    for (int i = 0; i < data.remaining(); i++) {
+                        w.segment().set(java.lang.foreign.ValueLayout.JAVA_BYTE, i, data.get(i));
+                    }
+                }
+                draw.bindUniformBuffer(1, ubo);
+            }
+        }
+    }
+
+    private Handle<EntityTag> findEntityForRenderable(dev.engine.graphics.renderer.DrawCommand cmd) {
+        // Reverse lookup: find which entity owns this renderable's transform
+        for (var entry : entityMeshes.entrySet()) {
+            if (meshRenderer.hasEntity(entry.getKey()) &&
+                    meshRenderer.getTransform(entry.getKey()) == cmd.transform()) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
     // --- Low-level access (escape hatch) ---
 
     public RenderDevice device() { return device; }
@@ -260,6 +324,8 @@ public class Renderer implements AutoCloseable {
     @Override
     public void close() {
         device.destroyBuffer(mvpUbo);
+        for (var ubo : materialUbos.values()) device.destroyBuffer(ubo);
+        materialUbos.clear();
         if (defaultPipeline != null) device.destroyPipeline(defaultPipeline);
         device.close();
     }

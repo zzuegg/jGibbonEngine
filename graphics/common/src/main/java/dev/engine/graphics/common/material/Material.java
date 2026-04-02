@@ -25,6 +25,8 @@ public class Material {
     private final MaterialType type;
     private final MutablePropertyMap properties = new MutablePropertyMap();
     private String shaderSource;
+    private Object dataRecord; // Optional: a record holding all material data
+    private Class<?> dataRecordType;
 
     private Material(MaterialType type) {
         this.type = type;
@@ -36,6 +38,7 @@ public class Material {
 
     public MaterialType type() { return type; }
 
+    // --- Property bag API (auto-managed materials) ---
     public <T> void set(PropertyKey<T> key, T value) { properties.set(key, value); }
     public <T> T get(PropertyKey<T> key) { return properties.get(key); }
     public boolean has(PropertyKey<?> key) { return properties.contains(key); }
@@ -43,6 +46,26 @@ public class Material {
     public Set<PropertyKey<?>> changes() { return properties.getChanges(); }
     public void clearChanges() { properties.clearChanges(); }
 
+    // --- Record-based API (custom materials, single source of truth) ---
+
+    /**
+     * Sets a typed record as the material data. The record type
+     * auto-generates the Slang struct definition via SlangStructGenerator.
+     * Use this for custom shaders where you control the data layout.
+     */
+    public <T extends Record> void setData(T record) {
+        this.dataRecord = record;
+        this.dataRecordType = record.getClass();
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T extends Record> T data() { return (T) dataRecord; }
+
+    public Class<?> dataRecordType() { return dataRecordType; }
+
+    public boolean hasRecordData() { return dataRecord != null; }
+
+    // --- Shader source ---
     public void setShaderSource(String path) { this.shaderSource = path; }
     public String shaderSource() { return shaderSource; }
 }
