@@ -49,17 +49,40 @@ public class SpinningCubeExample {
         var device = new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window);
         window.show();
 
-        // Cube vertices (8 corners with colors)
+        // Cube: 24 vertices (4 per face), each face has a solid color
         var layout = StructLayout.of(Vertex.class);
+        float s = 0.5f;
         var verts = new Vertex[]{
-                new Vertex(-0.5f, -0.5f, -0.5f, 1f, 0f, 0f),
-                new Vertex( 0.5f, -0.5f, -0.5f, 0f, 1f, 0f),
-                new Vertex( 0.5f,  0.5f, -0.5f, 0f, 0f, 1f),
-                new Vertex(-0.5f,  0.5f, -0.5f, 1f, 1f, 0f),
-                new Vertex(-0.5f, -0.5f,  0.5f, 1f, 0f, 1f),
-                new Vertex( 0.5f, -0.5f,  0.5f, 0f, 1f, 1f),
-                new Vertex( 0.5f,  0.5f,  0.5f, 1f, 1f, 1f),
-                new Vertex(-0.5f,  0.5f,  0.5f, 0.5f, 0.5f, 0.5f),
+                // Front face (red)
+                new Vertex(-s, -s,  s, 0.9f, 0.2f, 0.2f),
+                new Vertex( s, -s,  s, 0.9f, 0.2f, 0.2f),
+                new Vertex( s,  s,  s, 0.9f, 0.2f, 0.2f),
+                new Vertex(-s,  s,  s, 0.9f, 0.2f, 0.2f),
+                // Back face (green)
+                new Vertex( s, -s, -s, 0.2f, 0.9f, 0.2f),
+                new Vertex(-s, -s, -s, 0.2f, 0.9f, 0.2f),
+                new Vertex(-s,  s, -s, 0.2f, 0.9f, 0.2f),
+                new Vertex( s,  s, -s, 0.2f, 0.9f, 0.2f),
+                // Top face (blue)
+                new Vertex(-s,  s,  s, 0.2f, 0.2f, 0.9f),
+                new Vertex( s,  s,  s, 0.2f, 0.2f, 0.9f),
+                new Vertex( s,  s, -s, 0.2f, 0.2f, 0.9f),
+                new Vertex(-s,  s, -s, 0.2f, 0.2f, 0.9f),
+                // Bottom face (yellow)
+                new Vertex(-s, -s, -s, 0.9f, 0.9f, 0.2f),
+                new Vertex( s, -s, -s, 0.9f, 0.9f, 0.2f),
+                new Vertex( s, -s,  s, 0.9f, 0.9f, 0.2f),
+                new Vertex(-s, -s,  s, 0.9f, 0.9f, 0.2f),
+                // Right face (cyan)
+                new Vertex( s, -s,  s, 0.2f, 0.9f, 0.9f),
+                new Vertex( s, -s, -s, 0.2f, 0.9f, 0.9f),
+                new Vertex( s,  s, -s, 0.2f, 0.9f, 0.9f),
+                new Vertex( s,  s,  s, 0.2f, 0.9f, 0.9f),
+                // Left face (magenta)
+                new Vertex(-s, -s, -s, 0.9f, 0.2f, 0.9f),
+                new Vertex(-s, -s,  s, 0.9f, 0.2f, 0.9f),
+                new Vertex(-s,  s,  s, 0.9f, 0.2f, 0.9f),
+                new Vertex(-s,  s, -s, 0.9f, 0.2f, 0.9f),
         };
         long vbSize = (long) layout.size() * verts.length;
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
@@ -68,15 +91,17 @@ public class SpinningCubeExample {
                 layout.write(w.segment(), (long) layout.size() * i, verts[i]);
         }
 
-        // Index buffer (6 faces * 2 triangles * 3 indices)
-        int[] indices = {
-                0, 1, 2, 0, 2, 3, // back
-                4, 6, 5, 4, 7, 6, // front
-                0, 4, 5, 0, 5, 1, // bottom
-                2, 6, 7, 2, 7, 3, // top
-                0, 3, 7, 0, 7, 4, // left
-                1, 5, 6, 1, 6, 2, // right
-        };
+        // Index buffer: 6 faces * 2 triangles * 3 indices = 36
+        int[] indices = new int[36];
+        for (int face = 0; face < 6; face++) {
+            int base = face * 4;
+            indices[face * 6    ] = base;
+            indices[face * 6 + 1] = base + 1;
+            indices[face * 6 + 2] = base + 2;
+            indices[face * 6 + 3] = base;
+            indices[face * 6 + 4] = base + 2;
+            indices[face * 6 + 5] = base + 3;
+        }
         long ibSize = (long) indices.length * Integer.BYTES;
         var ibo = device.createBuffer(new BufferDescriptor(ibSize, BufferUsage.INDEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(ibo)) {
@@ -121,6 +146,7 @@ public class SpinningCubeExample {
             var ctx = device.beginFrame();
             ctx.viewport(0, 0, w, h);
             ctx.setDepthTest(true);
+            ctx.setCullFace(true);
             ctx.clear(0.08f, 0.08f, 0.1f, 1.0f);
             ctx.bindPipeline(pipeline);
             ctx.bindUniformBuffer(0, ubo);
