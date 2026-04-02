@@ -8,6 +8,7 @@ import dev.engine.core.scene.camera.Camera;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
+import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -125,25 +126,27 @@ public class SceneExample {
             var vp = camera.viewProjectionMatrix();
 
             // Render
-            var ctx = device.beginFrame();
-            ctx.viewport(0, 0, w, h);
-            ctx.setDepthTest(true);
-            ctx.setCullFace(true);
-            ctx.clear(0.05f, 0.05f, 0.08f, 1f);
-            ctx.bindPipeline(pipeline);
+            device.beginFrame();
+            var rec = new CommandRecorder();
+            rec.viewport(0, 0, w, h);
+            rec.setDepthTest(true);
+            rec.setCullFace(true);
+            rec.clear(0.05f, 0.05f, 0.08f, 1f);
+            rec.bindPipeline(pipeline);
 
             for (var cmd : meshRenderer.collectBatch()) {
                 var mvp = vp.mul(cmd.transform());
                 try (var writer = device.writeBuffer(ubo)) {
                     matLayout.write(writer.segment(), 0, mvp.transpose());
                 }
-                ctx.bindUniformBuffer(0, ubo);
-                ctx.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
-                ctx.bindIndexBuffer(cmd.renderable().indexBuffer());
-                ctx.drawIndexed(cmd.renderable().indexCount(), 0);
+                rec.bindUniformBuffer(0, ubo);
+                rec.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
+                rec.bindIndexBuffer(cmd.renderable().indexBuffer());
+                rec.drawIndexed(cmd.renderable().indexCount(), 0);
             }
 
-            device.endFrame(ctx);
+            device.submit(rec.finish());
+            device.endFrame();
         }
 
         // Cleanup

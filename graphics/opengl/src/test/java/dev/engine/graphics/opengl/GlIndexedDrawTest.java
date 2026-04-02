@@ -4,6 +4,7 @@ import dev.engine.core.layout.StructLayout;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
+import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
@@ -91,14 +92,16 @@ class GlIndexedDrawTest {
         GL45.glNamedFramebufferTexture(fbo, GL45.GL_COLOR_ATTACHMENT0, colorTex, 0);
 
         GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
-        var ctx = device.beginFrame();
-        ctx.viewport(0, 0, 64, 64);
-        ctx.clear(0f, 0f, 0f, 1f);
-        ctx.bindPipeline(pipeline);
-        ctx.bindVertexBuffer(vbo, vertexInput);
-        ctx.bindIndexBuffer(ibo);
-        ctx.drawIndexed(6, 0);
-        device.endFrame(ctx);
+        device.beginFrame();
+        var rec = new CommandRecorder();
+        rec.viewport(0, 0, 64, 64);
+        rec.clear(0f, 0f, 0f, 1f);
+        rec.bindPipeline(pipeline);
+        rec.bindVertexBuffer(vbo, vertexInput);
+        rec.bindIndexBuffer(ibo);
+        rec.drawIndexed(6, 0);
+        device.submit(rec.finish());
+        device.endFrame();
 
         // Center pixel should be green
         ByteBuffer pixel = ByteBuffer.allocateDirect(4);

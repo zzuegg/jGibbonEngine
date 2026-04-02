@@ -1,5 +1,6 @@
 package dev.engine.graphics.opengl;
 
+import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.window.WindowDescriptor;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -30,9 +31,11 @@ class GlGpuTimerTest {
         var timer = new GlGpuTimer();
         timer.begin();
         // Issue some GL work
-        var ctx = device.beginFrame();
-        ctx.clear(0f, 0f, 0f, 1f);
-        device.endFrame(ctx);
+        device.beginFrame();
+        var rec = new CommandRecorder();
+        rec.clear(0f, 0f, 0f, 1f);
+        device.submit(rec.finish());
+        device.endFrame();
         timer.end();
 
         // GPU timer results are async — wait for result

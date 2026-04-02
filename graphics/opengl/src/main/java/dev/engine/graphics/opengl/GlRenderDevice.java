@@ -3,14 +3,15 @@ package dev.engine.graphics.opengl;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.BufferResource;
+import dev.engine.graphics.DeviceCapability;
 import dev.engine.graphics.PipelineResource;
-import dev.engine.graphics.RenderCapability;
-import dev.engine.graphics.RenderContext;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.RenderTargetResource;
 import dev.engine.graphics.SamplerResource;
 import dev.engine.graphics.TextureResource;
 import dev.engine.graphics.VertexInputResource;
+import dev.engine.graphics.command.CommandList;
+import dev.engine.graphics.command.RenderCommand;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderCompilationException;
 import dev.engine.graphics.pipeline.ShaderSource;
@@ -365,27 +366,136 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
-    public RenderContext beginFrame() {
-        long frame = frameCounter.incrementAndGet();
-        return new GlRenderContext(frame, this);
+    public void beginFrame() {
+        frameCounter.incrementAndGet();
     }
 
     @Override
-    public void endFrame(RenderContext context) {
+    public void endFrame() {
         GLFW.glfwSwapBuffers(glfwWindow);
     }
 
     @Override
+    public void submit(CommandList commands) {
+        for (var command : commands.commands()) {
+            executeCommand(command);
+        }
+    }
+
+    private void executeCommand(RenderCommand command) {
+        switch (command) {
+            case RenderCommand.BindPipeline cmd -> {
+                int program = getGlProgramName(cmd.pipeline());
+                GL45.glUseProgram(program);
+            }
+            case RenderCommand.BindVertexBuffer cmd -> {
+                int vao = getGlVaoName(cmd.vertexInput());
+                int vbo = getGlBufferName(cmd.buffer());
+                GL45.glBindVertexArray(vao);
+                int stride = getVertexInputStride(cmd.vertexInput());
+                GL45.glVertexArrayVertexBuffer(vao, 0, vbo, 0, stride);
+            }
+            case RenderCommand.BindIndexBuffer cmd -> {
+                int ibo = getGlBufferName(cmd.buffer());
+                GL45.glBindBuffer(GL45.GL_ELEMENT_ARRAY_BUFFER, ibo);
+            }
+            case RenderCommand.BindUniformBuffer cmd -> {
+                int ubo = getGlBufferName(cmd.buffer());
+                GL45.glBindBufferBase(GL45.GL_UNIFORM_BUFFER, cmd.binding(), ubo);
+            }
+            case RenderCommand.BindTexture cmd -> {
+                int glTex = getGlTextureName(cmd.texture());
+                GL45.glBindTextureUnit(cmd.unit(), glTex);
+            }
+            case RenderCommand.BindSampler cmd -> {
+                GL45.glBindSampler(cmd.unit(), getGlSamplerName(cmd.sampler()));
+            }
+            case RenderCommand.Draw cmd -> {
+                GL45.glDrawArrays(GL45.GL_TRIANGLES, cmd.firstVertex(), cmd.vertexCount());
+            }
+            case RenderCommand.DrawIndexed cmd -> {
+                GL45.glDrawElements(GL45.GL_TRIANGLES, cmd.indexCount(), GL45.GL_UNSIGNED_INT,
+                        (long) cmd.firstIndex() * Integer.BYTES);
+            }
+            case RenderCommand.BindRenderTarget cmd -> {
+                int fbo = getGlFboName(cmd.renderTarget());
+                GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
+            }
+            case RenderCommand.BindDefaultRenderTarget cmd -> {
+                GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, 0);
+            }
+            case RenderCommand.SetDepthTest cmd -> {
+                if (cmd.enabled()) GL45.glEnable(GL45.GL_DEPTH_TEST);
+                else GL45.glDisable(GL45.GL_DEPTH_TEST);
+            }
+            case RenderCommand.SetBlending cmd -> {
+                if (cmd.enabled()) {
+                    GL45.glEnable(GL45.GL_BLEND);
+                    GL45.glBlendFunc(GL45.GL_SRC_ALPHA, GL45.GL_ONE_MINUS_SRC_ALPHA);
+                } else {
+                    GL45.glDisable(GL45.GL_BLEND);
+                }
+            }
+            case RenderCommand.SetCullFace cmd -> {
+                if (cmd.enabled()) {
+                    GL45.glEnable(GL45.GL_CULL_FACE);
+                    GL45.glCullFace(GL45.GL_BACK);
+                    GL45.glFrontFace(GL45.GL_CW);
+                } else {
+                    GL45.glDisable(GL45.GL_CULL_FACE);
+                }
+            }
+            case RenderCommand.SetWireframe cmd -> {
+                GL45.glPolygonMode(GL45.GL_FRONT_AND_BACK, cmd.enabled() ? GL45.GL_LINE : GL45.GL_FILL);
+            }
+            case RenderCommand.Clear cmd -> {
+                GL45.glClearColor(cmd.r(), cmd.g(), cmd.b(), cmd.a());
+                GL45.glClear(GL45.GL_COLOR_BUFFER_BIT | GL45.GL_DEPTH_BUFFER_BIT);
+            }
+            case RenderCommand.Viewport cmd -> {
+                GL45.glViewport(cmd.x(), cmd.y(), cmd.width(), cmd.height());
+            }
+            case RenderCommand.Scissor cmd -> {
+                GL45.glScissor(cmd.x(), cmd.y(), cmd.width(), cmd.height());
+            }
+        }
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
-    public <T> T queryCapability(RenderCapability<T> capability) {
-        if (capability == RenderCapability.MAX_TEXTURE_SIZE) {
+    public <T> T queryCapability(DeviceCapability<T> capability) {
+        if (capability == DeviceCapability.MAX_TEXTURE_SIZE) {
             return (T) Integer.valueOf(GL45.glGetInteger(GL45.GL_MAX_TEXTURE_SIZE));
         }
-        if (capability == RenderCapability.MAX_FRAMEBUFFER_WIDTH) {
+        if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) {
             return (T) Integer.valueOf(GL45.glGetInteger(GL45.GL_MAX_FRAMEBUFFER_WIDTH));
         }
-        if (capability == RenderCapability.MAX_FRAMEBUFFER_HEIGHT) {
+        if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) {
             return (T) Integer.valueOf(GL45.glGetInteger(GL45.GL_MAX_FRAMEBUFFER_HEIGHT));
+        }
+        if (capability == DeviceCapability.COMPUTE_SHADERS) {
+            return (T) Boolean.TRUE;
+        }
+        if (capability == DeviceCapability.GEOMETRY_SHADERS) {
+            return (T) Boolean.TRUE;
+        }
+        if (capability == DeviceCapability.TESSELLATION) {
+            return (T) Boolean.TRUE;
+        }
+        if (capability == DeviceCapability.ANISOTROPIC_FILTERING) {
+            return (T) Boolean.TRUE;
+        }
+        if (capability == DeviceCapability.MAX_ANISOTROPY) {
+            return (T) Float.valueOf(GL45.glGetFloat(0x84FF /* GL_MAX_TEXTURE_MAX_ANISOTROPY */));
+        }
+        if (capability == DeviceCapability.DEVICE_NAME) {
+            return (T) GL45.glGetString(GL45.GL_RENDERER);
+        }
+        if (capability == DeviceCapability.API_VERSION) {
+            return (T) GL45.glGetString(GL45.GL_VERSION);
+        }
+        if (capability == DeviceCapability.BACKEND_NAME) {
+            return (T) "OpenGL";
         }
         return null;
     }

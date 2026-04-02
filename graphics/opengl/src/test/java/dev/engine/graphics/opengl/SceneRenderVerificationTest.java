@@ -8,6 +8,7 @@ import dev.engine.core.scene.camera.Camera;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
+import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
@@ -133,23 +134,25 @@ class SceneRenderVerificationTest {
         GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
 
         // Render via mesh renderer batch
-        var ctx = device.beginFrame();
-        ctx.viewport(0, 0, 128, 128);
-        ctx.setDepthTest(true);
-        ctx.clear(0f, 0f, 0f, 1f);
-        ctx.bindPipeline(pipeline);
+        device.beginFrame();
+        var rec = new CommandRecorder();
+        rec.viewport(0, 0, 128, 128);
+        rec.setDepthTest(true);
+        rec.clear(0f, 0f, 0f, 1f);
+        rec.bindPipeline(pipeline);
 
         for (var cmd : meshRenderer.collectBatch()) {
             var mvp = vp.mul(cmd.transform());
             try (var writer = device.writeBuffer(ubo)) {
                 matLayout.write(writer.segment(), 0, mvp);
             }
-            ctx.bindUniformBuffer(0, ubo);
-            ctx.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
-            ctx.bindIndexBuffer(cmd.renderable().indexBuffer());
-            ctx.drawIndexed(cmd.renderable().indexCount(), 0);
+            rec.bindUniformBuffer(0, ubo);
+            rec.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
+            rec.bindIndexBuffer(cmd.renderable().indexBuffer());
+            rec.drawIndexed(cmd.renderable().indexCount(), 0);
         }
-        device.endFrame(ctx);
+        device.submit(rec.finish());
+        device.endFrame();
 
         // Verify center pixel is red (the quad is centered and should cover the center)
         ByteBuffer pixel = ByteBuffer.allocateDirect(4);

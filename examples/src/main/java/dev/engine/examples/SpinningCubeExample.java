@@ -6,6 +6,7 @@ import dev.engine.core.math.Vec3;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
+import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -143,17 +144,19 @@ public class SpinningCubeExample {
                 matLayout.write(writer.segment(), 0, mvp.transpose());
             }
 
-            var ctx = device.beginFrame();
-            ctx.viewport(0, 0, w, h);
-            ctx.setDepthTest(true);
-            ctx.setCullFace(true);
-            ctx.clear(0.08f, 0.08f, 0.1f, 1.0f);
-            ctx.bindPipeline(pipeline);
-            ctx.bindUniformBuffer(0, ubo);
-            ctx.bindVertexBuffer(vbo, vertexInput);
-            ctx.bindIndexBuffer(ibo);
-            ctx.drawIndexed(indices.length, 0);
-            device.endFrame(ctx);
+            device.beginFrame();
+            var rec = new CommandRecorder();
+            rec.viewport(0, 0, w, h);
+            rec.setDepthTest(true);
+            rec.setCullFace(true);
+            rec.clear(0.08f, 0.08f, 0.1f, 1.0f);
+            rec.bindPipeline(pipeline);
+            rec.bindUniformBuffer(0, ubo);
+            rec.bindVertexBuffer(vbo, vertexInput);
+            rec.bindIndexBuffer(ibo);
+            rec.drawIndexed(indices.length, 0);
+            device.submit(rec.finish());
+            device.endFrame();
         }
 
         device.destroyPipeline(pipeline);

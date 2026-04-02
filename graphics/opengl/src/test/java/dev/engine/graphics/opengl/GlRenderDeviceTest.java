@@ -1,7 +1,7 @@
 package dev.engine.graphics.opengl;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.graphics.RenderCapability;
+import dev.engine.graphics.DeviceCapability;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
@@ -70,19 +70,10 @@ class GlRenderDeviceTest {
     class FrameLifecycle {
         @Test
         void beginAndEndFrame() {
-            var ctx = device.beginFrame();
-            assertNotNull(ctx);
-            assertTrue(ctx.frameNumber() > 0);
-            assertDoesNotThrow(() -> device.endFrame(ctx));
-        }
-
-        @Test
-        void frameNumberIncrements() {
-            var ctx1 = device.beginFrame();
-            device.endFrame(ctx1);
-            var ctx2 = device.beginFrame();
-            device.endFrame(ctx2);
-            assertTrue(ctx2.frameNumber() > ctx1.frameNumber());
+            assertDoesNotThrow(() -> {
+                device.beginFrame();
+                device.endFrame();
+            });
         }
     }
 
@@ -90,8 +81,21 @@ class GlRenderDeviceTest {
     class Capabilities {
         @Test
         void maxTextureSizeIsPositive() {
-            int maxSize = device.queryCapability(RenderCapability.MAX_TEXTURE_SIZE);
+            int maxSize = device.queryCapability(DeviceCapability.MAX_TEXTURE_SIZE);
             assertTrue(maxSize >= 1024, "GPU should support at least 1024 texture size, got " + maxSize);
+        }
+
+        @Test
+        void backendNameIsOpenGL() {
+            String name = device.queryCapability(DeviceCapability.BACKEND_NAME);
+            assertEquals("OpenGL", name);
+        }
+
+        @Test
+        void deviceNameIsNonNull() {
+            String name = device.queryCapability(DeviceCapability.DEVICE_NAME);
+            assertNotNull(name);
+            assertFalse(name.isEmpty());
         }
     }
 }

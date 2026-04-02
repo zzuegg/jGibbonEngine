@@ -4,9 +4,8 @@ import dev.engine.bindings.wgpu.WgpuNative;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.BufferResource;
+import dev.engine.graphics.DeviceCapability;
 import dev.engine.graphics.PipelineResource;
-import dev.engine.graphics.RenderCapability;
-import dev.engine.graphics.RenderContext;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.RenderTargetResource;
 import dev.engine.graphics.SamplerResource;
@@ -14,6 +13,7 @@ import dev.engine.graphics.TextureResource;
 import dev.engine.graphics.VertexInputResource;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferWriter;
+import dev.engine.graphics.command.CommandList;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.target.RenderTargetDescriptor;
@@ -211,29 +211,36 @@ public class WgpuRenderDevice implements RenderDevice {
     // --- Frame ---
 
     @Override
-    public RenderContext beginFrame() {
-        long frame = frameCounter.incrementAndGet();
-        return new NoOpRenderContext(frame);
+    public void beginFrame() {
+        frameCounter.incrementAndGet();
     }
 
     @Override
-    public void endFrame(RenderContext context) {
+    public void endFrame() {
         // TODO: present frame via wgpu surface
+    }
+
+    @Override
+    public void submit(CommandList commands) {
+        // TODO: translate commands to wgpu calls
     }
 
     // --- Capabilities ---
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> T queryCapability(RenderCapability<T> capability) {
-        if (capability == RenderCapability.MAX_TEXTURE_SIZE) {
+    public <T> T queryCapability(DeviceCapability<T> capability) {
+        if (capability == DeviceCapability.MAX_TEXTURE_SIZE) {
             return (T) Integer.valueOf(4096);
         }
-        if (capability == RenderCapability.MAX_FRAMEBUFFER_WIDTH) {
+        if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) {
             return (T) Integer.valueOf(4096);
         }
-        if (capability == RenderCapability.MAX_FRAMEBUFFER_HEIGHT) {
+        if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) {
             return (T) Integer.valueOf(4096);
+        }
+        if (capability == DeviceCapability.BACKEND_NAME) {
+            return (T) "WebGPU";
         }
         return null;
     }
@@ -248,68 +255,5 @@ public class WgpuRenderDevice implements RenderDevice {
             log.info("WebGPU instance released");
         }
         log.info("WgpuRenderDevice closed");
-    }
-
-    // ------------------------------------------------------------------
-    // Inner no-op RenderContext returned by beginFrame()
-    // ------------------------------------------------------------------
-
-    private record NoOpRenderContext(long frame) implements RenderContext {
-
-        @Override
-        public long frameNumber() {
-            return frame;
-        }
-
-        @Override
-        public void bindPipeline(Handle<PipelineResource> pipeline) {}
-
-        @Override
-        public void bindVertexBuffer(Handle<BufferResource> buffer, Handle<VertexInputResource> vertexInput) {}
-
-        @Override
-        public void bindIndexBuffer(Handle<BufferResource> buffer) {}
-
-        @Override
-        public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) {}
-
-        @Override
-        public void bindTexture(int unit, Handle<TextureResource> texture) {}
-
-        @Override
-        public void bindSampler(int unit, Handle<SamplerResource> sampler) {}
-
-        @Override
-        public void draw(int vertexCount, int firstVertex) {}
-
-        @Override
-        public void drawIndexed(int indexCount, int firstIndex) {}
-
-        @Override
-        public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) {}
-
-        @Override
-        public void bindDefaultRenderTarget() {}
-
-        @Override
-        public void setDepthTest(boolean enabled) {}
-
-        @Override
-        public void setBlending(boolean enabled) {}
-
-        @Override
-        public void setCullFace(boolean enabled) {}
-
-        @Override
-        public void setWireframe(boolean enabled) {}
-
-        @Override
-        public void clear(float r, float g, float b, float a) {}
-
-        @Override
-        public void viewport(int x, int y, int width, int height) {}
-
-        @Override
-        public void scissor(int x, int y, int width, int height) {}
     }
 }

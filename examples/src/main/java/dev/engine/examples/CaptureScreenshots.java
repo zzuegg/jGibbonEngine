@@ -8,6 +8,7 @@ import dev.engine.core.scene.camera.Camera;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
+import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -77,13 +78,15 @@ public class CaptureScreenshots {
                 new Vertex(0.5f, -0.5f, 0f, 0f, 0f, 1f),
         };
         var triVbo = uploadVertices(device, layout, triVerts);
-        var ctx = device.beginFrame();
-        ctx.viewport(0, 0, 800, 600);
-        ctx.clear(0.1f, 0.1f, 0.12f, 1f);
-        ctx.bindPipeline(triPipeline);
-        ctx.bindVertexBuffer(triVbo, vertexInput);
-        ctx.draw(3, 0);
-        device.endFrame(ctx);
+        device.beginFrame();
+        var rec = new CommandRecorder();
+        rec.viewport(0, 0, 800, 600);
+        rec.clear(0.1f, 0.1f, 0.12f, 1f);
+        rec.bindPipeline(triPipeline);
+        rec.bindVertexBuffer(triVbo, vertexInput);
+        rec.draw(3, 0);
+        device.submit(rec.finish());
+        device.endFrame();
         ScreenshotUtil.capture(800, 600, "/tmp/engine_triangle.png");
         System.out.println("Saved /tmp/engine_triangle.png");
 
@@ -125,17 +128,19 @@ public class CaptureScreenshots {
         var mvp = proj.mul(view).mul(model);
         try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, mvp.transpose()); }
 
-        ctx = device.beginFrame();
-        ctx.viewport(0, 0, 800, 600);
-        ctx.setDepthTest(true);
-        ctx.setCullFace(true);
-        ctx.clear(0.08f, 0.08f, 0.1f, 1f);
-        ctx.bindPipeline(cubePipeline);
-        ctx.bindUniformBuffer(0, ubo);
-        ctx.bindVertexBuffer(cubeVbo, vertexInput);
-        ctx.bindIndexBuffer(cubeIbo);
-        ctx.drawIndexed(36, 0);
-        device.endFrame(ctx);
+        device.beginFrame();
+        rec = new CommandRecorder();
+        rec.viewport(0, 0, 800, 600);
+        rec.setDepthTest(true);
+        rec.setCullFace(true);
+        rec.clear(0.08f, 0.08f, 0.1f, 1f);
+        rec.bindPipeline(cubePipeline);
+        rec.bindUniformBuffer(0, ubo);
+        rec.bindVertexBuffer(cubeVbo, vertexInput);
+        rec.bindIndexBuffer(cubeIbo);
+        rec.drawIndexed(36, 0);
+        device.submit(rec.finish());
+        device.endFrame();
         ScreenshotUtil.capture(800, 600, "/tmp/engine_cube.png");
         System.out.println("Saved /tmp/engine_cube.png");
 
@@ -165,21 +170,23 @@ public class CaptureScreenshots {
         camera.lookAt(new Vec3(0f, 3f, 7f), Vec3.ZERO, Vec3.UNIT_Y);
         var vp = camera.viewProjectionMatrix();
 
-        ctx = device.beginFrame();
-        ctx.viewport(0, 0, 800, 600);
-        ctx.setDepthTest(true);
-        ctx.setCullFace(true);
-        ctx.clear(0.05f, 0.05f, 0.08f, 1f);
-        ctx.bindPipeline(cubePipeline);
+        device.beginFrame();
+        rec = new CommandRecorder();
+        rec.viewport(0, 0, 800, 600);
+        rec.setDepthTest(true);
+        rec.setCullFace(true);
+        rec.clear(0.05f, 0.05f, 0.08f, 1f);
+        rec.bindPipeline(cubePipeline);
         for (var cmd : meshRenderer.collectBatch()) {
             var m = vp.mul(cmd.transform());
             try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, m.transpose()); }
-            ctx.bindUniformBuffer(0, ubo);
-            ctx.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
-            ctx.bindIndexBuffer(cmd.renderable().indexBuffer());
-            ctx.drawIndexed(cmd.renderable().indexCount(), 0);
+            rec.bindUniformBuffer(0, ubo);
+            rec.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
+            rec.bindIndexBuffer(cmd.renderable().indexBuffer());
+            rec.drawIndexed(cmd.renderable().indexCount(), 0);
         }
-        device.endFrame(ctx);
+        device.submit(rec.finish());
+        device.endFrame();
         ScreenshotUtil.capture(800, 600, "/tmp/engine_scene.png");
         System.out.println("Saved /tmp/engine_scene.png");
 

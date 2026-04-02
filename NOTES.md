@@ -48,6 +48,42 @@ All native resources (GPU buffers, textures, shaders, native memory, file handle
 
 Triple-backend (OpenGL + Vulkan + WebGPU) behind a backend-agnostic abstraction.
 
+### Layered Module Structure
+
+Three layers — users only touch the top one:
+
+- **`graphics:common`** — the public API. `Renderer` is the single entry point. Creates from a backend choice, manages frame lifecycle, integrates camera/scene/render-graph. Users import this and nothing else.
+- **`graphics:api`** — shared low-level types. `RenderCommand` (sealed, pure data), `CommandList`, `RenderContext` (shared command recorder), descriptors, handles. Backends and common both depend on this.
+- **`graphics:opengl/vulcan/webgpu`** — backend implementations. Each provides a `RenderDevice` (native resource management) and `CommandExecutor` (translates `CommandList` → native API calls). Users never import these.
+
+### Command List Architecture
+
+`RenderContext` records commands into a `CommandList` — it's pure data, no native calls. The `CommandList` is then submitted to the backend's `CommandExecutor` which translates to GL/VK/WebGPU.
+
+This means:
+- Command recording is shared, written once, used by all backends.
+- Backends only implement resource creation + command execution.
+- A `CommandList` could be recorded on one thread and submitted on another.
+- Testing: record commands and inspect the list without a GPU.
+
+### Capability Query System
+
+`Renderer.queryCapability(cap)` returns normalized values regardless of backend. Capabilities use typed keys (interface, not enum) for extensibility:
+
+- `DeviceCapability.MAX_TEXTURE_SIZE` → int
+- `DeviceCapability.MAX_FRAMEBUFFER_WIDTH` → int
+- `DeviceCapability.COMPUTE_SHADERS` → boolean
+- `DeviceCapability.GEOMETRY_SHADERS` → boolean
+- `DeviceCapability.TESSELLATION` → boolean
+- `DeviceCapability.ANISOTROPIC_FILTERING` → boolean
+- `DeviceCapability.MAX_ANISOTROPY` → float
+- `DeviceCapability.MAX_UNIFORM_BUFFER_SIZE` → int
+- `DeviceCapability.MAX_STORAGE_BUFFER_SIZE` → int
+- `DeviceCapability.DEVICE_NAME` → String
+- `DeviceCapability.API_VERSION` → String
+
+Users can define custom capabilities; backends return null for unsupported ones.
+
 ### Key Abstractions
 
 - **RenderDevice** — represents the GPU. Creates resources (buffers, textures, shaders, pipelines), queries capabilities and state.

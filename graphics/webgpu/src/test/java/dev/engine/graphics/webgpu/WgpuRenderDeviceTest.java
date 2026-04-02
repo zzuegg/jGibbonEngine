@@ -2,7 +2,7 @@ package dev.engine.graphics.webgpu;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.graphics.BufferResource;
-import dev.engine.graphics.RenderCapability;
+import dev.engine.graphics.DeviceCapability;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
@@ -45,15 +45,15 @@ class WgpuRenderDeviceTest {
 
     @Test
     void queryCapabilityReturnsValues() {
-        Integer maxTexSize = device.queryCapability(RenderCapability.MAX_TEXTURE_SIZE);
+        Integer maxTexSize = device.queryCapability(DeviceCapability.MAX_TEXTURE_SIZE);
         assertNotNull(maxTexSize);
         assertTrue(maxTexSize > 0);
 
-        Integer maxFbWidth = device.queryCapability(RenderCapability.MAX_FRAMEBUFFER_WIDTH);
+        Integer maxFbWidth = device.queryCapability(DeviceCapability.MAX_FRAMEBUFFER_WIDTH);
         assertNotNull(maxFbWidth);
         assertTrue(maxFbWidth > 0);
 
-        Integer maxFbHeight = device.queryCapability(RenderCapability.MAX_FRAMEBUFFER_HEIGHT);
+        Integer maxFbHeight = device.queryCapability(DeviceCapability.MAX_FRAMEBUFFER_HEIGHT);
         assertNotNull(maxFbHeight);
         assertTrue(maxFbHeight > 0);
     }

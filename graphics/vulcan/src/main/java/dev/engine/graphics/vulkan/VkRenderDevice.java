@@ -396,26 +396,32 @@ public class VkRenderDevice implements RenderDevice {
     // --- Frame operations ---
 
     @Override
-    public RenderContext beginFrame() {
-        long frame = frameCounter.getAndIncrement();
-        return new VkRenderContext(frame);
+    public void beginFrame() {
+        frameCounter.getAndIncrement();
     }
 
     @Override
-    public void endFrame(RenderContext context) {
+    public void endFrame() {
         // Stub: no presentation for now
+    }
+
+    @Override
+    public void submit(dev.engine.graphics.command.CommandList commands) {
+        // TODO: translate commands to Vulkan command buffers
     }
 
     // --- Capabilities ---
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> T queryCapability(RenderCapability<T> capability) {
+    public <T> T queryCapability(DeviceCapability<T> capability) {
         var limits = deviceProperties.limits();
         return switch (capability.name()) {
             case "MAX_TEXTURE_SIZE" -> (T) Integer.valueOf(limits.maxImageDimension2D());
             case "MAX_FRAMEBUFFER_WIDTH" -> (T) Integer.valueOf(limits.maxFramebufferWidth());
             case "MAX_FRAMEBUFFER_HEIGHT" -> (T) Integer.valueOf(limits.maxFramebufferHeight());
+            case "BACKEND_NAME" -> (T) "Vulkan";
+            case "DEVICE_NAME" -> (T) deviceProperties.deviceNameString();
             default -> null;
         };
     }
@@ -483,32 +489,4 @@ public class VkRenderDevice implements RenderDevice {
         throw new RuntimeException("Failed to find suitable memory type");
     }
 
-    // --- Stub RenderContext ---
-
-    private static class VkRenderContext implements RenderContext {
-        private final long frame;
-
-        VkRenderContext(long frame) {
-            this.frame = frame;
-        }
-
-        @Override public long frameNumber() { return frame; }
-        @Override public void bindPipeline(Handle<PipelineResource> pipeline) {}
-        @Override public void bindVertexBuffer(Handle<BufferResource> buffer, Handle<VertexInputResource> vertexInput) {}
-        @Override public void bindIndexBuffer(Handle<BufferResource> buffer) {}
-        @Override public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) {}
-        @Override public void bindTexture(int unit, Handle<TextureResource> texture) {}
-        @Override public void bindSampler(int unit, Handle<SamplerResource> sampler) {}
-        @Override public void draw(int vertexCount, int firstVertex) {}
-        @Override public void drawIndexed(int indexCount, int firstIndex) {}
-        @Override public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) {}
-        @Override public void bindDefaultRenderTarget() {}
-        @Override public void setDepthTest(boolean enabled) {}
-        @Override public void setBlending(boolean enabled) {}
-        @Override public void setCullFace(boolean enabled) {}
-        @Override public void setWireframe(boolean enabled) {}
-        @Override public void clear(float r, float g, float b, float a) {}
-        @Override public void viewport(int x, int y, int width, int height) {}
-        @Override public void scissor(int x, int y, int width, int height) {}
-    }
 }

@@ -4,6 +4,7 @@ import dev.engine.core.layout.StructLayout;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
+import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
@@ -78,15 +79,17 @@ class GlRenderTargetTest {
                 new ShaderSource(ShaderStage.FRAGMENT, FS)));
 
         // Render to the render target
-        var ctx = device.beginFrame();
-        ctx.bindRenderTarget(rt);
-        ctx.viewport(0, 0, 128, 128);
-        ctx.clear(0f, 0f, 0f, 1f);
-        ctx.bindPipeline(pipeline);
-        ctx.bindVertexBuffer(vbo, vertexInput);
-        ctx.draw(3, 0);
-        ctx.bindDefaultRenderTarget();
-        device.endFrame(ctx);
+        device.beginFrame();
+        var rec = new CommandRecorder();
+        rec.bindRenderTarget(rt);
+        rec.viewport(0, 0, 128, 128);
+        rec.clear(0f, 0f, 0f, 1f);
+        rec.bindPipeline(pipeline);
+        rec.bindVertexBuffer(vbo, vertexInput);
+        rec.draw(3, 0);
+        rec.bindDefaultRenderTarget();
+        device.submit(rec.finish());
+        device.endFrame();
 
         // Read back from the color texture
         int glTex = device.getGlTextureName(colorTex);

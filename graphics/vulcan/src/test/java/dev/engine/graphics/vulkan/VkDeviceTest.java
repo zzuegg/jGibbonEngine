@@ -1,7 +1,7 @@
 package dev.engine.graphics.vulkan;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.graphics.RenderCapability;
+import dev.engine.graphics.DeviceCapability;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
@@ -39,7 +39,7 @@ class VkDeviceTest {
         }
 
         @Test void maxTextureSizeIsPositive() {
-            int maxSize = device.queryCapability(RenderCapability.MAX_TEXTURE_SIZE);
+            int maxSize = device.queryCapability(DeviceCapability.MAX_TEXTURE_SIZE);
             assertTrue(maxSize >= 1024, "Got " + maxSize);
         }
     }

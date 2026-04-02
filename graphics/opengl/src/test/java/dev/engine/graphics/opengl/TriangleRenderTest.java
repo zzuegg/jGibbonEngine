@@ -4,6 +4,7 @@ import dev.engine.core.layout.StructLayout;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
+import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
@@ -100,13 +101,15 @@ class TriangleRenderTest {
 
         // 5. Render
         GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
-        var ctx = device.beginFrame();
-        ctx.viewport(0, 0, 64, 64);
-        ctx.clear(0f, 0f, 0f, 1f);
-        ctx.bindPipeline(pipeline);
-        ctx.bindVertexBuffer(vbo, vertexInput);
-        ctx.draw(3, 0);
-        device.endFrame(ctx);
+        device.beginFrame();
+        var rec = new CommandRecorder();
+        rec.viewport(0, 0, 64, 64);
+        rec.clear(0f, 0f, 0f, 1f);
+        rec.bindPipeline(pipeline);
+        rec.bindVertexBuffer(vbo, vertexInput);
+        rec.draw(3, 0);
+        device.submit(rec.finish());
+        device.endFrame();
 
         // 6. Read back center pixel — should be red
         ByteBuffer pixel = ByteBuffer.allocateDirect(4);

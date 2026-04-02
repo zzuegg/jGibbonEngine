@@ -32,16 +32,15 @@ class RenderDeviceContractTest {
 
     @Nested
     class FrameLifecycle {
-        @Test void beginFrameReturnsContext() {
+        @Test void beginFrameCompletesWithoutError() {
             var device = new StubRenderDevice();
-            var ctx = device.beginFrame();
-            assertNotNull(ctx);
+            assertDoesNotThrow(device::beginFrame);
         }
 
         @Test void endFrameCompletesWithoutError() {
             var device = new StubRenderDevice();
-            var ctx = device.beginFrame();
-            assertDoesNotThrow(() -> device.endFrame(ctx));
+            device.beginFrame();
+            assertDoesNotThrow(device::endFrame);
         }
     }
 
@@ -49,7 +48,7 @@ class RenderDeviceContractTest {
     class Capabilities {
         @Test void queryMaxTextureSizeReturnsPositive() {
             var device = new StubRenderDevice();
-            int size = device.queryCapability(RenderCapability.MAX_TEXTURE_SIZE);
+            int size = device.queryCapability(DeviceCapability.MAX_TEXTURE_SIZE);
             assertTrue(size > 0);
         }
     }

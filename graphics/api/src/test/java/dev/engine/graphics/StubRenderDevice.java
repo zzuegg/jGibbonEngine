@@ -4,6 +4,7 @@ import dev.engine.core.handle.Handle;
 import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferWriter;
+import dev.engine.graphics.command.CommandList;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
@@ -24,12 +25,12 @@ class StubRenderDevice implements RenderDevice {
     private final HandlePool<SamplerResource> samplerPool = new HandlePool<>();
     private final HandlePool<PipelineResource> pipelinePool = new HandlePool<>();
     private final AtomicLong frameCounter = new AtomicLong(0);
-    private final Map<RenderCapability<?>, Object> capabilities = new ConcurrentHashMap<>();
+    private final Map<DeviceCapability<?>, Object> capabilities = new ConcurrentHashMap<>();
 
     StubRenderDevice() {
-        capabilities.put(RenderCapability.MAX_TEXTURE_SIZE, 4096);
-        capabilities.put(RenderCapability.MAX_FRAMEBUFFER_WIDTH, 8192);
-        capabilities.put(RenderCapability.MAX_FRAMEBUFFER_HEIGHT, 8192);
+        capabilities.put(DeviceCapability.MAX_TEXTURE_SIZE, 4096);
+        capabilities.put(DeviceCapability.MAX_FRAMEBUFFER_WIDTH, 8192);
+        capabilities.put(DeviceCapability.MAX_FRAMEBUFFER_HEIGHT, 8192);
     }
 
     @Override
@@ -105,38 +106,23 @@ class StubRenderDevice implements RenderDevice {
     public boolean isValidPipeline(Handle<PipelineResource> pipeline) { return pipelinePool.isValid(pipeline); }
 
     @Override
-    public RenderContext beginFrame() {
-        long frame = frameCounter.incrementAndGet();
-        return new RenderContext() {
-            @Override public long frameNumber() { return frame; }
-            @Override public void bindPipeline(Handle<PipelineResource> pipeline) {}
-            @Override public void bindVertexBuffer(Handle<BufferResource> buffer, Handle<VertexInputResource> vertexInput) {}
-            @Override public void bindIndexBuffer(Handle<BufferResource> buffer) {}
-            @Override public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) {}
-            @Override public void bindTexture(int unit, Handle<TextureResource> texture) {}
-            @Override public void bindSampler(int unit, Handle<SamplerResource> sampler) {}
-            @Override public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) {}
-            @Override public void bindDefaultRenderTarget() {}
-            @Override public void setDepthTest(boolean enabled) {}
-            @Override public void setBlending(boolean enabled) {}
-            @Override public void setCullFace(boolean enabled) {}
-            @Override public void setWireframe(boolean enabled) {}
-            @Override public void draw(int vertexCount, int firstVertex) {}
-            @Override public void drawIndexed(int indexCount, int firstIndex) {}
-            @Override public void clear(float r, float g, float b, float a) {}
-            @Override public void viewport(int x, int y, int width, int height) {}
-            @Override public void scissor(int x, int y, int width, int height) {}
-        };
+    public void beginFrame() {
+        frameCounter.incrementAndGet();
     }
 
     @Override
-    public void endFrame(RenderContext context) {
+    public void endFrame() {
+        // no-op for stub
+    }
+
+    @Override
+    public void submit(CommandList commands) {
         // no-op for stub
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> T queryCapability(RenderCapability<T> capability) {
+    public <T> T queryCapability(DeviceCapability<T> capability) {
         return (T) capabilities.get(capability);
     }
 

@@ -4,6 +4,7 @@ import dev.engine.core.layout.StructLayout;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
+import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -80,13 +81,15 @@ public class TriangleExample {
             int w = window.width();
             int h = window.height();
 
-            var ctx = device.beginFrame();
-            ctx.viewport(0, 0, w, h);
-            ctx.clear(0.1f, 0.1f, 0.12f, 1.0f);
-            ctx.bindPipeline(pipeline);
-            ctx.bindVertexBuffer(vbo, vertexInput);
-            ctx.draw(3, 0);
-            device.endFrame(ctx);
+            device.beginFrame();
+            var rec = new CommandRecorder();
+            rec.viewport(0, 0, w, h);
+            rec.clear(0.1f, 0.1f, 0.12f, 1.0f);
+            rec.bindPipeline(pipeline);
+            rec.bindVertexBuffer(vbo, vertexInput);
+            rec.draw(3, 0);
+            device.submit(rec.finish());
+            device.endFrame();
         }
 
         // Cleanup
