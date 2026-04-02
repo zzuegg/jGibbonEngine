@@ -27,6 +27,7 @@ class StubWindowToolkit implements WindowToolkit {
         @Override public int width() { return desc.width(); }
         @Override public int height() { return desc.height(); }
         @Override public String title() { return desc.title(); }
+        @Override public void show() {}
         @Override public void close() { open = false; }
     }
 }

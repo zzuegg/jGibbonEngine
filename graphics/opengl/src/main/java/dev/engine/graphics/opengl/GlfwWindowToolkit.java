@@ -67,7 +67,7 @@ public class GlfwWindowToolkit implements WindowToolkit {
         }
     }
 
-    static class GlfwWindowHandle implements WindowHandle {
+    public static class GlfwWindowHandle implements WindowHandle {
         private long handle;
         private final WindowDescriptor descriptor;
 
@@ -101,6 +101,11 @@ public class GlfwWindowToolkit implements WindowToolkit {
 
         @Override
         public String title() { return descriptor.title(); }
+
+        @Override
+        public void show() {
+            if (handle != 0) GLFW.glfwShowWindow(handle);
+        }
 
         @Override
         public void close() {

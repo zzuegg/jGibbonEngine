@@ -6,6 +6,7 @@ public interface WindowHandle extends AutoCloseable {
     int width();
     int height();
     String title();
+    void show();
 
     @Override
     void close();
