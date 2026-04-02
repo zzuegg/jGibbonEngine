@@ -2,7 +2,10 @@ package dev.engine.graphics;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.graphics.buffer.BufferDescriptor;
+import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.BufferWriter;
+import dev.engine.graphics.buffer.StreamingBuffer;
+import dev.engine.graphics.sync.GpuFence;
 import dev.engine.graphics.command.CommandExecutor;
 import dev.engine.graphics.command.CommandList;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -56,6 +59,12 @@ public interface RenderDevice extends AutoCloseable {
 
     // --- Command execution ---
     void submit(CommandList commands);
+
+    // --- Streaming buffers ---
+    StreamingBuffer createStreamingBuffer(long frameSize, int frameCount, BufferUsage usage);
+
+    // --- Synchronization ---
+    GpuFence createFence();
 
     // --- Bindless textures ---
     long getBindlessTextureHandle(Handle<TextureResource> texture);

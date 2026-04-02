@@ -4,7 +4,10 @@ import dev.engine.core.handle.Handle;
 import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.*;
 import dev.engine.graphics.buffer.BufferDescriptor;
+import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.BufferWriter;
+import dev.engine.graphics.buffer.StreamingBuffer;
+import dev.engine.graphics.sync.GpuFence;
 import dev.engine.graphics.command.CommandList;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.sampler.SamplerDescriptor;
@@ -73,6 +76,16 @@ public class HeadlessRenderDevice implements RenderDevice {
     @Override public Handle<PipelineResource> createPipeline(PipelineDescriptor d) { return pipelinePool.allocate(); }
     @Override public void destroyPipeline(Handle<PipelineResource> h) { pipelinePool.release(h); }
     @Override public boolean isValidPipeline(Handle<PipelineResource> h) { return pipelinePool.isValid(h); }
+
+    @Override public StreamingBuffer createStreamingBuffer(long frameSize, int frameCount, BufferUsage usage) { return null; }
+    @Override public GpuFence createFence() {
+        return new GpuFence() {
+            @Override public boolean isSignaled() { return true; }
+            @Override public void waitFor() {}
+            @Override public boolean waitFor(long timeoutNanos) { return true; }
+            @Override public void close() {}
+        };
+    }
 
     @Override public void beginFrame() {}
     @Override public void endFrame() {}

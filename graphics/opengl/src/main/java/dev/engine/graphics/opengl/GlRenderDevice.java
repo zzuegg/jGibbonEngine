@@ -24,6 +24,8 @@ import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.BufferWriter;
+import dev.engine.graphics.buffer.StreamingBuffer;
+import dev.engine.graphics.sync.GpuFence;
 import dev.engine.graphics.sampler.FilterMode;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.sampler.WrapMode;
@@ -524,6 +526,27 @@ public class GlRenderDevice implements RenderDevice {
         int glTex = getGlTextureName(texture);
         long handle = org.lwjgl.opengl.ARBBindlessTexture.glGetTextureHandleARB(glTex);
         org.lwjgl.opengl.ARBBindlessTexture.glMakeTextureHandleResidentARB(handle);
+        return handle;
+    }
+
+    @Override
+    public StreamingBuffer createStreamingBuffer(long frameSize, int frameCount, BufferUsage usage) {
+        return new GlStreamingBuffer(this, frameSize, frameCount, usage);
+    }
+
+    @Override
+    public GpuFence createFence() {
+        return new GlFence();
+    }
+
+    /**
+     * Registers an externally created GL buffer (e.g. from a streaming buffer) in
+     * the device's buffer pool so that {@link #getGlBufferName} works for it.
+     */
+    Handle<BufferResource> registerStreamingBuffer(int glBuffer, long size) {
+        var handle = bufferPool.allocate();
+        bufferGlNames.put(handle.index(), glBuffer);
+        bufferSizes.put(handle.index(), size);
         return handle;
     }
 

@@ -12,7 +12,10 @@ import dev.engine.graphics.SamplerResource;
 import dev.engine.graphics.TextureResource;
 import dev.engine.graphics.VertexInputResource;
 import dev.engine.graphics.buffer.BufferDescriptor;
+import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.BufferWriter;
+import dev.engine.graphics.buffer.StreamingBuffer;
+import dev.engine.graphics.sync.GpuFence;
 import dev.engine.graphics.command.CommandList;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.sampler.SamplerDescriptor;
@@ -214,6 +217,21 @@ public class WgpuRenderDevice implements RenderDevice {
     }
 
     // --- Frame ---
+
+    @Override
+    public StreamingBuffer createStreamingBuffer(long frameSize, int frameCount, BufferUsage usage) {
+        return null;
+    }
+
+    @Override
+    public GpuFence createFence() {
+        return new GpuFence() {
+            @Override public boolean isSignaled() { return true; }
+            @Override public void waitFor() {}
+            @Override public boolean waitFor(long timeoutNanos) { return true; }
+            @Override public void close() {}
+        };
+    }
 
     @Override
     public void beginFrame() {

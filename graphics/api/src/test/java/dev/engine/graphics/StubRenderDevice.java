@@ -3,7 +3,10 @@ package dev.engine.graphics;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.buffer.BufferDescriptor;
+import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.BufferWriter;
+import dev.engine.graphics.buffer.StreamingBuffer;
+import dev.engine.graphics.sync.GpuFence;
 import dev.engine.graphics.command.CommandList;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.sampler.SamplerDescriptor;
@@ -107,6 +110,21 @@ class StubRenderDevice implements RenderDevice {
 
     @Override
     public boolean isValidPipeline(Handle<PipelineResource> pipeline) { return pipelinePool.isValid(pipeline); }
+
+    @Override
+    public StreamingBuffer createStreamingBuffer(long frameSize, int frameCount, BufferUsage usage) {
+        return null;
+    }
+
+    @Override
+    public GpuFence createFence() {
+        return new GpuFence() {
+            @Override public boolean isSignaled() { return true; }
+            @Override public void waitFor() {}
+            @Override public boolean waitFor(long timeoutNanos) { return true; }
+            @Override public void close() {}
+        };
+    }
 
     @Override
     public void beginFrame() {

@@ -4,6 +4,7 @@ import dev.engine.core.handle.Handle;
 import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.*;
 import dev.engine.graphics.buffer.*;
+import dev.engine.graphics.sync.GpuFence;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.sampler.SamplerDescriptor;
@@ -399,6 +400,21 @@ public class VkRenderDevice implements RenderDevice {
     }
 
     // --- Frame operations ---
+
+    @Override
+    public StreamingBuffer createStreamingBuffer(long frameSize, int frameCount, BufferUsage usage) {
+        return null;
+    }
+
+    @Override
+    public GpuFence createFence() {
+        return new GpuFence() {
+            @Override public boolean isSignaled() { return true; }
+            @Override public void waitFor() {}
+            @Override public boolean waitFor(long timeoutNanos) { return true; }
+            @Override public void close() {}
+        };
+    }
 
     @Override
     public void beginFrame() {
