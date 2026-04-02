@@ -154,6 +154,30 @@ public class Renderer implements AutoCloseable {
 
     public void setMaterial(Handle<EntityTag> entity, Material material) {
         entityMaterials.put(entity, material);
+        // Push material properties into the scene as a MaterialReplaced transaction
+        // so MeshRenderer receives them through the standard transaction path
+        var snapshot = dev.engine.core.property.PropertyMap.builder();
+        // Copy standard known keys
+        for (var key : new dev.engine.core.property.PropertyKey<?>[]{
+                Material.ALBEDO_COLOR, Material.ROUGHNESS, Material.METALLIC,
+                Material.EMISSIVE, Material.OPACITY, Material.COLOR}) {
+            var value = material.get(key);
+            if (value != null) {
+                @SuppressWarnings("unchecked")
+                var typedKey = (dev.engine.core.property.PropertyKey<Object>) key;
+                snapshot.set(typedKey, value);
+            }
+        }
+        scene.setMaterialProperties(entity, snapshot.build());
+    }
+
+    /**
+     * Updates a single material property and emits a transaction.
+     */
+    public <T> void setMaterialProperty(Handle<EntityTag> entity, dev.engine.core.property.PropertyKey<T> key, T value) {
+        var material = entityMaterials.get(entity);
+        if (material != null) material.set(key, value);
+        scene.setMaterialProperty(entity, key, value);
     }
 
     // --- Shader management ---
@@ -235,14 +259,8 @@ public class Renderer implements AutoCloseable {
                 draw.bindPipeline(cmd.renderable().pipeline());
                 draw.bindUniformBuffer(0, mvpUbo);
 
-                // Upload material data to binding 1 if material has properties
-                var entity = findEntityForRenderable(cmd);
-                if (entity != null) {
-                    var material = entityMaterials.get(entity);
-                    if (material != null) {
-                        uploadMaterialData(material, draw);
-                    }
-                }
+                // Upload material data from transaction-driven snapshot to binding 1
+                uploadMaterialSnapshot(cmd.entity(), cmd.materialData(), draw);
 
                 draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
                 if (cmd.renderable().indexBuffer() != null) {
@@ -275,9 +293,17 @@ public class Renderer implements AutoCloseable {
 
     // --- Internal helpers ---
 
-    private void uploadMaterialData(Material material, CommandRecorder draw) {
-        if (material.hasRecordData()) {
-            // Record-based: use StructLayout to serialize
+    /**
+     * Uploads material data from a transaction-driven PropertyMap snapshot.
+     * Material data comes through transactions, not by reading Material objects.
+     */
+    private void uploadMaterialSnapshot(Handle<?> entity, dev.engine.core.property.PropertyMap materialData, CommandRecorder draw) {
+        if (materialData == null || materialData.size() == 0) return;
+
+        // Check if this entity has a record-based material (for custom shaders)
+        @SuppressWarnings("unchecked")
+        var material = entityMaterials.get((Handle<EntityTag>) entity);
+        if (material != null && material.hasRecordData()) {
             var record = material.data();
             var layout = dev.engine.core.layout.StructLayout.of(record.getClass());
             var key = "record_" + record.getClass().getName();
@@ -288,14 +314,17 @@ public class Renderer implements AutoCloseable {
                 layout.write(w.segment(), 0, record);
             }
             draw.bindUniformBuffer(1, ubo);
-        } else {
-            // Property bag: use MaterialCompiler to serialize
+            return;
+        }
+
+        // Property-bag path: serialize from the snapshot that came through transactions
+        if (material != null) {
             var data = MaterialCompiler.serializeMaterialData(material);
             if (data.remaining() > 0) {
-                var key = MaterialCompiler.shaderKey(material);
+                var key = "mat_" + entity.index();
                 var ubo = materialUbos.computeIfAbsent(key, k ->
                         device.createBuffer(new dev.engine.graphics.buffer.BufferDescriptor(
-                                data.remaining(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
+                                Math.max(data.remaining(), 16), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
                 try (var w = device.writeBuffer(ubo)) {
                     for (int i = 0; i < data.remaining(); i++) {
                         w.segment().set(java.lang.foreign.ValueLayout.JAVA_BYTE, i, data.get(i));
@@ -304,17 +333,6 @@ public class Renderer implements AutoCloseable {
                 draw.bindUniformBuffer(1, ubo);
             }
         }
-    }
-
-    private Handle<EntityTag> findEntityForRenderable(dev.engine.graphics.renderer.DrawCommand cmd) {
-        // Reverse lookup: find which entity owns this renderable's transform
-        for (var entry : entityMeshes.entrySet()) {
-            if (meshRenderer.hasEntity(entry.getKey()) &&
-                    meshRenderer.getTransform(entry.getKey()) == cmd.transform()) {
-                return entry.getKey();
-            }
-        }
-        return null;
     }
 
     // --- Low-level access (escape hatch) ---

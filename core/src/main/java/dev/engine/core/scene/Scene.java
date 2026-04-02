@@ -95,6 +95,10 @@ public class Scene {
         transactions.materialPropertyChanged(entity, key, value);
     }
 
+    public void setMaterialProperties(Handle<EntityTag> entity, dev.engine.core.property.PropertyMap properties) {
+        transactions.materialReplaced(entity, properties);
+    }
+
     public List<Transaction> drainTransactions() {
         return transactions.drain();
     }
