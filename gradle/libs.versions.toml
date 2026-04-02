@@ -22,6 +22,9 @@ lwjgl-glfw = { module = "org.lwjgl:lwjgl-glfw" }
 lwjgl-core-natives = { module = "org.lwjgl:lwjgl", version.ref = "lwjgl" }
 lwjgl-opengl-natives = { module = "org.lwjgl:lwjgl-opengl", version.ref = "lwjgl" }
 lwjgl-glfw-natives = { module = "org.lwjgl:lwjgl-glfw", version.ref = "lwjgl" }
+lwjgl-vulkan = { module = "org.lwjgl:lwjgl-vulkan" }
+lwjgl-shaderc = { module = "org.lwjgl:lwjgl-shaderc" }
+lwjgl-shaderc-natives = { module = "org.lwjgl:lwjgl-shaderc", version.ref = "lwjgl" }
 
 # Testing
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }

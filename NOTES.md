@@ -6,6 +6,14 @@
 
 Only use enums when the set of values is **guaranteed** to never be extended. If there is any chance a user or future module might need to add a variant, use an interface/sealed interface with static instances instead. Enums lock down extensibility — once a `switch` or pattern match exists, adding a variant is a breaking change everywhere.
 
+### Flexibility First
+
+Everything must be flexible and extensible. Data types should not hardcode specific fields — use format descriptors, property bags, or generic containers that let users define their own layouts. Examples:
+- Meshes: raw bytes + VertexFormat, not hardcoded position/normal/texcoord arrays.
+- Materials: property bags, not fixed PBR structs.
+- Render state: interface-based types (FilterMode, WrapMode, BufferUsage) that users can extend.
+- Handles: typed via phantom parameters but the system never assumes what the handle points to.
+
 ### Modularity and Reuse
 
 Code should be modular and reusable where possible. Prefer small, focused components with clear boundaries over monolithic classes. Each piece should be usable independently — if a utility or subsystem can only function inside the engine, it's too tightly coupled.
