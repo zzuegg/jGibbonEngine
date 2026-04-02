@@ -9,6 +9,9 @@ import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderCompilationException;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
+import dev.engine.graphics.vertex.ComponentType;
+import dev.engine.graphics.vertex.VertexAttribute;
+import dev.engine.graphics.vertex.VertexFormat;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
@@ -38,6 +41,9 @@ public class GlRenderDevice implements RenderDevice {
     private final HandlePool texturePool = new HandlePool();
     private final Map<Integer, Integer> textureGlNames = new HashMap<>();
     private final Map<Integer, TextureDescriptor> textureDescs = new HashMap<>();
+    private final HandlePool vertexInputPool = new HandlePool();
+    private final Map<Integer, Integer> vertexInputVaos = new HashMap<>();
+    private final Map<Integer, Integer> vertexInputStrides = new HashMap<>();
     private final HandlePool pipelinePool = new HandlePool();
     private final Map<Integer, Integer> pipelineGlPrograms = new HashMap<>();
     private final AtomicLong frameCounter = new AtomicLong(0);
@@ -136,6 +142,51 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
+    public Handle createVertexInput(VertexFormat format) {
+        int vao = GL45.glCreateVertexArrays();
+        for (var attr : format.attributes()) {
+            GL45.glEnableVertexArrayAttrib(vao, attr.location());
+            int glType = mapComponentType(attr.componentType());
+            GL45.glVertexArrayAttribFormat(vao, attr.location(),
+                    attr.componentCount(), glType, attr.normalized(), attr.offset());
+            GL45.glVertexArrayAttribBinding(vao, attr.location(), 0); // binding point 0
+        }
+
+        var handle = vertexInputPool.allocate();
+        vertexInputVaos.put(handle.index(), vao);
+        vertexInputStrides.put(handle.index(), format.stride());
+        return handle;
+    }
+
+    @Override
+    public void destroyVertexInput(Handle vertexInput) {
+        if (!vertexInputPool.isValid(vertexInput)) return;
+        Integer vao = vertexInputVaos.remove(vertexInput.index());
+        vertexInputStrides.remove(vertexInput.index());
+        if (vao != null) GL45.glDeleteVertexArrays(vao);
+        vertexInputPool.release(vertexInput);
+    }
+
+    int getGlVaoName(Handle vertexInput) {
+        return vertexInputVaos.getOrDefault(vertexInput.index(), 0);
+    }
+
+    int getVertexInputStride(Handle vertexInput) {
+        return vertexInputStrides.getOrDefault(vertexInput.index(), 0);
+    }
+
+    int getGlProgramName(Handle pipeline) {
+        return pipelineGlPrograms.getOrDefault(pipeline.index(), 0);
+    }
+
+    private static int mapComponentType(ComponentType type) {
+        if (type == ComponentType.FLOAT) return GL45.GL_FLOAT;
+        if (type == ComponentType.BYTE) return GL45.GL_BYTE;
+        if (type == ComponentType.INT) return GL45.GL_INT;
+        return GL45.GL_FLOAT;
+    }
+
+    @Override
     public Handle createPipeline(PipelineDescriptor descriptor) {
         int program = GL45.glCreateProgram();
         var shaderIds = new java.util.ArrayList<Integer>();
@@ -207,7 +258,7 @@ public class GlRenderDevice implements RenderDevice {
     @Override
     public RenderContext beginFrame() {
         long frame = frameCounter.incrementAndGet();
-        return () -> frame;
+        return new GlRenderContext(frame, this);
     }
 
     @Override
@@ -244,6 +295,10 @@ public class GlRenderDevice implements RenderDevice {
             GL45.glDeleteProgram(program);
         }
         pipelineGlPrograms.clear();
+        for (var vao : vertexInputVaos.values()) {
+            GL45.glDeleteVertexArrays(vao);
+        }
+        vertexInputVaos.clear();
         log.info("GlRenderDevice closed");
     }
 

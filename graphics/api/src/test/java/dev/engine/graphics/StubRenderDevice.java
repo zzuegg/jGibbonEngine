@@ -6,6 +6,7 @@ import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferWriter;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
+import dev.engine.graphics.vertex.VertexFormat;
 
 import java.lang.foreign.Arena;
 import java.nio.ByteBuffer;
@@ -68,6 +69,12 @@ class StubRenderDevice implements RenderDevice {
     public boolean isValidTexture(Handle texture) { return bufferPool.isValid(texture); }
 
     @Override
+    public Handle createVertexInput(VertexFormat format) { return bufferPool.allocate(); }
+
+    @Override
+    public void destroyVertexInput(Handle vertexInput) { bufferPool.release(vertexInput); }
+
+    @Override
     public Handle createPipeline(PipelineDescriptor descriptor) { return bufferPool.allocate(); }
 
     @Override
@@ -79,7 +86,14 @@ class StubRenderDevice implements RenderDevice {
     @Override
     public RenderContext beginFrame() {
         long frame = frameCounter.incrementAndGet();
-        return () -> frame;
+        return new RenderContext() {
+            @Override public long frameNumber() { return frame; }
+            @Override public void bindPipeline(Handle pipeline) {}
+            @Override public void bindVertexBuffer(Handle buffer, Handle vertexInput) {}
+            @Override public void draw(int vertexCount, int firstVertex) {}
+            @Override public void clear(float r, float g, float b, float a) {}
+            @Override public void viewport(int x, int y, int width, int height) {}
+        };
     }
 
     @Override

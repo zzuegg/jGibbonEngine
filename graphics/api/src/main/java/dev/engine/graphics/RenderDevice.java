@@ -5,6 +5,7 @@ import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferWriter;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
+import dev.engine.graphics.vertex.VertexFormat;
 
 import java.nio.ByteBuffer;
 
@@ -20,6 +21,9 @@ public interface RenderDevice extends AutoCloseable {
     void uploadTexture(Handle texture, ByteBuffer pixels);
     void destroyTexture(Handle texture);
     boolean isValidTexture(Handle texture);
+
+    Handle createVertexInput(VertexFormat format);
+    void destroyVertexInput(Handle vertexInput);
 
     Handle createPipeline(PipelineDescriptor descriptor);
     void destroyPipeline(Handle pipeline);
