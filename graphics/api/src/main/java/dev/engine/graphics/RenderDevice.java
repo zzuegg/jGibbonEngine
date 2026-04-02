@@ -57,8 +57,16 @@ public interface RenderDevice extends AutoCloseable {
     // --- Command execution ---
     void submit(CommandList commands);
 
+    // --- Bindless textures ---
+    long getBindlessTextureHandle(Handle<TextureResource> texture);
+
     // --- Capabilities ---
     <T> T queryCapability(DeviceCapability<T> capability);
+
+    default boolean supports(DeviceCapability<Boolean> feature) {
+        Boolean result = queryCapability(feature);
+        return result != null && result;
+    }
 
     @Override
     void close();

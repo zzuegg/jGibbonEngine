@@ -410,6 +410,10 @@ public class GlRenderDevice implements RenderDevice {
             case RenderCommand.BindSampler cmd -> {
                 GL45.glBindSampler(cmd.unit(), getGlSamplerName(cmd.sampler()));
             }
+            case RenderCommand.BindStorageBuffer cmd -> {
+                int ssbo = getGlBufferName(cmd.buffer());
+                GL45.glBindBufferBase(GL45.GL_SHADER_STORAGE_BUFFER, cmd.binding(), ssbo);
+            }
             case RenderCommand.Draw cmd -> {
                 GL45.glDrawArrays(GL45.GL_TRIANGLES, cmd.firstVertex(), cmd.vertexCount());
             }
@@ -497,7 +501,30 @@ public class GlRenderDevice implements RenderDevice {
         if (capability == DeviceCapability.BACKEND_NAME) {
             return (T) "OpenGL";
         }
+        if (capability == DeviceCapability.BINDLESS_TEXTURES) {
+            return (T) Boolean.valueOf(hasBindlessTextures());
+        }
         return null;
+    }
+
+    private boolean hasBindlessTextures() {
+        var extensions = GL45.glGetString(GL45.GL_EXTENSIONS);
+        if (extensions != null && extensions.contains("GL_ARB_bindless_texture")) return true;
+        // Also check via glGetIntegerv GL_NUM_EXTENSIONS
+        int numExt = GL45.glGetInteger(GL45.GL_NUM_EXTENSIONS);
+        for (int i = 0; i < numExt; i++) {
+            var ext = GL45.glGetStringi(GL45.GL_EXTENSIONS, i);
+            if ("GL_ARB_bindless_texture".equals(ext)) return true;
+        }
+        return false;
+    }
+
+    @Override
+    public long getBindlessTextureHandle(Handle<TextureResource> texture) {
+        int glTex = getGlTextureName(texture);
+        long handle = org.lwjgl.opengl.ARBBindlessTexture.glGetTextureHandleARB(glTex);
+        org.lwjgl.opengl.ARBBindlessTexture.glMakeTextureHandleResidentARB(handle);
+        return handle;
     }
 
     @Override

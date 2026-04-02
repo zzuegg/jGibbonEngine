@@ -76,6 +76,9 @@ class StubRenderDevice implements RenderDevice {
     public boolean isValidTexture(Handle<TextureResource> texture) { return texturePool.isValid(texture); }
 
     @Override
+    public long getBindlessTextureHandle(Handle<TextureResource> texture) { return 0L; }
+
+    @Override
     public Handle<RenderTargetResource> createRenderTarget(dev.engine.graphics.target.RenderTargetDescriptor descriptor) { return renderTargetPool.allocate(); }
 
     @Override

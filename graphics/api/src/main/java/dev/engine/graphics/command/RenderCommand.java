@@ -17,6 +17,7 @@ public sealed interface RenderCommand {
     record BindUniformBuffer(int binding, Handle<BufferResource> buffer) implements RenderCommand {}
     record BindTexture(int unit, Handle<TextureResource> texture) implements RenderCommand {}
     record BindSampler(int unit, Handle<SamplerResource> sampler) implements RenderCommand {}
+    record BindStorageBuffer(int binding, Handle<BufferResource> buffer) implements RenderCommand {}
 
     // --- Draw commands ---
     record Draw(int vertexCount, int firstVertex) implements RenderCommand {}

@@ -58,6 +58,8 @@ public class HeadlessRenderDevice implements RenderDevice {
     @Override public void destroyTexture(Handle<TextureResource> h) { texturePool.release(h); }
     @Override public boolean isValidTexture(Handle<TextureResource> h) { return texturePool.isValid(h); }
 
+    @Override public long getBindlessTextureHandle(Handle<TextureResource> texture) { return 0L; }
+
     @Override public Handle<RenderTargetResource> createRenderTarget(RenderTargetDescriptor d) { return rtPool.allocate(); }
     @Override public Handle<TextureResource> getRenderTargetColorTexture(Handle<RenderTargetResource> h, int i) { return Handle.invalid(); }
     @Override public void destroyRenderTarget(Handle<RenderTargetResource> h) { rtPool.release(h); }

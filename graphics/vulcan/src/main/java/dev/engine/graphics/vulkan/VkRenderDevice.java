@@ -327,6 +327,11 @@ public class VkRenderDevice implements RenderDevice {
         return texturePool.isValid(handle);
     }
 
+    @Override
+    public long getBindlessTextureHandle(Handle<TextureResource> texture) {
+        return 0L;
+    }
+
     // --- Render target operations (stubs) ---
 
     @Override

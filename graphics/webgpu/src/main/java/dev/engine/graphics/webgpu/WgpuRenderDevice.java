@@ -134,6 +134,11 @@ public class WgpuRenderDevice implements RenderDevice {
         return texturePool.isValid(texture);
     }
 
+    @Override
+    public long getBindlessTextureHandle(Handle<TextureResource> texture) {
+        return 0L;
+    }
+
     // --- Render Target ---
 
     @Override

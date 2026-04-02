@@ -22,6 +22,7 @@ public class CommandRecorder {
     public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) { commands.add(new RenderCommand.BindUniformBuffer(binding, buffer)); }
     public void bindTexture(int unit, Handle<TextureResource> texture) { commands.add(new RenderCommand.BindTexture(unit, texture)); }
     public void bindSampler(int unit, Handle<SamplerResource> sampler) { commands.add(new RenderCommand.BindSampler(unit, sampler)); }
+    public void bindStorageBuffer(int binding, Handle<BufferResource> buffer) { commands.add(new RenderCommand.BindStorageBuffer(binding, buffer)); }
 
     // --- Draw commands ---
     public void draw(int vertexCount, int firstVertex) { commands.add(new RenderCommand.Draw(vertexCount, firstVertex)); }
