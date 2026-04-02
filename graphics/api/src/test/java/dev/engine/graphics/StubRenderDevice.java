@@ -5,6 +5,7 @@ import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferWriter;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
+import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.vertex.VertexFormat;
 
@@ -20,6 +21,7 @@ class StubRenderDevice implements RenderDevice {
     private final HandlePool<TextureResource> texturePool = new HandlePool<>();
     private final HandlePool<RenderTargetResource> renderTargetPool = new HandlePool<>();
     private final HandlePool<VertexInputResource> vertexInputPool = new HandlePool<>();
+    private final HandlePool<SamplerResource> samplerPool = new HandlePool<>();
     private final HandlePool<PipelineResource> pipelinePool = new HandlePool<>();
     private final AtomicLong frameCounter = new AtomicLong(0);
     private final Map<RenderCapability<?>, Object> capabilities = new ConcurrentHashMap<>();
@@ -88,6 +90,12 @@ class StubRenderDevice implements RenderDevice {
     public void destroyVertexInput(Handle<VertexInputResource> vertexInput) { vertexInputPool.release(vertexInput); }
 
     @Override
+    public Handle<SamplerResource> createSampler(SamplerDescriptor descriptor) { return samplerPool.allocate(); }
+
+    @Override
+    public void destroySampler(Handle<SamplerResource> sampler) { samplerPool.release(sampler); }
+
+    @Override
     public Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor) { return pipelinePool.allocate(); }
 
     @Override
@@ -106,13 +114,18 @@ class StubRenderDevice implements RenderDevice {
             @Override public void bindIndexBuffer(Handle<BufferResource> buffer) {}
             @Override public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) {}
             @Override public void bindTexture(int unit, Handle<TextureResource> texture) {}
+            @Override public void bindSampler(int unit, Handle<SamplerResource> sampler) {}
             @Override public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) {}
             @Override public void bindDefaultRenderTarget() {}
             @Override public void setDepthTest(boolean enabled) {}
+            @Override public void setBlending(boolean enabled) {}
+            @Override public void setCullFace(boolean enabled) {}
+            @Override public void setWireframe(boolean enabled) {}
             @Override public void draw(int vertexCount, int firstVertex) {}
             @Override public void drawIndexed(int indexCount, int firstIndex) {}
             @Override public void clear(float r, float g, float b, float a) {}
             @Override public void viewport(int x, int y, int width, int height) {}
+            @Override public void scissor(int x, int y, int width, int height) {}
         };
     }
 

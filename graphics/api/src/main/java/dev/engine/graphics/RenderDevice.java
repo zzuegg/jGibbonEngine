@@ -4,6 +4,7 @@ import dev.engine.core.handle.Handle;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferWriter;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
+import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.target.RenderTargetDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.vertex.VertexFormat;
@@ -29,6 +30,9 @@ public interface RenderDevice extends AutoCloseable {
 
     Handle<VertexInputResource> createVertexInput(VertexFormat format);
     void destroyVertexInput(Handle<VertexInputResource> vertexInput);
+
+    Handle<SamplerResource> createSampler(SamplerDescriptor descriptor);
+    void destroySampler(Handle<SamplerResource> sampler);
 
     Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor);
     void destroyPipeline(Handle<PipelineResource> pipeline);

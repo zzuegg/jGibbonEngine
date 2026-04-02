@@ -8,6 +8,7 @@ import dev.engine.graphics.RenderCapability;
 import dev.engine.graphics.RenderContext;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.RenderTargetResource;
+import dev.engine.graphics.SamplerResource;
 import dev.engine.graphics.TextureResource;
 import dev.engine.graphics.VertexInputResource;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -22,6 +23,9 @@ import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.BufferWriter;
+import dev.engine.graphics.sampler.FilterMode;
+import dev.engine.graphics.sampler.SamplerDescriptor;
+import dev.engine.graphics.sampler.WrapMode;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureFormat;
 import org.lwjgl.glfw.GLFW;
@@ -55,6 +59,8 @@ public class GlRenderDevice implements RenderDevice {
     private final HandlePool<RenderTargetResource> renderTargetPool = new HandlePool<>();
     private final Map<Integer, Integer> renderTargetFbos = new HashMap<>();
     private final Map<Integer, List<Handle<TextureResource>>> renderTargetColorTextures = new HashMap<>();
+    private final HandlePool<SamplerResource> samplerPool = new HandlePool<>();
+    private final Map<Integer, Integer> samplerGlNames = new HashMap<>();
     private final HandlePool<PipelineResource> pipelinePool = new HandlePool<>();
     private final Map<Integer, Integer> pipelineGlPrograms = new HashMap<>();
     private final AtomicLong frameCounter = new AtomicLong(0);
@@ -238,8 +244,48 @@ public class GlRenderDevice implements RenderDevice {
         return vertexInputStrides.getOrDefault(vertexInput.index(), 0);
     }
 
+    @Override
+    public Handle<SamplerResource> createSampler(SamplerDescriptor descriptor) {
+        int glSampler = GL45.glCreateSamplers();
+        GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_MIN_FILTER, mapFilterMode(descriptor.minFilter()));
+        GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_MAG_FILTER, mapFilterMode(descriptor.magFilter()));
+        GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_WRAP_S, mapWrapMode(descriptor.wrapS()));
+        GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_WRAP_T, mapWrapMode(descriptor.wrapT()));
+
+        var handle = samplerPool.allocate();
+        samplerGlNames.put(handle.index(), glSampler);
+        return handle;
+    }
+
+    @Override
+    public void destroySampler(Handle<SamplerResource> sampler) {
+        if (!samplerPool.isValid(sampler)) return;
+        Integer glName = samplerGlNames.remove(sampler.index());
+        if (glName != null) GL45.glDeleteSamplers(glName);
+        samplerPool.release(sampler);
+    }
+
+    int getGlSamplerName(Handle<SamplerResource> sampler) {
+        return samplerGlNames.getOrDefault(sampler.index(), 0);
+    }
+
     int getGlProgramName(Handle<PipelineResource> pipeline) {
         return pipelineGlPrograms.getOrDefault(pipeline.index(), 0);
+    }
+
+    private static int mapFilterMode(FilterMode mode) {
+        if (mode == FilterMode.NEAREST) return GL45.GL_NEAREST;
+        if (mode == FilterMode.LINEAR) return GL45.GL_LINEAR;
+        if (mode == FilterMode.NEAREST_MIPMAP_NEAREST) return GL45.GL_NEAREST_MIPMAP_NEAREST;
+        if (mode == FilterMode.LINEAR_MIPMAP_LINEAR) return GL45.GL_LINEAR_MIPMAP_LINEAR;
+        return GL45.GL_LINEAR;
+    }
+
+    private static int mapWrapMode(WrapMode mode) {
+        if (mode == WrapMode.REPEAT) return GL45.GL_REPEAT;
+        if (mode == WrapMode.CLAMP_TO_EDGE) return GL45.GL_CLAMP_TO_EDGE;
+        if (mode == WrapMode.MIRRORED_REPEAT) return GL45.GL_MIRRORED_REPEAT;
+        return GL45.GL_REPEAT;
     }
 
     private static int mapComponentType(ComponentType type) {
@@ -362,6 +408,10 @@ public class GlRenderDevice implements RenderDevice {
             GL45.glDeleteVertexArrays(vao);
         }
         vertexInputVaos.clear();
+        for (var glSampler : samplerGlNames.values()) {
+            GL45.glDeleteSamplers(glSampler);
+        }
+        samplerGlNames.clear();
         log.info("GlRenderDevice closed");
     }
 

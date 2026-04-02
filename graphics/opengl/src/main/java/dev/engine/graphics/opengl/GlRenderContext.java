@@ -5,6 +5,7 @@ import dev.engine.graphics.BufferResource;
 import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.RenderContext;
 import dev.engine.graphics.RenderTargetResource;
+import dev.engine.graphics.SamplerResource;
 import dev.engine.graphics.TextureResource;
 import dev.engine.graphics.VertexInputResource;
 import org.lwjgl.opengl.GL45;
@@ -57,6 +58,11 @@ class GlRenderContext implements RenderContext {
     }
 
     @Override
+    public void bindSampler(int unit, Handle<SamplerResource> sampler) {
+        GL45.glBindSampler(unit, device.getGlSamplerName(sampler));
+    }
+
+    @Override
     public void draw(int vertexCount, int firstVertex) {
         GL45.glDrawArrays(GL45.GL_TRIANGLES, firstVertex, vertexCount);
     }
@@ -85,6 +91,27 @@ class GlRenderContext implements RenderContext {
     }
 
     @Override
+    public void setBlending(boolean enabled) {
+        if (enabled) {
+            GL45.glEnable(GL45.GL_BLEND);
+            GL45.glBlendFunc(GL45.GL_SRC_ALPHA, GL45.GL_ONE_MINUS_SRC_ALPHA);
+        } else {
+            GL45.glDisable(GL45.GL_BLEND);
+        }
+    }
+
+    @Override
+    public void setCullFace(boolean enabled) {
+        if (enabled) GL45.glEnable(GL45.GL_CULL_FACE);
+        else GL45.glDisable(GL45.GL_CULL_FACE);
+    }
+
+    @Override
+    public void setWireframe(boolean enabled) {
+        GL45.glPolygonMode(GL45.GL_FRONT_AND_BACK, enabled ? GL45.GL_LINE : GL45.GL_FILL);
+    }
+
+    @Override
     public void clear(float r, float g, float b, float a) {
         GL45.glClearColor(r, g, b, a);
         GL45.glClear(GL45.GL_COLOR_BUFFER_BIT | GL45.GL_DEPTH_BUFFER_BIT);
@@ -93,5 +120,10 @@ class GlRenderContext implements RenderContext {
     @Override
     public void viewport(int x, int y, int width, int height) {
         GL45.glViewport(x, y, width, height);
+    }
+
+    @Override
+    public void scissor(int x, int y, int width, int height) {
+        GL45.glScissor(x, y, width, height);
     }
 }
