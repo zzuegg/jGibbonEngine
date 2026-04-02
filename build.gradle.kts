@@ -38,6 +38,14 @@ subprojects {
     tasks.test {
         useJUnitPlatform()
         jvmArgs("--enable-native-access=ALL-UNNAMED")
+
+        // Slang's C++ runtime can trigger glibc heap metadata corruption on
+        // certain glibc versions when COM objects are released (free/delete).
+        // Using jemalloc as a drop-in replacement avoids the issue.
+        val jemalloc = file("/lib/x86_64-linux-gnu/libjemalloc.so.2")
+        if (jemalloc.exists()) {
+            environment("LD_PRELOAD", jemalloc.absolutePath)
+        }
     }
 
     tasks.withType<JavaCompile> {
