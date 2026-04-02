@@ -17,9 +17,9 @@ import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.core.shader.SlangCompiler;
 import dev.engine.graphics.command.CommandRecorder;
-import dev.engine.graphics.common.material.Material;
+import dev.engine.core.material.Material;
+import dev.engine.core.material.MaterialType;
 import dev.engine.graphics.common.material.MaterialCompiler;
-import dev.engine.graphics.common.material.MaterialType;
 import dev.engine.core.mesh.MeshData;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.renderer.DrawCommand;
@@ -259,21 +259,23 @@ public class Renderer implements AutoCloseable {
 
             if (resolvedMesh == null) continue; // no mesh assigned yet
 
-            // Resolve pipeline from material
+            // Resolve pipeline from material — prefer transaction-driven Material first
             Handle<PipelineResource> pipeline = defaultPipeline;
-            var matHandle = meshRenderer.getMaterialAssignment(entity);
-            if (matHandle != null) {
-                var material = materialRegistry.get(matHandle.index());
-                if (material != null) {
-                    try {
-                        if (material.shaderSource() != null) {
-                            pipeline = shaderManager.compileSlangFile(material.shaderSource());
-                        } else {
-                            pipeline = shaderManager.getPipeline(material.type());
-                        }
-                    } catch (Exception e) {
-                        // Fall back to default
+            Material material = meshRenderer.getMaterialData(entity);
+            if (material == null) {
+                // Fall back to handle-based registry lookup
+                var matHandle = meshRenderer.getMaterialAssignment(entity);
+                if (matHandle != null) material = materialRegistry.get(matHandle.index());
+            }
+            if (material != null) {
+                try {
+                    if (material.shaderSource() != null) {
+                        pipeline = shaderManager.compileSlangFile(material.shaderSource());
+                    } else {
+                        pipeline = shaderManager.getPipeline(material.type());
                     }
+                } catch (Exception e) {
+                    // Fall back to default
                 }
             }
 
@@ -381,9 +383,12 @@ public class Renderer implements AutoCloseable {
     private void uploadMaterialSnapshot(Handle<?> entity, dev.engine.core.property.PropertyMap materialData, CommandRecorder draw) {
         if (materialData == null || materialData.size() == 0) return;
 
-        // Resolve material from registry via MeshRenderer's assignment
-        var matHandle = meshRenderer.getMaterialAssignment(entity);
-        Material material = matHandle != null ? materialRegistry.get(matHandle.index()) : null;
+        // Resolve material — prefer transaction-driven Material first, fall back to registry
+        Material material = meshRenderer.getMaterialData(entity);
+        if (material == null) {
+            var matHandle = meshRenderer.getMaterialAssignment(entity);
+            material = matHandle != null ? materialRegistry.get(matHandle.index()) : null;
+        }
         if (material != null && material.hasRecordData()) {
             var record = material.data();
             var layout = dev.engine.core.layout.StructLayout.of(record.getClass());

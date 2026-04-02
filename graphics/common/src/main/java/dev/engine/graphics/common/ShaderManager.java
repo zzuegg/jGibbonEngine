@@ -6,7 +6,7 @@ import dev.engine.core.shader.ShaderStageType;
 import dev.engine.core.shader.SlangCompiler;
 import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.RenderDevice;
-import dev.engine.graphics.common.material.MaterialType;
+import dev.engine.core.material.MaterialType;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;

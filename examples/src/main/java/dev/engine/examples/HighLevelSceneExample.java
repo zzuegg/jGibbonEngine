@@ -67,9 +67,9 @@ public class HighLevelSceneExample {
         var cube1 = scene.createEntity();
         var cube2 = scene.createEntity();
         var cube3 = scene.createEntity();
-        scene.setParent(cube1, root);
-        scene.setParent(cube2, root);
-        scene.setParent(cube3, root);
+        cube1.setParent(root);
+        cube2.setParent(root);
+        cube3.setParent(root);
         scene.setMesh(cube1, cubeMesh);
         scene.setMesh(cube2, cubeMesh);
         scene.setMesh(cube3, cubeMesh);

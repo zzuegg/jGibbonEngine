@@ -150,15 +150,15 @@ public class CaptureScreenshots {
         var meshRenderer = new MeshRenderer();
         var camera = new Camera();
         var root = scene.createEntity();
-        var c1 = scene.createEntity(); scene.setParent(c1, root);
-        var c2 = scene.createEntity(); scene.setParent(c2, root);
-        var c3 = scene.createEntity(); scene.setParent(c3, root);
+        var c1 = scene.createEntity(); c1.setParent(root);
+        var c2 = scene.createEntity(); c2.setParent(root);
+        var c3 = scene.createEntity(); c3.setParent(root);
         meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
 
         // Reuse the same cube mesh for all 3 entities
-        meshRenderer.setRenderable(c1, new Renderable(cubeVbo, cubeIbo, vertexInput, cubePipeline, 24, 36));
-        meshRenderer.setRenderable(c2, new Renderable(cubeVbo, cubeIbo, vertexInput, cubePipeline, 24, 36));
-        meshRenderer.setRenderable(c3, new Renderable(cubeVbo, cubeIbo, vertexInput, cubePipeline, 24, 36));
+        meshRenderer.setRenderable(c1.handle(), new Renderable(cubeVbo, cubeIbo, vertexInput, cubePipeline, 24, 36));
+        meshRenderer.setRenderable(c2.handle(), new Renderable(cubeVbo, cubeIbo, vertexInput, cubePipeline, 24, 36));
+        meshRenderer.setRenderable(c3.handle(), new Renderable(cubeVbo, cubeIbo, vertexInput, cubePipeline, 24, 36));
 
         time = 2f;
         scene.setLocalTransform(root, Mat4.rotationY(time * 0.3f));

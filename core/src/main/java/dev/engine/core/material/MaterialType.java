@@ -1,4 +1,4 @@
-package dev.engine.graphics.common.material;
+package dev.engine.core.material;
 
 public interface MaterialType {
     String name();

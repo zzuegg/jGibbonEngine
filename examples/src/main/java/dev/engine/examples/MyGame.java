@@ -1,10 +1,9 @@
 package dev.engine.examples;
 
-import dev.engine.core.handle.Handle;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
-import dev.engine.core.scene.EntityTag;
-import dev.engine.core.scene.HierarchicalScene;
+import dev.engine.core.scene.Entity;
+import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
@@ -15,21 +14,25 @@ import dev.engine.graphics.opengl.OpenGlBackend;
  */
 public class MyGame extends BaseApplication {
 
-    private Handle<EntityTag> root, cube1, cube2, cube3;
+    private Entity root, cube1, cube2, cube3;
 
     @Override
     protected void init() {
-        var scene = (HierarchicalScene) scene();
+        var scene = scene();
         var cube = PrimitiveMeshes.cube();
 
         root = scene.createEntity();
-        cube1 = scene.createEntity(); scene.setParent(cube1, root);
-        cube2 = scene.createEntity(); scene.setParent(cube2, root);
-        cube3 = scene.createEntity(); scene.setParent(cube3, root);
+        cube1 = scene.createEntity();
+        cube1.setParent(root);
+        cube1.add(cube);
 
-        scene.setMesh(cube1, cube);
-        scene.setMesh(cube2, cube);
-        scene.setMesh(cube3, cube);
+        cube2 = scene.createEntity();
+        cube2.setParent(root);
+        cube2.add(cube);
+
+        cube3 = scene.createEntity();
+        cube3.setParent(root);
+        cube3.add(cube);
 
         camera().lookAt(new Vec3(0, 3, 7), Vec3.ZERO, Vec3.UNIT_Y);
     }

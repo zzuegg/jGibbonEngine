@@ -1,5 +1,6 @@
 package dev.engine.graphics.common.material;
 
+import dev.engine.core.material.Material;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;

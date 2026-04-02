@@ -2,8 +2,8 @@ package dev.engine.graphics.common;
 
 import dev.engine.core.math.Vec3;
 import dev.engine.core.property.PropertyKey;
-import dev.engine.graphics.common.material.Material;
-import dev.engine.graphics.common.material.MaterialType;
+import dev.engine.core.material.Material;
+import dev.engine.core.material.MaterialType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 

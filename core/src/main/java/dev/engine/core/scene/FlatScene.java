@@ -3,49 +3,32 @@ package dev.engine.core.scene;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.handle.HandlePool;
 import dev.engine.core.math.Mat4;
+import dev.engine.core.scene.component.Transform;
 
-import java.util.HashMap;
-import java.util.Map;
-
-/**
- * A flat scene with no hierarchy. All entities are independent.
- * World transform equals local transform.
- *
- * <p>Best for: ECS-style games, particle systems, flat object lists.
- */
 public class FlatScene extends AbstractScene {
 
-    private final HandlePool<EntityTag> entityPool = new HandlePool<>();
-    private final Map<Integer, Mat4> transforms = new HashMap<>();
+    private final HandlePool<EntityTag> pool = new HandlePool<>();
 
     @Override
-    public Handle<EntityTag> createEntity() {
-        var entity = entityPool.allocate();
-        transforms.put(entity.index(), Mat4.IDENTITY);
-        transactions.added(entity);
+    public Entity createEntity() {
+        var handle = pool.allocate();
+        transactions.added(handle);
+        var entity = new Entity(handle, this);
+        entityMap.put(handle, entity);
         return entity;
     }
 
     @Override
-    public void destroyEntity(Handle<EntityTag> entity) {
-        transforms.remove(entity.index());
-        transactions.removed(entity);
-        entityPool.release(entity);
+    public void destroyEntity(Handle<EntityTag> handle) {
+        entityMap.remove(handle);
+        transactions.removed(handle);
+        pool.release(handle);
     }
 
     @Override
-    public void setLocalTransform(Handle<EntityTag> entity, Mat4 transform) {
-        transforms.put(entity.index(), transform);
-        transactions.transformChanged(entity, transform);
-    }
-
-    @Override
-    public Mat4 getLocalTransform(Handle<EntityTag> entity) {
-        return transforms.getOrDefault(entity.index(), Mat4.IDENTITY);
-    }
-
-    @Override
-    public Mat4 getWorldTransform(Handle<EntityTag> entity) {
-        return getLocalTransform(entity); // No hierarchy — world = local
+    public Mat4 getWorldTransform(Handle<EntityTag> handle) {
+        var entity = entityMap.get(handle);
+        if (entity != null && entity.has(Transform.class)) return entity.get(Transform.class).toMatrix();
+        return Mat4.IDENTITY;
     }
 }

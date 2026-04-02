@@ -1,5 +1,6 @@
 package dev.engine.core.mesh;
 
+import dev.engine.core.scene.Component;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -12,7 +13,7 @@ import java.nio.ByteOrder;
  * <p>The vertex data layout is determined entirely by the format — MeshData
  * makes no assumptions about which attributes exist. Any vertex type works.
  */
-public record MeshData(ByteBuffer vertexData, VertexFormat format, int[] indices, int vertexCount, int indexCount) {
+public record MeshData(ByteBuffer vertexData, VertexFormat format, int[] indices, int vertexCount, int indexCount) implements Component {
 
     /**
      * Creates MeshData from float arrays. The most common creation path.

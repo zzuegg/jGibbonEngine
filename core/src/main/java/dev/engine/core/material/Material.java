@@ -1,6 +1,7 @@
-package dev.engine.graphics.common.material;
+package dev.engine.core.material;
 
 import dev.engine.core.math.Vec3;
+import dev.engine.core.scene.Component;
 import dev.engine.core.property.MutablePropertyMap;
 import dev.engine.core.property.PropertyKey;
 
@@ -10,7 +11,7 @@ import java.util.Set;
  * A material is a typed property bag that drives shader selection and uniform data.
  * Standard properties are defined as constants. Users can add any custom properties.
  */
-public class Material {
+public class Material implements Component {
 
     // Standard PBR properties
     public static final PropertyKey<Vec3> ALBEDO_COLOR = PropertyKey.of("albedoColor", Vec3.class);

@@ -116,7 +116,7 @@ class SceneRenderVerificationTest {
         var entity = scene.createEntity();
         scene.setLocalTransform(entity, Mat4.IDENTITY); // centered
         meshRenderer.processTransactions(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
-        meshRenderer.setRenderable(entity, new Renderable(vbo, ibo, vertexInput, pipeline, 4, 6));
+        meshRenderer.setRenderable(entity.handle(), new Renderable(vbo, ibo, vertexInput, pipeline, 4, 6));
 
         // Camera looking straight at the quad
         camera.setPerspective((float) Math.toRadians(60), 1f, 0.1f, 100f);

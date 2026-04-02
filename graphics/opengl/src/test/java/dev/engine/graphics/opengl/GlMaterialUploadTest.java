@@ -112,12 +112,12 @@ class GlMaterialUploadTest {
         meshRenderer.processTransactions(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
 
         // Verify MeshRenderer received the material data
-        var mat = meshRenderer.getMaterial(entity);
+        var mat = meshRenderer.getMaterial(entity.handle());
         assertNotNull(mat);
         assertEquals(new Vec3(1f, 0f, 0f), mat.get(ALBEDO));
 
         // Render with red material
-        var redPixel = renderEntityWithMaterial(meshRenderer, entity);
+        var redPixel = renderEntityWithMaterial(meshRenderer, entity.handle());
         assertTrue(redPixel[0] > 200, "Red should be high, got " + redPixel[0]);
 
         // Change material to green through transaction
@@ -125,10 +125,10 @@ class GlMaterialUploadTest {
         meshRenderer.processTransactions(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
 
         // Verify MeshRenderer updated
-        assertEquals(new Vec3(0f, 1f, 0f), meshRenderer.getMaterial(entity).get(ALBEDO));
+        assertEquals(new Vec3(0f, 1f, 0f), meshRenderer.getMaterial(entity.handle()).get(ALBEDO));
 
         // Render with green material
-        var greenPixel = renderEntityWithMaterial(meshRenderer, entity);
+        var greenPixel = renderEntityWithMaterial(meshRenderer, entity.handle());
         assertTrue(greenPixel[1] > 200, "Green should be high after change, got " + greenPixel[1]);
         assertTrue(greenPixel[0] < 50, "Red should be low after change, got " + greenPixel[0]);
     }
@@ -148,7 +148,7 @@ class GlMaterialUploadTest {
         scene.setMaterialProperties(entity, props);
         meshRenderer.processTransactions(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
 
-        var bluePixel = renderEntityWithMaterial(meshRenderer, entity);
+        var bluePixel = renderEntityWithMaterial(meshRenderer, entity.handle());
         assertTrue(bluePixel[2] > 200, "Blue should be high, got " + bluePixel[2]);
 
         // Replace with yellow
@@ -159,7 +159,7 @@ class GlMaterialUploadTest {
         scene.setMaterialProperties(entity, yellowProps);
         meshRenderer.processTransactions(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
 
-        var yellowPixel = renderEntityWithMaterial(meshRenderer, entity);
+        var yellowPixel = renderEntityWithMaterial(meshRenderer, entity.handle());
         assertTrue(yellowPixel[0] > 200, "Red should be high (yellow), got " + yellowPixel[0]);
         assertTrue(yellowPixel[1] > 200, "Green should be high (yellow), got " + yellowPixel[1]);
         assertTrue(yellowPixel[2] < 50, "Blue should be low (yellow), got " + yellowPixel[2]);

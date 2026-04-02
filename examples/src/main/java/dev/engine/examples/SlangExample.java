@@ -4,7 +4,7 @@ import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
-import dev.engine.graphics.common.material.MaterialType;
+import dev.engine.core.material.MaterialType;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
 import dev.engine.core.mesh.ComponentType;
@@ -37,9 +37,9 @@ public class SlangExample {
         // Create scene entities with unlit material (compiled from Slang)
         var scene = (HierarchicalScene) renderer.scene();
         var root = scene.createEntity();
-        var cube1 = scene.createEntity(); scene.setParent(cube1, root);
-        var cube2 = scene.createEntity(); scene.setParent(cube2, root);
-        var cube3 = scene.createEntity(); scene.setParent(cube3, root);
+        var cube1 = scene.createEntity(); cube1.setParent(root);
+        var cube2 = scene.createEntity(); cube2.setParent(root);
+        var cube3 = scene.createEntity(); cube3.setParent(root);
 
         // Assign meshes and materials
         scene.setMesh(cube1, cubeMesh);

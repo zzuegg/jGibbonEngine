@@ -53,9 +53,9 @@ public class SceneMultiCapture {
 
         var scene = (HierarchicalScene) renderer.scene();
         var root = scene.createEntity();
-        var c1 = scene.createEntity(); scene.setParent(c1, root);
-        var c2 = scene.createEntity(); scene.setParent(c2, root);
-        var c3 = scene.createEntity(); scene.setParent(c3, root);
+        var c1 = scene.createEntity(); c1.setParent(root);
+        var c2 = scene.createEntity(); c2.setParent(root);
+        var c3 = scene.createEntity(); c3.setParent(root);
         scene.setMesh(c1, cubeMesh);
         scene.setMesh(c2, cubeMesh);
         scene.setMesh(c3, cubeMesh);

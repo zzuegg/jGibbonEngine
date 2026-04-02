@@ -92,17 +92,17 @@ public class SceneExample {
         var cube1 = scene.createEntity();
         var cube2 = scene.createEntity();
         var cube3 = scene.createEntity();
-        scene.setParent(cube1, root);
-        scene.setParent(cube2, root);
-        scene.setParent(cube3, root);
+        cube1.setParent(root);
+        cube2.setParent(root);
+        cube3.setParent(root);
 
         // Process initial transactions
         meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
 
         // Assign renderables
-        meshRenderer.setRenderable(cube1, new Renderable(cubeVbo, cubeIbo, vertexInput, pipeline, 8, 36));
-        meshRenderer.setRenderable(cube2, new Renderable(cubeVbo, cubeIbo, vertexInput, pipeline, 8, 36));
-        meshRenderer.setRenderable(cube3, new Renderable(cubeVbo, cubeIbo, vertexInput, pipeline, 8, 36));
+        meshRenderer.setRenderable(cube1.handle(), new Renderable(cubeVbo, cubeIbo, vertexInput, pipeline, 8, 36));
+        meshRenderer.setRenderable(cube2.handle(), new Renderable(cubeVbo, cubeIbo, vertexInput, pipeline, 8, 36));
+        meshRenderer.setRenderable(cube3.handle(), new Renderable(cubeVbo, cubeIbo, vertexInput, pipeline, 8, 36));
 
         long startTime = System.nanoTime();
 
