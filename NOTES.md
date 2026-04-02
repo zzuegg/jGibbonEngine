@@ -1,8 +1,44 @@
 # Engine Design Notes
 
+## Code Conventions
+
+### Enums
+
+Only use enums when the set of values is **guaranteed** to never be extended. If there is any chance a user or future module might need to add a variant, use an interface/sealed interface with static instances instead. Enums lock down extensibility — once a `switch` or pattern match exists, adding a variant is a breaking change everywhere.
+
+### Modularity and Reuse
+
+Code should be modular and reusable where possible. Prefer small, focused components with clear boundaries over monolithic classes. Each piece should be usable independently — if a utility or subsystem can only function inside the engine, it's too tightly coupled.
+
+### Multithreading
+
+Multithreading support is a hard requirement. Every component must be designed thread-safe from the start — retrofitting concurrency is not an option. Prefer immutable data, lock-free structures, and message passing over shared mutable state with locks.
+
+### Minimal Dependencies
+
+Add as few external libraries as possible. Prefer writing engine-owned implementations over pulling in dependencies. Exceptions only for things that are genuinely impractical to implement in-house (e.g. native bindings like LWJGL for OpenGL/Vulkan access, Slang compiler). SLF4J for logging is acceptable. Everything else — math, collections, utilities — is engine code.
+
+### Math as Records (Valhalla-Ready)
+
+All math types (`Vec2`, `Vec3`, `Vec4`, `Mat3`, `Mat4`, `Quat`, etc.) are implemented as Java records. This makes them:
+- **Immutable** — thread-safe by default, no defensive copies needed.
+- **Value semantics** — identity-free, equality by components.
+- **Valhalla-ready** — when Project Valhalla ships value types, records are the natural migration path. Switching from `record` to `value record` should be a one-line change per type with zero API breakage.
+
+Mutable operations return new instances. For hot paths where allocation pressure matters, provide static methods that write directly into `MemorySegment` / `float[]` buffers without creating intermediate objects.
+
+### Native Resource Management
+
+All native resources (GPU buffers, textures, shaders, native memory, file handles, etc.) must be tracked through a **Cleaner**-based mechanism (`java.lang.ref.Cleaner`). No reliance on `finalize()`. Every native allocation registers a cleaning action at creation time, guaranteeing cleanup even if the user forgets to close explicitly.
+
+- Resources implement `AutoCloseable` for deterministic cleanup (try-with-resources).
+- The Cleaner acts as a safety net — if a resource becomes unreachable without being closed, the cleaner reclaims it.
+- Cleanup must happen on the correct thread/context (e.g. GL resources on the GL thread). The cleaner queues a release action to the owning context rather than freeing directly.
+- Deferred destruction for frames-in-flight — resources are not freed immediately but after the GPU is done with them (fence-based or frame-count-based).
+
 ## Rendering Architecture
 
-Dual-backend (OpenGL + Vulkan) behind a backend-agnostic abstraction.
+Triple-backend (OpenGL + Vulkan + WebGPU) behind a backend-agnostic abstraction.
 
 ### Key Abstractions
 
@@ -12,7 +48,7 @@ Dual-backend (OpenGL + Vulkan) behind a backend-agnostic abstraction.
 
 ### Design Decisions
 
-- **Command-oriented, not state-machine** — design around Vulkan's explicit model. OpenGL backend translates trivially. Reverse direction is painful.
+- **Command-oriented, not state-machine** — design around the explicit model shared by Vulkan and WebGPU. OpenGL backend translates trivially. Reverse direction is painful.
 - **Pipeline State Objects** — bundle rasterizer state, blend mode, depth test, shaders into one immutable object. Vulkan requires this; OpenGL emulates by diffing against current state.
 - **Capability query system** — `RenderDevice.query(RenderCap)` returns normalized values regardless of backend (MAX_TEXTURE_SIZE, VRAM_USAGE, SUPPORTED_FORMATS, etc.).
 - **Frame lifecycle** — `device.beginFrame()` → `RenderContext` → record commands → `device.endFrame()`.
@@ -24,7 +60,8 @@ Dual-backend (OpenGL + Vulkan) behind a backend-agnostic abstraction.
 
 ### Approach
 
-- Get OpenGL working first, then factor out the interface when adding Vulkan.
+- Get OpenGL working first, then factor out the interface when adding Vulkan and WebGPU.
+- WebGPU is a natural fit alongside Vulkan — both are explicit, command-oriented APIs. The abstraction layer should map cleanly to all three.
 
 ## Buffer System
 
@@ -41,11 +78,11 @@ Dual-backend (OpenGL + Vulkan) behind a backend-agnostic abstraction.
 
 ### Backend Translation
 
-| | OpenGL | Vulkan |
-|---|---|---|
-| STATIC | `glBufferData` or staging+copy | Staging buffer → `vkCmdCopyBuffer` to device-local |
-| DYNAMIC | `glMapBufferRange` persistent | Persistently mapped host-visible memory or staging ring |
-| STREAM | Orphan + `glMapBufferRange` unsynchronized | Per-frame ring buffer from host-visible pool |
+| | OpenGL | Vulkan | WebGPU |
+|---|---|---|---|
+| STATIC | `glBufferData` or staging+copy | Staging buffer → `vkCmdCopyBuffer` to device-local | `createBuffer` with `mappedAtCreation` or `writeBuffer` |
+| DYNAMIC | `glMapBufferRange` persistent | Persistently mapped host-visible memory or staging ring | `writeBuffer` per frame or staging via `mapAsync` |
+| STREAM | Orphan + `glMapBufferRange` unsynchronized | Per-frame ring buffer from host-visible pool | `writeBuffer` (internally ring-buffered by implementation) |
 
 ### Partial Updates
 
@@ -108,6 +145,148 @@ struct PointLight {
 ```
 
 This eliminates layout mismatches between CPU and GPU — the record is the contract. Shader compilation can include generated structs via preprocessing/injection before passing to the Slang compiler.
+
+## Shader System (Slang)
+
+All shaders are written in **Slang** and compiled at runtime. No pre-compiled shader binaries, no offline SPIR-V compilation step.
+
+### Why Slang
+
+- Single shading language targeting all three backends (GLSL for OpenGL, SPIR-V for Vulkan, WGSL/SPIR-V for WebGPU).
+- Module system, generics, interfaces — proper language features instead of preprocessor hacks.
+- Automatic differentiation (future: ML/physics integration).
+- Struct generation from Java records feeds directly into Slang source (see above).
+
+### Runtime Compilation Pipeline
+
+```
+Slang source (.slang)
+  + generated struct definitions (from Java records)
+  + material property declarations (from property bag schema)
+  → Slang compiler (via native FFM bindings)
+  → target-specific output:
+      OpenGL  → GLSL source → glShaderSource/glCompileShader
+      Vulkan  → SPIR-V binary → VkShaderModule
+      WebGPU  → WGSL source or SPIR-V → GPUShaderModule
+```
+
+### Compilation Caching
+
+- Compiled shader variants are cached by a hash of (source + defines + target backend).
+- Cache is persistent across sessions (disk cache) and in-memory for the current run.
+- Hot-reloading: when a `.slang` file changes, recompile affected variants and swap them into live pipelines without restarting.
+
+### Variant Generation
+
+The renderer drives variant compilation based on material properties:
+- Each unique property combination → a set of `#define`s or Slang specialization parameters.
+- Variants are compiled on-demand (first use) and cached.
+- A fallback/error shader is always available so missing variants never cause a black screen.
+
+### Custom Shaders
+
+Users write custom `.slang` files. The engine provides:
+- A standard library of common functions (lighting, PBR, noise, etc.) importable via Slang modules.
+- A contract interface — custom shaders implement a known entry point signature, receive material properties as parameters.
+- The same hot-reload and caching infrastructure applies to custom shaders.
+
+## Scene → Renderer Communication (Transactions)
+
+The renderer is **completely independent** of the scene. It has no reference to scene objects, no knowledge of the scene graph, and never reads scene state directly. All communication flows one way: the scene produces transactions, the renderer consumes them.
+
+This means:
+- The renderer is a standalone system that maintains its own internal representation (GPU buffers, draw lists, spatial structures).
+- The scene could be replaced, run on a different machine, or not exist at all — as long as something feeds valid transactions, the renderer works.
+- Testing the renderer doesn't require a scene — just feed it transaction sequences.
+- The scene never waits on the renderer and the renderer never reaches back into the scene.
+
+### Transaction Types
+
+Changes are categorized so the renderer can handle them with minimal work:
+
+- **Added(entity)** — new object entered the scene. Renderer allocates GPU resources, picks a shader, inserts into spatial structures.
+- **Removed(entity)** — object left the scene. Renderer schedules deferred destruction (respects frames-in-flight).
+- **TransformChanged(entity, new transform)** — position/rotation/scale changed. Renderer updates the transform buffer, re-evaluates culling, may invalidate shadow maps. Does NOT触 trigger shader or material re-evaluation.
+- **MaterialChanged(entity, property key, new value)** — a single material property changed (e.g. roughness, albedo color). Renderer updates the property in the material uniform/storage buffer. May trigger shader variant switch if the change affects the shader key (e.g. toggling transparency).
+- **MaterialReplaced(entity, new material)** — entire material swapped. Renderer re-evaluates shader selection and re-binds.
+- **MeshChanged(entity, new mesh)** — geometry swap. Renderer re-binds vertex/index buffers.
+- **LightChanged(light, property, value)** — light parameter changed. Renderer updates light buffer, may invalidate shadow maps for that light.
+
+### Why Fine-Grained
+
+- A position change should never cause a material rebind or shader recompile.
+- A material property tweak (e.g. color) should never trigger a full pipeline rebuild — only a uniform update.
+- Batching by type lets the renderer process all transform updates in one pass, all material updates in another, etc.
+
+### Transaction Buffer
+
+Transactions accumulate during the logic tick into a per-frame transaction list. At the sync point (frame snapshot swap), the list is handed to the renderer as part of the snapshot. The renderer drains it, applies changes, then discards it.
+
+## Materials as Property Bags
+
+A material is a flat collection of typed properties (floats, vectors, textures, booleans). The renderer inspects these properties to select the appropriate shader/pipeline.
+
+### Property-Driven Shader Selection
+
+The renderer maintains a mapping from property combinations → shader variants. Examples:
+
+| Properties present | Shader selected |
+|---|---|
+| `albedo`, `normal`, `roughness`, `metallic` | PBR standard |
+| `albedo`, `normal`, `roughness`, `metallic`, `emissive` | PBR emissive |
+| `albedo`, `opacity < 1.0` | Transparent forward |
+| `albedo` only | Unlit |
+
+The material never names a shader — the renderer figures it out from what properties are set.
+
+### Custom Shaders
+
+Users can bypass automatic selection by attaching a custom shader directly:
+
+- `material.setShader(customShader)` — overrides automatic selection entirely. The renderer uses this shader as-is.
+- Custom shaders still receive the material's properties as uniforms — the property bag is the data contract regardless of which shader consumes it.
+- This allows full creative control while keeping the common case (90%+ of materials) zero-config.
+
+### Property Change Granularity
+
+When a single property changes, the transaction carries the property key and new value — not the entire material. The renderer can:
+- Update just that slot in the material's GPU buffer.
+- Check if the change crosses a shader variant boundary (e.g. `opacity` going from 1.0 to 0.5 triggers a switch from opaque to transparent pipeline).
+- Skip entirely if the property doesn't affect the current render pass (e.g. emissive color change doesn't matter for shadow pass).
+
+## Asset Manager
+
+Central system for loading, caching, and managing all engine assets (textures, meshes, shaders, materials, sounds, etc.).
+
+### Core Responsibilities
+
+- **Caching** — assets are loaded once and shared via handles. Duplicate load requests return the cached instance. Reference counting or GC-based eviction for unused assets.
+- **Async Loading** — asset loads happen off the main thread. Callers get a handle immediately; the handle resolves when the data is ready. Placeholder/fallback assets are used until loading completes.
+- **Hot Reloading** — file watchers detect changes on disk and trigger reload. The asset handle stays the same — dependents see the updated data without rebinding. Essential for iteration during development.
+
+### Asset Sources
+
+Assets can come from multiple sources, abstracted behind a unified interface:
+
+- **Filesystem** — local directory, the default during development.
+- **Archive / Pack file** — bundled assets for distribution (e.g. zip, custom format).
+- **Network** — remote asset server for streaming or editor workflows.
+- **Generated** — procedurally created assets registered into the manager like any other.
+
+Sources are composable — the manager searches them in priority order (e.g. local overrides → pack file → network fallback).
+
+### Flexible Loader System
+
+Asset loading is driven by pluggable **loaders** registered per asset type. Each loader knows how to read a specific format and produce the engine's internal representation.
+
+- Register loaders at startup: `assetManager.registerLoader(Texture.class, new PngLoader(), new KtxLoader())`
+- Multiple loaders per type — selected by file extension or content sniffing.
+- Users can register custom loaders for proprietary or project-specific formats.
+- Loaders are stateless — they transform bytes → asset data. The manager handles caching, lifecycle, and threading.
+
+### Dependency Tracking
+
+Assets can depend on other assets (e.g. a material references textures). The manager resolves dependencies transitively and ensures correct load order. Hot-reloading a dependency triggers re-evaluation of dependents.
 
 ## Object Versioning
 
@@ -177,6 +356,40 @@ Implementation:
 - Each window gets its own dedicated render thread + its own graphics context. No context switching, no sharing.
 - OpenGL: one GL context per thread per window. Clean and avoids shared-context driver bugs.
 - Vulkan: single device, multiple swapchains. Command buffers per surface.
+- WebGPU: single `GPUDevice`, multiple `GPUCanvasContext`s. One command encoder per surface per frame.
 - The immutable frame snapshot is read-only — multiple render threads read it in parallel safely, zero coordination needed.
 - Use cases: editor viewports (scene view, game view, asset preview), multi-monitor, split-screen, debug views.
+
+### Window Toolkit Abstraction
+
+The renderer does not create or manage windows directly. Window creation, event polling, and surface handling are delegated to a **WindowToolkit** abstraction, with backend implementations for different native toolkits.
+
+#### Supported Toolkits
+
+- **GLFW** — lightweight, widely used, good OpenGL/Vulkan support. Primary toolkit for development.
+- **SDL3** — broader platform coverage, richer input/gamepad support, audio subsystem if needed.
+
+#### Key Abstraction: WindowToolkit + WindowHandle
+
+- **WindowToolkit** — creates windows, polls events, provides surfaces. One active toolkit per application (mixing GLFW and SDL windows is not supported — pick one at startup).
+- **WindowHandle** — opaque handle to a native window. The renderer asks the toolkit for a drawable surface from this handle.
+
+#### Toolkit ↔ Graphics Backend Interaction
+
+The toolkit and graphics backend are independent choices that compose:
+
+| | OpenGL | Vulkan | WebGPU |
+|---|---|---|---|
+| GLFW | `glfwCreateWindow` + GL context | `glfwCreateWindowSurface` → `VkSurfaceKHR` | `glfwCreateWindowSurface` → `wgpu::Surface` (via wgpu-native) |
+| SDL3 | `SDL_GL_CreateContext` | `SDL_Vulkan_CreateSurface` → `VkSurfaceKHR` | `SDL_GetWindowWMInfo` → native handle → `wgpu::Surface` |
+
+The toolkit provides the native surface/handle, the graphics backend wraps it into its own surface type. Neither knows about the other's internals.
+
+#### Event Handling
+
+The toolkit translates native events (resize, close, focus, input) into engine events. The renderer listens for resize events to recreate swapchains/framebuffers. Input events flow to the game logic, not the renderer.
+
+#### Why Not Abstract Further
+
+No attempt to support arbitrary toolkits via a plugin interface — GLFW and SDL3 cover all realistic desktop use cases. The abstraction exists to avoid hard-wiring one toolkit, not to support an open-ended ecosystem. Adding a new toolkit means implementing one interface, not designing a framework.
 

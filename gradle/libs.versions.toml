@@ -1,12 +1,20 @@
 [versions]
-java = "26"
+java = "25"
+
+# Logging
+slf4j = "2.0.16"
 
 # Testing
 junit = "5.11.3"
 
 [libraries]
+# Logging
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+
+# Testing
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 
 [bundles]
 
