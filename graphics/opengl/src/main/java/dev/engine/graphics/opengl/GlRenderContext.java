@@ -72,6 +72,12 @@ class GlRenderContext implements RenderContext {
     }
 
     @Override
+    public void setDepthTest(boolean enabled) {
+        if (enabled) GL45.glEnable(GL45.GL_DEPTH_TEST);
+        else GL45.glDisable(GL45.GL_DEPTH_TEST);
+    }
+
+    @Override
     public void clear(float r, float g, float b, float a) {
         GL45.glClearColor(r, g, b, a);
         GL45.glClear(GL45.GL_COLOR_BUFFER_BIT | GL45.GL_DEPTH_BUFFER_BIT);

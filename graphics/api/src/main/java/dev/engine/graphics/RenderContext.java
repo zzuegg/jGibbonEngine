@@ -14,6 +14,7 @@ public interface RenderContext {
     void drawIndexed(int indexCount, int firstIndex);
     void bindRenderTarget(Handle<RenderTargetResource> renderTarget);
     void bindDefaultRenderTarget();
+    void setDepthTest(boolean enabled);
     void clear(float r, float g, float b, float a);
     void viewport(int x, int y, int width, int height);
 }

@@ -17,5 +17,5 @@ dependencies {
 }
 
 application {
-    mainClass = "dev.engine.examples.TriangleExample"
+    mainClass = providers.gradleProperty("mainClass").orElse("dev.engine.examples.TriangleExample")
 }

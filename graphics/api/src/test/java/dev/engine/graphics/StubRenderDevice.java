@@ -107,6 +107,7 @@ class StubRenderDevice implements RenderDevice {
             @Override public void bindUniformBuffer(int binding, Handle<BufferResource> buffer) {}
             @Override public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) {}
             @Override public void bindDefaultRenderTarget() {}
+            @Override public void setDepthTest(boolean enabled) {}
             @Override public void draw(int vertexCount, int firstVertex) {}
             @Override public void drawIndexed(int indexCount, int firstIndex) {}
             @Override public void clear(float r, float g, float b, float a) {}
