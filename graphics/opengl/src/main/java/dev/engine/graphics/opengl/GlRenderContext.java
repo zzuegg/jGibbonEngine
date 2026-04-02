@@ -34,8 +34,37 @@ class GlRenderContext implements RenderContext {
     }
 
     @Override
+    public void bindIndexBuffer(Handle buffer) {
+        int ibo = device.getGlBufferName(buffer);
+        GL45.glBindBuffer(GL45.GL_ELEMENT_ARRAY_BUFFER, ibo);
+    }
+
+    @Override
+    public void bindUniformBuffer(int binding, Handle buffer) {
+        int ubo = device.getGlBufferName(buffer);
+        GL45.glBindBufferBase(GL45.GL_UNIFORM_BUFFER, binding, ubo);
+    }
+
+    @Override
     public void draw(int vertexCount, int firstVertex) {
         GL45.glDrawArrays(GL45.GL_TRIANGLES, firstVertex, vertexCount);
+    }
+
+    @Override
+    public void drawIndexed(int indexCount, int firstIndex) {
+        GL45.glDrawElements(GL45.GL_TRIANGLES, indexCount, GL45.GL_UNSIGNED_INT,
+                (long) firstIndex * Integer.BYTES);
+    }
+
+    @Override
+    public void bindRenderTarget(Handle renderTarget) {
+        int fbo = device.getGlFboName(renderTarget);
+        GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
+    }
+
+    @Override
+    public void bindDefaultRenderTarget() {
+        GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, 0);
     }
 
     @Override

@@ -25,6 +25,10 @@ public interface RenderDevice extends AutoCloseable {
     Handle createVertexInput(VertexFormat format);
     void destroyVertexInput(Handle vertexInput);
 
+    Handle createRenderTarget(dev.engine.graphics.target.RenderTargetDescriptor descriptor);
+    Handle getRenderTargetColorTexture(Handle renderTarget, int index);
+    void destroyRenderTarget(Handle renderTarget);
+
     Handle createPipeline(PipelineDescriptor descriptor);
     void destroyPipeline(Handle pipeline);
     boolean isValidPipeline(Handle pipeline);

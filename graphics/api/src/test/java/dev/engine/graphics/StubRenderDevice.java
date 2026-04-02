@@ -69,6 +69,15 @@ class StubRenderDevice implements RenderDevice {
     public boolean isValidTexture(Handle texture) { return bufferPool.isValid(texture); }
 
     @Override
+    public Handle createRenderTarget(dev.engine.graphics.target.RenderTargetDescriptor descriptor) { return bufferPool.allocate(); }
+
+    @Override
+    public Handle getRenderTargetColorTexture(Handle renderTarget, int index) { return Handle.INVALID; }
+
+    @Override
+    public void destroyRenderTarget(Handle renderTarget) { bufferPool.release(renderTarget); }
+
+    @Override
     public Handle createVertexInput(VertexFormat format) { return bufferPool.allocate(); }
 
     @Override
@@ -90,7 +99,12 @@ class StubRenderDevice implements RenderDevice {
             @Override public long frameNumber() { return frame; }
             @Override public void bindPipeline(Handle pipeline) {}
             @Override public void bindVertexBuffer(Handle buffer, Handle vertexInput) {}
+            @Override public void bindIndexBuffer(Handle buffer) {}
+            @Override public void bindUniformBuffer(int binding, Handle buffer) {}
+            @Override public void bindRenderTarget(Handle renderTarget) {}
+            @Override public void bindDefaultRenderTarget() {}
             @Override public void draw(int vertexCount, int firstVertex) {}
+            @Override public void drawIndexed(int indexCount, int firstIndex) {}
             @Override public void clear(float r, float g, float b, float a) {}
             @Override public void viewport(int x, int y, int width, int height) {}
         };

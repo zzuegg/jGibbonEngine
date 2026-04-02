@@ -12,6 +12,7 @@ import dev.engine.graphics.pipeline.ShaderStage;
 import dev.engine.graphics.vertex.ComponentType;
 import dev.engine.graphics.vertex.VertexAttribute;
 import dev.engine.graphics.vertex.VertexFormat;
+import dev.engine.graphics.target.RenderTargetDescriptor;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
@@ -27,7 +28,9 @@ import org.slf4j.LoggerFactory;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -44,6 +47,9 @@ public class GlRenderDevice implements RenderDevice {
     private final HandlePool vertexInputPool = new HandlePool();
     private final Map<Integer, Integer> vertexInputVaos = new HashMap<>();
     private final Map<Integer, Integer> vertexInputStrides = new HashMap<>();
+    private final HandlePool renderTargetPool = new HandlePool();
+    private final Map<Integer, Integer> renderTargetFbos = new HashMap<>();
+    private final Map<Integer, List<Handle>> renderTargetColorTextures = new HashMap<>();
     private final HandlePool pipelinePool = new HandlePool();
     private final Map<Integer, Integer> pipelineGlPrograms = new HashMap<>();
     private final AtomicLong frameCounter = new AtomicLong(0);
@@ -139,6 +145,58 @@ public class GlRenderDevice implements RenderDevice {
     @Override
     public boolean isValidTexture(Handle texture) {
         return texturePool.isValid(texture);
+    }
+
+    @Override
+    public Handle createRenderTarget(RenderTargetDescriptor descriptor) {
+        int fbo = GL45.glCreateFramebuffers();
+        var colorTextures = new ArrayList<Handle>();
+
+        for (int i = 0; i < descriptor.colorAttachments().size(); i++) {
+            var format = descriptor.colorAttachments().get(i);
+            int glTex = GL45.glCreateTextures(GL45.GL_TEXTURE_2D);
+            GL45.glTextureStorage2D(glTex, 1, mapTextureFormat(format), descriptor.width(), descriptor.height());
+            GL45.glNamedFramebufferTexture(fbo, GL45.GL_COLOR_ATTACHMENT0 + i, glTex, 0);
+
+            var texHandle = texturePool.allocate();
+            textureGlNames.put(texHandle.index(), glTex);
+            textureDescs.put(texHandle.index(), new dev.engine.graphics.texture.TextureDescriptor(
+                    descriptor.width(), descriptor.height(), format));
+            colorTextures.add(texHandle);
+        }
+
+        if (descriptor.depthFormat() != null) {
+            int depthTex = GL45.glCreateTextures(GL45.GL_TEXTURE_2D);
+            GL45.glTextureStorage2D(depthTex, 1, mapTextureFormat(descriptor.depthFormat()),
+                    descriptor.width(), descriptor.height());
+            GL45.glNamedFramebufferTexture(fbo, GL45.GL_DEPTH_ATTACHMENT, depthTex, 0);
+        }
+
+        var handle = renderTargetPool.allocate();
+        renderTargetFbos.put(handle.index(), fbo);
+        renderTargetColorTextures.put(handle.index(), colorTextures);
+        return handle;
+    }
+
+    @Override
+    public Handle getRenderTargetColorTexture(Handle renderTarget, int index) {
+        return renderTargetColorTextures.get(renderTarget.index()).get(index);
+    }
+
+    @Override
+    public void destroyRenderTarget(Handle renderTarget) {
+        if (!renderTargetPool.isValid(renderTarget)) return;
+        Integer fbo = renderTargetFbos.remove(renderTarget.index());
+        var textures = renderTargetColorTextures.remove(renderTarget.index());
+        if (fbo != null) GL45.glDeleteFramebuffers(fbo);
+        if (textures != null) {
+            for (var tex : textures) destroyTexture(tex);
+        }
+        renderTargetPool.release(renderTarget);
+    }
+
+    int getGlFboName(Handle renderTarget) {
+        return renderTargetFbos.getOrDefault(renderTarget.index(), 0);
     }
 
     @Override
