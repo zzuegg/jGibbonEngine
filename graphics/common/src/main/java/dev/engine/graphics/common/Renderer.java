@@ -378,7 +378,7 @@ public class Renderer implements AutoCloseable {
         if (scalarRecord == null) return;
         org.slf4j.LoggerFactory.getLogger(Renderer.class).info("Uploading typed material: {}", scalarRecord);
 
-        var layout = StructLayout.of(scalarRecord.getClass());
+        var layout = StructLayout.of(scalarRecord.getClass(), dev.engine.core.layout.LayoutMode.STD140);
         var key = "typedmat_" + scalarRecord.getClass().getName();
         var ubo = materialUbos.computeIfAbsent(key, k ->
                 device.createBuffer(new BufferDescriptor(
