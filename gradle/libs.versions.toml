@@ -4,12 +4,24 @@ java = "25"
 # Logging
 slf4j = "2.0.16"
 
+# Native
+lwjgl = "3.3.6"
+
 # Testing
 junit = "5.11.3"
 
 [libraries]
 # Logging
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+
+# LWJGL
+lwjgl-bom = { module = "org.lwjgl:lwjgl-bom", version.ref = "lwjgl" }
+lwjgl-core = { module = "org.lwjgl:lwjgl" }
+lwjgl-opengl = { module = "org.lwjgl:lwjgl-opengl" }
+lwjgl-glfw = { module = "org.lwjgl:lwjgl-glfw" }
+lwjgl-core-natives = { module = "org.lwjgl:lwjgl", version.ref = "lwjgl" }
+lwjgl-opengl-natives = { module = "org.lwjgl:lwjgl-opengl", version.ref = "lwjgl" }
+lwjgl-glfw-natives = { module = "org.lwjgl:lwjgl-glfw", version.ref = "lwjgl" }
 
 # Testing
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
