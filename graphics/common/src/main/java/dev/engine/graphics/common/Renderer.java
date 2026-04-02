@@ -10,7 +10,10 @@ import dev.engine.graphics.*;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
+import dev.engine.core.shader.SlangCompiler;
 import dev.engine.graphics.command.CommandRecorder;
+import dev.engine.graphics.common.material.Material;
+import dev.engine.graphics.common.material.MaterialType;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.renderer.DrawCommand;
 import dev.engine.graphics.renderer.MeshRenderer;
@@ -40,24 +43,43 @@ public class Renderer implements AutoCloseable {
     private final List<Camera> cameras = new ArrayList<>();
     private Camera activeCamera;
 
+    // Shader management
+    private final ShaderManager shaderManager;
+
     // Internal GPU resources
     private final Handle<BufferResource> mvpUbo;
     private final StructLayout mat4Layout = StructLayout.of(Mat4.class);
     private Handle<PipelineResource> defaultPipeline;
 
-    // Entity → MeshHandle mapping
+    // Entity → MeshHandle + Material mapping
     private final Map<Handle<EntityTag>, MeshHandle> entityMeshes = new HashMap<>();
+    private final Map<Handle<EntityTag>, Material> entityMaterials = new HashMap<>();
 
     // Viewport
     private int viewportWidth = 800;
     private int viewportHeight = 600;
 
     public Renderer(RenderDevice device) {
+        this(device, SlangCompiler.find());
+    }
+
+    public Renderer(RenderDevice device, SlangCompiler slangCompiler) {
         this.device = device;
         this.scene = new Scene();
         this.meshRenderer = new MeshRenderer();
+        this.shaderManager = new ShaderManager(slangCompiler, device);
         this.mvpUbo = device.createBuffer(
                 new BufferDescriptor(mat4Layout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
+
+        // Auto-compile default unlit pipeline if Slang is available
+        if (slangCompiler.isAvailable()) {
+            try {
+                this.defaultPipeline = shaderManager.getPipeline(MaterialType.UNLIT);
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(Renderer.class)
+                        .warn("Failed to compile default shader: {}", e.getMessage());
+            }
+        }
     }
 
     /**
@@ -120,7 +142,19 @@ public class Renderer implements AutoCloseable {
         entityMeshes.put(entity, mesh);
     }
 
-    // --- Pipeline ---
+    // --- Material management ---
+
+    public Material createMaterial(MaterialType type) {
+        return Material.create(type);
+    }
+
+    public void setMaterial(Handle<EntityTag> entity, Material material) {
+        entityMaterials.put(entity, material);
+    }
+
+    // --- Shader management ---
+
+    public ShaderManager shaderManager() { return shaderManager; }
 
     public void setDefaultPipeline(Handle<PipelineResource> pipeline) {
         this.defaultPipeline = pipeline;
@@ -143,14 +177,27 @@ public class Renderer implements AutoCloseable {
         // Process scene transactions
         meshRenderer.processTransactions(scene.drainTransactions());
 
-        // Sync entity meshes → renderables
+        // Sync entity meshes → renderables, resolve pipeline from material
         for (var entry : entityMeshes.entrySet()) {
             var entity = entry.getKey();
             var mesh = entry.getValue();
             if (meshRenderer.hasEntity(entity) && meshRenderer.getRenderable(entity) == null) {
+                var material = entityMaterials.get(entity);
+                Handle<PipelineResource> pipeline = defaultPipeline;
+                if (material != null) {
+                    try {
+                        if (material.shaderSource() != null) {
+                            pipeline = shaderManager.compileSlangFile(material.shaderSource());
+                        } else {
+                            pipeline = shaderManager.getPipeline(material.type());
+                        }
+                    } catch (Exception e) {
+                        // Fall back to default
+                    }
+                }
                 meshRenderer.setRenderable(entity, new Renderable(
                         mesh.vertexBuffer(), mesh.indexBuffer(), mesh.vertexInput(),
-                        defaultPipeline, mesh.vertexCount(), mesh.indexCount()));
+                        pipeline, mesh.vertexCount(), mesh.indexCount()));
             }
         }
 

@@ -19,3 +19,4 @@ Thumbs.db
 # Runtime
 *.log
 hs_err_pid*
+tools/
