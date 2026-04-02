@@ -67,7 +67,7 @@ class GpuBufferTest {
         @Test void generatesCbufferDeclaration() {
             var buf = GpuBuffer.create(device, PBRMaterial.class, BufferUsage.UNIFORM, AccessPattern.DYNAMIC);
             var slang = buf.slangCbuffer("MaterialData", 1);
-            assertTrue(slang.contains("cbuffer MaterialData : register(b1)"));
+            assertTrue(slang.contains("cbuffer MaterialData"));
         }
     }
 }

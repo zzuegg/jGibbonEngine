@@ -99,9 +99,11 @@ public class Renderer implements AutoCloseable {
         this.mvpUbo = device.createBuffer(
                 new BufferDescriptor(mat4Layout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
 
-        // Register built-in material type → shader mappings
+        // Register built-in material type → shader + struct mappings
         registerMaterialShader(dev.engine.core.material.PbrMaterial.class, "PBR");
         registerMaterialShader(dev.engine.core.material.UnlitMaterial.class, "UNLIT");
+        shaderManager.registerMaterialStruct("PBR", dev.engine.core.material.PbrMaterial.ScalarData.class);
+        shaderManager.registerMaterialStruct("UNLIT", dev.engine.core.material.UnlitMaterial.ScalarData.class);
 
         // Auto-compile default unlit pipeline if Slang is available
         if (slangCompiler.isAvailable()) {

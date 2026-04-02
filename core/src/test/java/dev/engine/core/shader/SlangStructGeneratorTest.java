@@ -81,7 +81,7 @@ class SlangStructGeneratorTest {
     class CbufferGeneration {
         @Test void generateCbuffer() {
             var slang = SlangStructGenerator.generateCbuffer("MaterialData", PBRMaterial.class, 1);
-            assertTrue(slang.contains("cbuffer MaterialData : register(b1)"));
+            assertTrue(slang.contains("cbuffer MaterialData"));
             assertTrue(slang.contains("float3 albedoColor;"));
             assertTrue(slang.contains("float roughness;"));
         }

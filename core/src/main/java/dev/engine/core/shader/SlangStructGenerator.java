@@ -83,7 +83,7 @@ public final class SlangStructGenerator {
             throw new IllegalArgumentException(recordType.getName() + " is not a record");
         }
         var sb = new StringBuilder();
-        sb.append("cbuffer ").append(name).append(" : register(b").append(binding).append(") {\n");
+        sb.append("cbuffer ").append(name).append(" {\n");
         for (var comp : recordType.getRecordComponents()) {
             sb.append("    ").append(mapType(comp)).append(" ").append(comp.getName()).append(";\n");
         }
