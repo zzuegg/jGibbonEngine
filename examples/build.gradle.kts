@@ -8,6 +8,8 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":graphics:api"))
     implementation(project(":graphics:opengl"))
+    implementation(platform(libs.lwjgl.bom))
+    implementation(libs.lwjgl.opengl)
 
     runtimeOnly(libs.lwjgl.core.natives) { artifact { classifier = lwjglNatives } }
     runtimeOnly(libs.lwjgl.opengl.natives) { artifact { classifier = lwjglNatives } }

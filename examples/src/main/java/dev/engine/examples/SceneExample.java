@@ -128,13 +128,14 @@ public class SceneExample {
             var ctx = device.beginFrame();
             ctx.viewport(0, 0, w, h);
             ctx.setDepthTest(true);
+            ctx.setCullFace(true);
             ctx.clear(0.05f, 0.05f, 0.08f, 1f);
             ctx.bindPipeline(pipeline);
 
             for (var cmd : meshRenderer.collectBatch()) {
                 var mvp = vp.mul(cmd.transform());
                 try (var writer = device.writeBuffer(ubo)) {
-                    matLayout.write(writer.segment(), 0, mvp);
+                    matLayout.write(writer.segment(), 0, mvp.transpose());
                 }
                 ctx.bindUniformBuffer(0, ubo);
                 ctx.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());

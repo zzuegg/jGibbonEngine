@@ -138,9 +138,9 @@ public class SpinningCubeExample {
             var proj = Mat4.perspective((float) Math.toRadians(45), aspect, 0.1f, 100f);
             var mvp = proj.mul(view).mul(model);
 
-            // Upload MVP
+            // Upload MVP (transpose for OpenGL column-major layout)
             try (var writer = device.writeBuffer(ubo)) {
-                matLayout.write(writer.segment(), 0, mvp);
+                matLayout.write(writer.segment(), 0, mvp.transpose());
             }
 
             var ctx = device.beginFrame();
