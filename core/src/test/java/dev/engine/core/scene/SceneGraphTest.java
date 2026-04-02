@@ -1,0 +1,144 @@
+package dev.engine.core.scene;
+
+import dev.engine.core.math.Mat4;
+import dev.engine.core.math.Vec3;
+import dev.engine.core.property.PropertyKey;
+import dev.engine.core.transaction.Transaction;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class SceneGraphTest {
+
+    private Scene scene;
+
+    @BeforeEach
+    void setUp() { scene = new Scene(); }
+
+    @Nested
+    class EntityLifecycle {
+        @Test void createEntityReturnsUniqueId() {
+            var a = scene.createEntity();
+            var b = scene.createEntity();
+            assertNotEquals(a, b);
+        }
+
+        @Test void createEntityEmitsAddedTransaction() {
+            var entity = scene.createEntity();
+            var txns = scene.drainTransactions();
+            assertEquals(1, txns.size());
+            assertInstanceOf(Transaction.EntityAdded.class, txns.getFirst());
+        }
+
+        @Test void destroyEntityEmitsRemovedTransaction() {
+            var entity = scene.createEntity();
+            scene.drainTransactions(); // clear
+            scene.destroyEntity(entity);
+            var txns = scene.drainTransactions();
+            assertEquals(1, txns.size());
+            assertInstanceOf(Transaction.EntityRemoved.class, txns.getFirst());
+        }
+    }
+
+    @Nested
+    class TransformHierarchy {
+        @Test void setLocalTransform() {
+            var entity = scene.createEntity();
+            var t = Mat4.translation(1f, 2f, 3f);
+            scene.setLocalTransform(entity, t);
+            assertEquals(t, scene.getLocalTransform(entity));
+        }
+
+        @Test void worldTransformWithoutParentEqualsLocal() {
+            var entity = scene.createEntity();
+            var t = Mat4.translation(5f, 0f, 0f);
+            scene.setLocalTransform(entity, t);
+            assertEquals(t, scene.getWorldTransform(entity));
+        }
+
+        @Test void childWorldTransformIncludesParent() {
+            var parent = scene.createEntity();
+            var child = scene.createEntity();
+            scene.setParent(child, parent);
+            scene.setLocalTransform(parent, Mat4.translation(10f, 0f, 0f));
+            scene.setLocalTransform(child, Mat4.translation(0f, 5f, 0f));
+
+            var world = scene.getWorldTransform(child);
+            // Parent translates +10x, child translates +5y
+            // World should be translation(10, 5, 0)
+            var point = world.transform(new dev.engine.core.math.Vec4(0f, 0f, 0f, 1f));
+            assertEquals(10f, point.x(), 1e-5f);
+            assertEquals(5f, point.y(), 1e-5f);
+        }
+
+        @Test void settingTransformEmitsTransaction() {
+            var entity = scene.createEntity();
+            scene.drainTransactions();
+            scene.setLocalTransform(entity, Mat4.translation(1f, 0f, 0f));
+            var txns = scene.drainTransactions();
+            assertTrue(txns.stream().anyMatch(t -> t instanceof Transaction.TransformChanged));
+        }
+
+        @Test void removeParent() {
+            var parent = scene.createEntity();
+            var child = scene.createEntity();
+            scene.setParent(child, parent);
+            scene.setLocalTransform(parent, Mat4.translation(10f, 0f, 0f));
+            scene.setLocalTransform(child, Mat4.translation(0f, 5f, 0f));
+
+            scene.removeParent(child);
+            var world = scene.getWorldTransform(child);
+            var point = world.transform(new dev.engine.core.math.Vec4(0f, 0f, 0f, 1f));
+            assertEquals(0f, point.x(), 1e-5f);
+            assertEquals(5f, point.y(), 1e-5f);
+        }
+    }
+
+    @Nested
+    class Children {
+        @Test void parentTracksChildren() {
+            var parent = scene.createEntity();
+            var c1 = scene.createEntity();
+            var c2 = scene.createEntity();
+            scene.setParent(c1, parent);
+            scene.setParent(c2, parent);
+            var children = scene.getChildren(parent);
+            assertEquals(2, children.size());
+            assertTrue(children.contains(c1));
+            assertTrue(children.contains(c2));
+        }
+
+        @Test void destroyParentDestroysChildren() {
+            var parent = scene.createEntity();
+            var child = scene.createEntity();
+            scene.setParent(child, parent);
+            scene.drainTransactions();
+
+            scene.destroyEntity(parent);
+            var txns = scene.drainTransactions();
+            // Should have removed both parent and child
+            long removals = txns.stream()
+                    .filter(t -> t instanceof Transaction.EntityRemoved)
+                    .count();
+            assertEquals(2, removals);
+        }
+    }
+
+    @Nested
+    class MaterialProperties {
+        static final PropertyKey<Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
+
+        @Test void setMaterialPropertyEmitsTransaction() {
+            var entity = scene.createEntity();
+            scene.drainTransactions();
+            scene.setMaterialProperty(entity, ROUGHNESS, 0.5f);
+            var txns = scene.drainTransactions();
+            assertEquals(1, txns.size());
+            assertInstanceOf(Transaction.MaterialPropertyChanged.class, txns.getFirst());
+        }
+    }
+}
