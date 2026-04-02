@@ -74,15 +74,17 @@ public class Engine {
         this.profiler = new Profiler();
         this.renderStats = new RenderStats();
 
-        // Asset manager with default loaders
+        // Asset manager with core loaders
         this.assets = new AssetManager(Executors.newSingleThreadExecutor());
         assets.addSource(new FileSystemAssetSource(Path.of("assets")));
         assets.registerLoader(new ImageLoader());
         assets.registerLoader(new ObjLoader());
+        assets.registerLoader(new dev.engine.core.asset.SlangShaderLoader());
 
-        // Renderer
+        // Renderer — connected to asset manager for shader hot-reload
         if (device == null) device = new HeadlessRenderDevice();
         this.renderer = new Renderer(device, scene);
+        this.renderer.shaderManager().setAssetManager(assets);
 
         // Module manager
         this.modules = new ModuleManager<>(new VariableTimestep<>(Time::new), Executors.newWorkStealingPool());

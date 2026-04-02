@@ -20,6 +20,7 @@ import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.core.material.Material;
 import dev.engine.core.material.MaterialType;
 import dev.engine.graphics.common.material.MaterialCompiler;
+import dev.engine.core.asset.TextureData;
 import dev.engine.core.mesh.MeshData;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.renderer.DrawCommand;
@@ -68,6 +69,9 @@ public class Renderer implements AutoCloseable {
 
     // Auto-upload cache: MeshData identity hash → MeshHandle (GPU resources)
     private final Map<Integer, MeshHandle> meshDataCache = new HashMap<>();
+
+    // Texture auto-upload cache: TextureData identity hash → GPU texture handle
+    private final Map<Integer, Handle<TextureResource>> textureCache = new HashMap<>();
 
     // Material data UBO (binding 1) — lazily created per material key
     private final Map<String, Handle<BufferResource>> materialUbos = new HashMap<>();
@@ -374,6 +378,30 @@ public class Renderer implements AutoCloseable {
 
         var vertexInput = device.createVertexInput(data.format());
         return new MeshHandle(vbo, ibo, vertexInput, data.format(), data.vertexCount(), data.indexCount());
+    }
+
+    /**
+     * Uploads TextureData to GPU, caching by identity.
+     * Returns a GPU texture handle for binding.
+     */
+    public Handle<TextureResource> uploadTexture(TextureData data) {
+        return textureCache.computeIfAbsent(System.identityHashCode(data), k -> {
+            var desc = new dev.engine.graphics.texture.TextureDescriptor(
+                    data.width(), data.height(),
+                    mapTextureFormat(data.format()));
+            var handle = device.createTexture(desc);
+            if (!data.compressed()) {
+                device.uploadTexture(handle, data.pixels());
+            }
+            return handle;
+        });
+    }
+
+    private dev.engine.graphics.texture.TextureFormat mapTextureFormat(TextureData.PixelFormat format) {
+        if (format == TextureData.PixelFormat.RGBA8) return dev.engine.graphics.texture.TextureFormat.RGBA8;
+        if (format == TextureData.PixelFormat.RGB8) return dev.engine.graphics.texture.TextureFormat.RGB8;
+        if (format == TextureData.PixelFormat.R8) return dev.engine.graphics.texture.TextureFormat.R8;
+        return dev.engine.graphics.texture.TextureFormat.RGBA8;
     }
 
     /**
