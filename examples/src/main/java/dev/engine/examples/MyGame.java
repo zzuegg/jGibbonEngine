@@ -37,9 +37,9 @@ public class MyGame extends BaseApplication {
         cube2 = scene.createEntity(); scene.setParent(cube2, root);
         cube3 = scene.createEntity(); scene.setParent(cube3, root);
 
-        renderer().setMesh(cube1, cubeMesh);
-        renderer().setMesh(cube2, cubeMesh);
-        renderer().setMesh(cube3, cubeMesh);
+        scene().setMesh(cube1, cubeMesh);
+        scene().setMesh(cube2, cubeMesh);
+        scene().setMesh(cube3, cubeMesh);
 
         // Camera
         camera().lookAt(new Vec3(0, 3, 7), Vec3.ZERO, Vec3.UNIT_Y);

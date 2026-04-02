@@ -3,7 +3,10 @@ package dev.engine.graphics.common;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
+import dev.engine.core.handle.HandlePool;
 import dev.engine.core.scene.AbstractScene;
+import dev.engine.core.scene.MaterialTag;
+import dev.engine.core.scene.MeshTag;
 import dev.engine.core.scene.Scene;
 import dev.engine.core.scene.SceneAccess;
 import dev.engine.core.scene.EntityTag;
@@ -54,9 +57,13 @@ public class Renderer implements AutoCloseable {
     private final StructLayout mat4Layout = StructLayout.of(Mat4.class);
     private Handle<PipelineResource> defaultPipeline;
 
-    // Entity → MeshHandle + Material mapping
-    private final Map<Handle<EntityTag>, MeshHandle> entityMeshes = new HashMap<>();
-    private final Map<Handle<EntityTag>, Material> entityMaterials = new HashMap<>();
+    // Mesh registry: Handle<MeshTag> → MeshHandle (GPU resources)
+    private final HandlePool<MeshTag> meshPool = new HandlePool<>();
+    private final Map<Integer, MeshHandle> meshRegistry = new HashMap<>();
+
+    // Material registry: Handle<MaterialTag> → Material
+    private final HandlePool<MaterialTag> materialPool = new HandlePool<>();
+    private final Map<Integer, Material> materialRegistry = new HashMap<>();
 
     // Material data UBO (binding 1) — lazily created per material key
     private final Map<String, Handle<BufferResource>> materialUbos = new HashMap<>();
@@ -117,7 +124,11 @@ public class Renderer implements AutoCloseable {
 
     // --- Mesh management ---
 
-    public MeshHandle createMesh(float[] vertices, int[] indices, VertexFormat format) {
+    /**
+     * Creates a mesh from vertex/index data and returns an opaque handle.
+     * The handle can be assigned to entities via {@code scene().setMesh(entity, handle)}.
+     */
+    public Handle<MeshTag> createMesh(float[] vertices, int[] indices, VertexFormat format) {
         // Upload vertex data
         long vbSize = (long) vertices.length * Float.BYTES;
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
@@ -141,48 +152,47 @@ public class Renderer implements AutoCloseable {
             indexCount = indices.length;
         }
 
-        // Create vertex input
         var vertexInput = device.createVertexInput(format);
-
         int vertexCount = vertices.length / (format.stride() / Float.BYTES);
-        return new MeshHandle(vbo, ibo, vertexInput, format, vertexCount, indexCount);
+
+        var handle = meshPool.allocate();
+        meshRegistry.put(handle.index(), new MeshHandle(vbo, ibo, vertexInput, format, vertexCount, indexCount));
+        return handle;
     }
 
-    public void setMesh(Handle<EntityTag> entity, MeshHandle mesh) {
-        entityMeshes.put(entity, mesh);
+    /** @deprecated Use {@code scene().setMesh(entity, meshHandle)} instead */
+    @Deprecated
+    public void setMesh(Handle<EntityTag> entity, Handle<MeshTag> mesh) {
+        scene.setMesh(entity, mesh);
     }
 
     // --- Material management ---
 
-    public Material createMaterial(MaterialType type) {
-        return Material.create(type);
+    /**
+     * Creates a material and returns an opaque handle.
+     * The handle can be assigned to entities via {@code scene().setMaterial(entity, handle)}.
+     */
+    public Handle<MaterialTag> createMaterial(MaterialType type) {
+        var handle = materialPool.allocate();
+        materialRegistry.put(handle.index(), Material.create(type));
+        return handle;
     }
 
-    public void setMaterial(Handle<EntityTag> entity, Material material) {
-        entityMaterials.put(entity, material);
-        // Push material properties into the scene as a MaterialReplaced transaction
-        // so MeshRenderer receives them through the standard transaction path
-        var snapshot = dev.engine.core.property.PropertyMap.builder();
-        // Copy standard known keys
-        for (var key : new dev.engine.core.property.PropertyKey<?>[]{
-                Material.ALBEDO_COLOR, Material.ROUGHNESS, Material.METALLIC,
-                Material.EMISSIVE, Material.OPACITY, Material.COLOR}) {
-            var value = material.get(key);
-            if (value != null) {
-                @SuppressWarnings("unchecked")
-                var typedKey = (dev.engine.core.property.PropertyKey<Object>) key;
-                snapshot.set(typedKey, value);
-            }
-        }
-        scene.setMaterialProperties(entity, snapshot.build());
+    /** Gets the Material object for a material handle (for setting properties). */
+    public Material material(Handle<MaterialTag> handle) {
+        return materialRegistry.get(handle.index());
+    }
+
+    /** @deprecated Use {@code scene().setMaterial(entity, materialHandle)} instead */
+    @Deprecated
+    public void setMaterial(Handle<EntityTag> entity, Handle<MaterialTag> material) {
+        scene.setMaterial(entity, material);
     }
 
     /**
      * Updates a single material property and emits a transaction.
      */
     public <T> void setMaterialProperty(Handle<EntityTag> entity, dev.engine.core.property.PropertyKey<T> key, T value) {
-        var material = entityMaterials.get(entity);
-        if (material != null) material.set(key, value);
         scene.setMaterialProperty(entity, key, value);
     }
 
@@ -211,13 +221,22 @@ public class Renderer implements AutoCloseable {
         // Process scene transactions
         meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
 
-        // Sync entity meshes → renderables, resolve pipeline from material
-        for (var entry : entityMeshes.entrySet()) {
-            var entity = entry.getKey();
-            var mesh = entry.getValue();
-            if (meshRenderer.hasEntity(entity) && meshRenderer.getRenderable(entity) == null) {
-                var material = entityMaterials.get(entity);
-                Handle<PipelineResource> pipeline = defaultPipeline;
+        // Resolve mesh/material assignments → renderables
+        // MeshRenderer tracks which entities have mesh/material handles assigned via transactions
+        for (var entity : meshRenderer.getEntities()) {
+            if (meshRenderer.getRenderable(entity) != null) continue; // already resolved
+
+            var meshHandle = meshRenderer.getMeshAssignment(entity);
+            if (meshHandle == null) continue; // no mesh assigned yet
+
+            var meshData = meshRegistry.get(meshHandle.index());
+            if (meshData == null) continue; // invalid mesh handle
+
+            // Resolve pipeline from material
+            Handle<PipelineResource> pipeline = defaultPipeline;
+            var matHandle = meshRenderer.getMaterialAssignment(entity);
+            if (matHandle != null) {
+                var material = materialRegistry.get(matHandle.index());
                 if (material != null) {
                     try {
                         if (material.shaderSource() != null) {
@@ -229,10 +248,11 @@ public class Renderer implements AutoCloseable {
                         // Fall back to default
                     }
                 }
-                meshRenderer.setRenderable(entity, new Renderable(
-                        mesh.vertexBuffer(), mesh.indexBuffer(), mesh.vertexInput(),
-                        pipeline, mesh.vertexCount(), mesh.indexCount()));
             }
+
+            meshRenderer.setRenderable(entity, new Renderable(
+                    meshData.vertexBuffer(), meshData.indexBuffer(), meshData.vertexInput(),
+                    pipeline, meshData.vertexCount(), meshData.indexCount()));
         }
 
         device.beginFrame();
@@ -306,9 +326,9 @@ public class Renderer implements AutoCloseable {
     private void uploadMaterialSnapshot(Handle<?> entity, dev.engine.core.property.PropertyMap materialData, CommandRecorder draw) {
         if (materialData == null || materialData.size() == 0) return;
 
-        // Check if this entity has a record-based material (for custom shaders)
-        @SuppressWarnings("unchecked")
-        var material = entityMaterials.get((Handle<EntityTag>) entity);
+        // Resolve material from registry via MeshRenderer's assignment
+        var matHandle = meshRenderer.getMaterialAssignment(entity);
+        Material material = matHandle != null ? materialRegistry.get(matHandle.index()) : null;
         if (material != null && material.hasRecordData()) {
             var record = material.data();
             var layout = dev.engine.core.layout.StructLayout.of(record.getClass());

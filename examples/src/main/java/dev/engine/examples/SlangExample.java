@@ -4,7 +4,6 @@ import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
-import dev.engine.graphics.common.material.Material;
 import dev.engine.graphics.common.material.MaterialType;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
@@ -43,14 +42,14 @@ public class SlangExample {
         var cube3 = scene.createEntity(); scene.setParent(cube3, root);
 
         // Assign meshes and materials
-        renderer.setMesh(cube1, cubeMesh);
-        renderer.setMesh(cube2, cubeMesh);
-        renderer.setMesh(cube3, cubeMesh);
+        scene.setMesh(cube1, cubeMesh);
+        scene.setMesh(cube2, cubeMesh);
+        scene.setMesh(cube3, cubeMesh);
 
         var mat = renderer.createMaterial(MaterialType.UNLIT);
-        renderer.setMaterial(cube1, mat);
-        renderer.setMaterial(cube2, mat);
-        renderer.setMaterial(cube3, mat);
+        scene.setMaterial(cube1, mat);
+        scene.setMaterial(cube2, mat);
+        scene.setMaterial(cube3, mat);
 
         var camera = renderer.createCamera();
         camera.lookAt(new Vec3(0f, 3f, 7f), Vec3.ZERO, Vec3.UNIT_Y);

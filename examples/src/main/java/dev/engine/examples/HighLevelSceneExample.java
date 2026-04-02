@@ -70,9 +70,9 @@ public class HighLevelSceneExample {
         scene.setParent(cube1, root);
         scene.setParent(cube2, root);
         scene.setParent(cube3, root);
-        renderer.setMesh(cube1, cubeMesh);
-        renderer.setMesh(cube2, cubeMesh);
-        renderer.setMesh(cube3, cubeMesh);
+        scene.setMesh(cube1, cubeMesh);
+        scene.setMesh(cube2, cubeMesh);
+        scene.setMesh(cube3, cubeMesh);
 
         // Set up camera
         var camera = renderer.createCamera();

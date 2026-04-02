@@ -56,9 +56,9 @@ public class SceneMultiCapture {
         var c1 = scene.createEntity(); scene.setParent(c1, root);
         var c2 = scene.createEntity(); scene.setParent(c2, root);
         var c3 = scene.createEntity(); scene.setParent(c3, root);
-        renderer.setMesh(c1, cubeMesh);
-        renderer.setMesh(c2, cubeMesh);
-        renderer.setMesh(c3, cubeMesh);
+        scene.setMesh(c1, cubeMesh);
+        scene.setMesh(c2, cubeMesh);
+        scene.setMesh(c3, cubeMesh);
 
         var camera = renderer.createCamera();
         camera.lookAt(new Vec3(0f, 3f, 7f), Vec3.ZERO, Vec3.UNIT_Y);

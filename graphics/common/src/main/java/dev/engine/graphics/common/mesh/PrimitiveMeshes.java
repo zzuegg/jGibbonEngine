@@ -1,6 +1,7 @@
 package dev.engine.graphics.common.mesh;
 
-import dev.engine.graphics.common.MeshHandle;
+import dev.engine.core.handle.Handle;
+import dev.engine.core.scene.MeshTag;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.vertex.ComponentType;
 import dev.engine.graphics.vertex.VertexAttribute;
@@ -26,7 +27,7 @@ public final class PrimitiveMeshes {
     private PrimitiveMeshes() {}
 
     /** A 1x1 quad centered at origin in the XY plane, facing +Z. */
-    public static MeshHandle quad(Renderer renderer) {
+    public static Handle<MeshTag> quad(Renderer renderer) {
         float[] v = {
                 // pos              normal          uv
                 -0.5f, -0.5f, 0f,  0f, 0f, 1f,    0f, 0f,
@@ -39,7 +40,7 @@ public final class PrimitiveMeshes {
     }
 
     /** A 1x1x1 cube centered at origin. 24 vertices (4 per face with correct normals). */
-    public static MeshHandle cube(Renderer renderer) {
+    public static Handle<MeshTag> cube(Renderer renderer) {
         float s = 0.5f;
         float[] v = new float[24 * STRIDE];
         int vi = 0;
@@ -67,7 +68,7 @@ public final class PrimitiveMeshes {
     }
 
     /** UV sphere with given segments and rings. */
-    public static MeshHandle sphere(Renderer renderer, int segments, int rings) {
+    public static Handle<MeshTag> sphere(Renderer renderer, int segments, int rings) {
         var verts = new ArrayList<Float>();
         var indices = new ArrayList<Integer>();
 
@@ -107,12 +108,12 @@ public final class PrimitiveMeshes {
     }
 
     /** UV sphere with default detail (32 segments, 16 rings). */
-    public static MeshHandle sphere(Renderer renderer) {
+    public static Handle<MeshTag> sphere(Renderer renderer) {
         return sphere(renderer, 32, 16);
     }
 
     /** Cylinder along Y axis, radius 0.5, height 1. */
-    public static MeshHandle cylinder(Renderer renderer, int segments) {
+    public static Handle<MeshTag> cylinder(Renderer renderer, int segments) {
         var verts = new ArrayList<Float>();
         var indices = new ArrayList<Integer>();
         int vi = 0;
@@ -182,7 +183,7 @@ public final class PrimitiveMeshes {
     }
 
     /** Cone along Y axis, radius 0.5, height 1. Tip at Y=0.5. */
-    public static MeshHandle cone(Renderer renderer, int segments) {
+    public static Handle<MeshTag> cone(Renderer renderer, int segments) {
         var verts = new ArrayList<Float>();
         var indices = new ArrayList<Integer>();
 
@@ -224,7 +225,7 @@ public final class PrimitiveMeshes {
     }
 
     /** Subdivided plane in the XZ plane. */
-    public static MeshHandle plane(Renderer renderer, int subdivisionsX, int subdivisionsZ) {
+    public static Handle<MeshTag> plane(Renderer renderer, int subdivisionsX, int subdivisionsZ) {
         var verts = new ArrayList<Float>();
         var indices = new ArrayList<Integer>();
 
@@ -257,7 +258,7 @@ public final class PrimitiveMeshes {
     }
 
     /** Fullscreen triangle for post-processing. Position only, no normals/UVs. */
-    public static MeshHandle fullscreenTriangle(Renderer renderer) {
+    public static Handle<MeshTag> fullscreenTriangle(Renderer renderer) {
         var format = VertexFormat.of(
                 new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0));
         float[] v = {-1, -1, 0, 3, -1, 0, -1, 3, 0};

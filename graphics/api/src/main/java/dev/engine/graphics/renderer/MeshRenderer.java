@@ -5,6 +5,8 @@ import dev.engine.core.math.Mat4;
 import dev.engine.core.property.MutablePropertyMap;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.core.property.PropertyMap;
+import dev.engine.core.scene.MaterialTag;
+import dev.engine.core.scene.MeshTag;
 import dev.engine.core.transaction.Transaction;
 
 import java.util.ArrayList;
@@ -24,6 +26,8 @@ public class MeshRenderer {
     private final Map<Handle<?>, Mat4> transforms = new HashMap<>();
     private final Map<Handle<?>, Renderable> renderables = new HashMap<>();
     private final Map<Handle<?>, MutablePropertyMap> materials = new HashMap<>();
+    private final Map<Handle<?>, Handle<MeshTag>> meshAssignments = new HashMap<>();
+    private final Map<Handle<?>, Handle<MaterialTag>> materialAssignments = new HashMap<>();
 
     public void processTransaction(Transaction txn) {
         switch (txn) {
@@ -58,11 +62,19 @@ public class MeshRenderer {
                 }
             }
             case Transaction.MeshChanged ignored -> {}
+            case Transaction.MeshAssigned assigned ->
+                    meshAssignments.put(assigned.entity(), assigned.mesh());
+            case Transaction.MaterialAssigned assigned ->
+                    materialAssignments.put(assigned.entity(), assigned.material());
         }
     }
 
     public void processTransactions(List<Transaction> txns) {
         for (var txn : txns) processTransaction(txn);
+    }
+
+    public java.util.Set<Handle<?>> getEntities() {
+        return java.util.Collections.unmodifiableSet(transforms.keySet());
     }
 
     public boolean hasEntity(Handle<?> entity) {
@@ -83,6 +95,14 @@ public class MeshRenderer {
 
     public MutablePropertyMap getMaterial(Handle<?> entity) {
         return materials.get(entity);
+    }
+
+    public Handle<MeshTag> getMeshAssignment(Handle<?> entity) {
+        return meshAssignments.get(entity);
+    }
+
+    public Handle<MaterialTag> getMaterialAssignment(Handle<?> entity) {
+        return materialAssignments.get(entity);
     }
 
     public List<DrawCommand> collectBatch() {

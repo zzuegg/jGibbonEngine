@@ -91,7 +91,7 @@ class RendererTest {
                     format);
 
             var entity = renderer.scene().createEntity();
-            renderer.setMesh(entity, mesh);
+            renderer.scene().setMesh(entity, mesh);
             renderer.scene().setLocalTransform(entity, Mat4.translation(0, 0, 0));
 
             var cam = renderer.createCamera();

@@ -4,7 +4,6 @@ import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
-import dev.engine.graphics.common.material.Material;
 import dev.engine.graphics.common.material.MaterialType;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.opengl.GlfwWindowToolkit;
@@ -31,14 +30,14 @@ public class SlangCapture {
         var c1 = scene.createEntity(); scene.setParent(c1, root);
         var c2 = scene.createEntity(); scene.setParent(c2, root);
         var c3 = scene.createEntity(); scene.setParent(c3, root);
-        renderer.setMesh(c1, cubeMesh);
-        renderer.setMesh(c2, cubeMesh);
-        renderer.setMesh(c3, cubeMesh);
+        scene.setMesh(c1, cubeMesh);
+        scene.setMesh(c2, cubeMesh);
+        scene.setMesh(c3, cubeMesh);
 
         var mat = renderer.createMaterial(MaterialType.UNLIT);
-        renderer.setMaterial(c1, mat);
-        renderer.setMaterial(c2, mat);
-        renderer.setMaterial(c3, mat);
+        scene.setMaterial(c1, mat);
+        scene.setMaterial(c2, mat);
+        scene.setMaterial(c3, mat);
 
         var camera = renderer.createCamera();
         camera.lookAt(new Vec3(0f, 3f, 7f), Vec3.ZERO, Vec3.UNIT_Y);

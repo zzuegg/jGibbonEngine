@@ -57,6 +57,16 @@ public abstract class AbstractScene {
         transactions.materialReplaced(entity, properties);
     }
 
+    /** Assigns a mesh to an entity. The handle is opaque — created by the Renderer. */
+    public void setMesh(Handle<EntityTag> entity, Handle<MeshTag> mesh) {
+        transactions.meshAssigned(entity, mesh);
+    }
+
+    /** Assigns a material to an entity. The handle is opaque — created by the Renderer. */
+    public void setMaterial(Handle<EntityTag> entity, Handle<MaterialTag> material) {
+        transactions.materialAssigned(entity, material);
+    }
+
     // --- Renderer-internal API (not visible to users) ---
 
     /**

@@ -4,6 +4,8 @@ import dev.engine.core.handle.Handle;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.core.property.PropertyMap;
+import dev.engine.core.scene.MaterialTag;
+import dev.engine.core.scene.MeshTag;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,6 +37,14 @@ public class TransactionBuffer {
 
     public void meshChanged(Handle<?> entity, Handle<?> newMesh) {
         transactions.add(new Transaction.MeshChanged(entity, newMesh));
+    }
+
+    public void meshAssigned(Handle<?> entity, Handle<MeshTag> mesh) {
+        transactions.add(new Transaction.MeshAssigned(entity, mesh));
+    }
+
+    public void materialAssigned(Handle<?> entity, Handle<MaterialTag> material) {
+        transactions.add(new Transaction.MaterialAssigned(entity, material));
     }
 
     public List<Transaction> drain() {
