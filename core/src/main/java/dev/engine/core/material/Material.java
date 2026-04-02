@@ -1,5 +1,6 @@
 package dev.engine.core.material;
 
+import dev.engine.core.asset.TextureData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.Component;
 import dev.engine.core.property.MutablePropertyMap;
@@ -9,18 +10,32 @@ import java.util.Set;
 
 /**
  * A material is a typed property bag that drives shader selection and uniform data.
- * Standard properties are defined as constants. Users can add any custom properties.
+ *
+ * <p>Properties include scalar values (roughness, metallic), colors (albedo),
+ * and textures (albedo map, normal map). The renderer reads all properties
+ * and uploads them to GPU (scalars → UBO, textures → sampler bindings).
+ *
+ * <p>Standard properties are defined as constants. Users can add custom ones.
  */
 public class Material implements Component {
 
-    // Standard PBR properties
+    // --- PBR scalar/color properties ---
     public static final PropertyKey<Vec3> ALBEDO_COLOR = PropertyKey.of("albedoColor", Vec3.class);
     public static final PropertyKey<Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
     public static final PropertyKey<Float> METALLIC = PropertyKey.of("metallic", Float.class);
     public static final PropertyKey<Vec3> EMISSIVE = PropertyKey.of("emissive", Vec3.class);
     public static final PropertyKey<Float> OPACITY = PropertyKey.of("opacity", Float.class);
+    public static final PropertyKey<Float> NORMAL_STRENGTH = PropertyKey.of("normalStrength", Float.class);
 
-    // Standard unlit properties
+    // --- Texture properties ---
+    public static final PropertyKey<TextureData> ALBEDO_MAP = PropertyKey.of("albedoMap", TextureData.class);
+    public static final PropertyKey<TextureData> NORMAL_MAP = PropertyKey.of("normalMap", TextureData.class);
+    public static final PropertyKey<TextureData> ROUGHNESS_MAP = PropertyKey.of("roughnessMap", TextureData.class);
+    public static final PropertyKey<TextureData> METALLIC_MAP = PropertyKey.of("metallicMap", TextureData.class);
+    public static final PropertyKey<TextureData> EMISSIVE_MAP = PropertyKey.of("emissiveMap", TextureData.class);
+    public static final PropertyKey<TextureData> AO_MAP = PropertyKey.of("aoMap", TextureData.class);
+
+    // --- Unlit properties ---
     public static final PropertyKey<Vec3> COLOR = PropertyKey.of("color", Vec3.class);
 
     private final MaterialType type;
