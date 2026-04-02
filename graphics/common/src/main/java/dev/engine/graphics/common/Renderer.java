@@ -20,6 +20,7 @@ import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.common.material.Material;
 import dev.engine.graphics.common.material.MaterialCompiler;
 import dev.engine.graphics.common.material.MaterialType;
+import dev.engine.graphics.mesh.MeshData;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.renderer.DrawCommand;
 import dev.engine.graphics.renderer.MeshRenderer;
@@ -158,6 +159,19 @@ public class Renderer implements AutoCloseable {
         var handle = meshPool.allocate();
         meshRegistry.put(handle.index(), new MeshHandle(vbo, ibo, vertexInput, format, vertexCount, indexCount));
         return handle;
+    }
+
+    /**
+     * Creates a mesh from MeshData (pure data → GPU upload).
+     * Called by Engine.registerMesh().
+     */
+    public Handle<MeshTag> createMeshFromData(MeshData data) {
+        var buf = data.vertexData();
+        float[] vertices = new float[buf.remaining() / Float.BYTES];
+        buf.mark();
+        buf.asFloatBuffer().get(vertices);
+        buf.reset();
+        return createMesh(vertices, data.indices(), data.format());
     }
 
     /** @deprecated Use {@code scene().setMesh(entity, meshHandle)} instead */

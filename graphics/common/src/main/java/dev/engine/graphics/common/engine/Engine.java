@@ -3,6 +3,12 @@ package dev.engine.graphics.common.engine;
 import dev.engine.core.asset.AssetManager;
 import dev.engine.core.asset.FileSystemAssetSource;
 import dev.engine.core.asset.ImageLoader;
+import dev.engine.core.handle.Handle;
+import dev.engine.core.scene.MeshTag;
+import dev.engine.core.scene.MaterialTag;
+import dev.engine.graphics.common.material.Material;
+import dev.engine.graphics.common.material.MaterialType;
+import dev.engine.graphics.mesh.MeshData;
 import dev.engine.core.module.ModuleManager;
 import dev.engine.core.module.Time;
 import dev.engine.core.module.VariableTimestep;
@@ -95,6 +101,30 @@ public class Engine {
     public EngineConfig config() { return config; }
     public long frameNumber() { return frameNumber; }
     public double totalTime() { return totalTime; }
+
+    // --- Resource creation (user-facing, no GPU concepts exposed) ---
+
+    /**
+     * Registers mesh data with the engine. Returns an opaque handle
+     * for assignment to scene entities via {@code scene().setMesh(entity, handle)}.
+     */
+    public Handle<MeshTag> registerMesh(MeshData data) {
+        return renderer.createMeshFromData(data);
+    }
+
+    /**
+     * Creates a material and returns an opaque handle.
+     * Use {@code material(handle)} to set properties.
+     * Assign to entities via {@code scene().setMaterial(entity, handle)}.
+     */
+    public Handle<MaterialTag> createMaterial(MaterialType type) {
+        return renderer.createMaterial(type);
+    }
+
+    /** Gets the Material object for property setting. */
+    public Material material(Handle<MaterialTag> handle) {
+        return renderer.material(handle);
+    }
 
     // --- Single-threaded mode ---
 

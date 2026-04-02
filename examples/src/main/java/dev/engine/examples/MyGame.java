@@ -7,14 +7,11 @@ import dev.engine.core.scene.EntityTag;
 import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
+import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.opengl.OpenGlBackend;
-import dev.engine.graphics.vertex.ComponentType;
-import dev.engine.graphics.vertex.VertexAttribute;
-import dev.engine.graphics.vertex.VertexFormat;
 
 /**
- * The simplest possible game using BaseApplication.
- * All boilerplate is gone — just init, update, done.
+ * The cleanest possible game. No GPU concepts, no renderer access, no boilerplate.
  */
 public class MyGame extends BaseApplication {
 
@@ -22,26 +19,23 @@ public class MyGame extends BaseApplication {
 
     @Override
     protected void init() {
-        // Create mesh
-        var format = VertexFormat.of(
-                new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0),
-                new VertexAttribute(1, 3, ComponentType.FLOAT, false, 12));
-        var cubeMesh = renderer().createMesh(
-                HighLevelSceneExample.cubeVertices(0.5f),
-                HighLevelSceneExample.cubeIndices(), format);
+        // Create mesh data (pure data, no GPU)
+        var cubeData = PrimitiveMeshes.cube();
 
-        // Create entities
+        // Register with engine (GPU upload happens here, returns opaque handle)
+        var cubeMesh = registerMesh(cubeData);
+
+        // Create entities and assign mesh — all through scene
         var scene = (HierarchicalScene) scene();
         root = scene.createEntity();
         cube1 = scene.createEntity(); scene.setParent(cube1, root);
         cube2 = scene.createEntity(); scene.setParent(cube2, root);
         cube3 = scene.createEntity(); scene.setParent(cube3, root);
 
-        scene().setMesh(cube1, cubeMesh);
-        scene().setMesh(cube2, cubeMesh);
-        scene().setMesh(cube3, cubeMesh);
+        scene.setMesh(cube1, cubeMesh);
+        scene.setMesh(cube2, cubeMesh);
+        scene.setMesh(cube3, cubeMesh);
 
-        // Camera
         camera().lookAt(new Vec3(0, 3, 7), Vec3.ZERO, Vec3.UNIT_Y);
     }
 
@@ -58,11 +52,8 @@ public class MyGame extends BaseApplication {
     }
 
     public static void main(String[] args) {
-        var config = EngineConfig.builder()
-                .windowTitle("My Game")
-                .windowSize(1024, 768)
-                .build();
-
-        new MyGame().launch(config, OpenGlBackend.factory());
+        new MyGame().launch(
+                EngineConfig.builder().windowTitle("My Game").windowSize(1024, 768).build(),
+                OpenGlBackend.factory());
     }
 }

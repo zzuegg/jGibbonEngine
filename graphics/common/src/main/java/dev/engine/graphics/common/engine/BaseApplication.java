@@ -1,9 +1,15 @@
 package dev.engine.graphics.common.engine;
 
 import dev.engine.core.asset.AssetManager;
+import dev.engine.core.handle.Handle;
 import dev.engine.core.input.InputState;
 import dev.engine.core.module.ModuleManager;
 import dev.engine.core.module.Time;
+import dev.engine.core.scene.MaterialTag;
+import dev.engine.core.scene.MeshTag;
+import dev.engine.graphics.common.material.Material;
+import dev.engine.graphics.common.material.MaterialType;
+import dev.engine.graphics.mesh.MeshData;
 import dev.engine.core.profiler.Profiler;
 import dev.engine.core.profiler.RenderStats;
 import dev.engine.core.scene.AbstractScene;
@@ -144,4 +150,15 @@ public abstract class BaseApplication {
     protected WindowHandle window() { return window; }
     protected double time() { return engine.totalTime(); }
     protected long frameNumber() { return engine.frameNumber(); }
+
+    // --- Resource creation (convenience, delegates to engine) ---
+
+    /** Registers mesh data and returns an opaque handle for scene assignment. */
+    protected Handle<MeshTag> registerMesh(MeshData data) { return engine.registerMesh(data); }
+
+    /** Creates a material and returns an opaque handle for scene assignment. */
+    protected Handle<MaterialTag> createMaterial(MaterialType type) { return engine.createMaterial(type); }
+
+    /** Gets the Material object for a handle (to set properties). */
+    protected Material material(Handle<MaterialTag> handle) { return engine.material(handle); }
 }
