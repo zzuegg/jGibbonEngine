@@ -1,10 +1,7 @@
 package dev.engine.core.scene;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.core.math.Quat;
-import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Hierarchy;
-import dev.engine.core.scene.component.Transform;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -79,101 +76,6 @@ public class Entity {
             add(fn.apply(current));
         }
         return this;
-    }
-
-    // --- Transform convenience ---
-
-    /** Sets position. Adds Transform if not present. */
-    public Entity setPosition(Vec3 position) {
-        var t = getOrCreateTransform();
-        return add(t.withPosition(position));
-    }
-
-    /** Sets position. */
-    public Entity setPosition(float x, float y, float z) {
-        return setPosition(new Vec3(x, y, z));
-    }
-
-    /** Sets rotation. Adds Transform if not present. */
-    public Entity setRotation(Quat rotation) {
-        var t = getOrCreateTransform();
-        return add(t.withRotation(rotation));
-    }
-
-    /** Sets scale uniformly. */
-    public Entity setScale(float uniform) {
-        var t = getOrCreateTransform();
-        return add(t.withScale(uniform));
-    }
-
-    /** Sets scale per axis. */
-    public Entity setScale(Vec3 scale) {
-        var t = getOrCreateTransform();
-        return add(t.withScale(scale));
-    }
-
-    /** Translates by offset (adds to current position). */
-    public Entity move(Vec3 offset) {
-        var t = getOrCreateTransform();
-        return add(t.withPosition(t.position().add(offset)));
-    }
-
-    /** Translates by offset. */
-    public Entity move(float dx, float dy, float dz) {
-        return move(new Vec3(dx, dy, dz));
-    }
-
-    /** Rotates around an axis by radians (multiplies current rotation). */
-    public Entity rotate(Vec3 axis, float radians) {
-        var t = getOrCreateTransform();
-        var delta = Quat.fromAxisAngle(axis, radians);
-        return add(t.withRotation(delta.mul(t.rotation())));
-    }
-
-    /** Rotates around Y axis. */
-    public Entity rotateY(float radians) { return rotate(Vec3.UNIT_Y, radians); }
-
-    /** Rotates around X axis. */
-    public Entity rotateX(float radians) { return rotate(Vec3.UNIT_X, radians); }
-
-    /** Rotates around Z axis. */
-    public Entity rotateZ(float radians) { return rotate(Vec3.UNIT_Z, radians); }
-
-    /** Looks at a target position from current position. */
-    public Entity lookAt(Vec3 target, Vec3 up) {
-        var t = getOrCreateTransform();
-        var dir = target.sub(t.position()).normalize();
-        // Simple lookAt quaternion from direction
-        var forward = new Vec3(0, 0, -1);
-        var dot = forward.dot(dir);
-        if (dot < -0.9999f) {
-            return add(t.withRotation(Quat.fromAxisAngle(up, (float) Math.PI)));
-        }
-        var cross = forward.cross(dir);
-        return add(t.withRotation(new Quat(cross.x(), cross.y(), cross.z(), 1 + dot).normalize()));
-    }
-
-    /** Gets current position, or Vec3.ZERO if no Transform. */
-    public Vec3 position() {
-        var t = get(Transform.class);
-        return t != null ? t.position() : Vec3.ZERO;
-    }
-
-    /** Gets current rotation, or identity if no Transform. */
-    public Quat rotation() {
-        var t = get(Transform.class);
-        return t != null ? t.rotation() : Quat.IDENTITY;
-    }
-
-    /** Gets current scale, or Vec3.ONE if no Transform. */
-    public Vec3 scale() {
-        var t = get(Transform.class);
-        return t != null ? t.scale() : Vec3.ONE;
-    }
-
-    private Transform getOrCreateTransform() {
-        var t = get(Transform.class);
-        return t != null ? t : Transform.IDENTITY;
     }
 
     // --- Hierarchy shortcuts ---
