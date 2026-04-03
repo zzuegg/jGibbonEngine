@@ -38,4 +38,32 @@ class OpenGlRenderTest {
     @Test void forcedWireframe() throws IOException {
         harness.assertOpenGlMatchesReference(ScreenshotTestSuite.FORCED_WIREFRAME, "forced_wireframe");
     }
+
+    @Test void blendAdditive() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.BLEND_ADDITIVE, "blend_additive");
+    }
+
+    @Test void depthWriteOff() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.DEPTH_WRITE_OFF, "depth_write_off");
+    }
+
+    @Test void texturedQuad() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.TEXTURED_QUAD, "textured_quad");
+    }
+
+    @Test void allBlendModes() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.ALL_BLEND_MODES, "all_blend_modes");
+    }
+
+    @Test void depthFuncGreater() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.DEPTH_FUNC_GREATER, "depth_func_greater");
+    }
+
+    @Test void frontFaceCw() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.FRONT_FACE_CW, "front_face_cw");
+    }
+
+    @Test void stencilMasking() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.STENCIL_MASKING, "stencil_masking");
+    }
 }

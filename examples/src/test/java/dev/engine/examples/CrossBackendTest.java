@@ -41,6 +41,39 @@ class CrossBackendTest {
             RenderTestHarness.Tolerance.loose());
     }
 
+    @Test void blendAdditive() {
+        harness.assertCrossBackend(ScreenshotTestSuite.BLEND_ADDITIVE, "blend_additive",
+            RenderTestHarness.Tolerance.loose());
+    }
+
+    @Test void depthWriteOff() {
+        harness.assertCrossBackend(ScreenshotTestSuite.DEPTH_WRITE_OFF, "depth_write_off",
+            RenderTestHarness.Tolerance.loose());
+    }
+
+    @Test void texturedQuad() {
+        harness.assertCrossBackend(ScreenshotTestSuite.TEXTURED_QUAD, "textured_quad",
+            RenderTestHarness.Tolerance.loose());
+    }
+
+    @Test void allBlendModes() {
+        harness.assertCrossBackend(ScreenshotTestSuite.ALL_BLEND_MODES, "all_blend_modes",
+            RenderTestHarness.Tolerance.loose());
+    }
+
+    @Test void frontFaceCw() {
+        harness.assertCrossBackend(ScreenshotTestSuite.FRONT_FACE_CW, "front_face_cw",
+            RenderTestHarness.Tolerance.loose());
+    }
+
+    @Test void stencilMasking() {
+        harness.assertCrossBackend(ScreenshotTestSuite.STENCIL_MASKING, "stencil_masking",
+            RenderTestHarness.Tolerance.loose());
+    }
+
     // Wireframe is not cross-backend comparable — Vulkan doesn't support dynamic polygon mode.
     // Per-backend wireframe tests exist in OpenGlRenderTest and VulkanRenderTest.
+
+    // DEPTH_FUNC_GREATER is not cross-backend — Vulkan doesn't support dynamic depth compare op.
+    // Per-backend test exists in OpenGlRenderTest.
 }

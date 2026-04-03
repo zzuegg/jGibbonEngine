@@ -1,11 +1,17 @@
 package dev.engine.examples;
 
+import dev.engine.core.asset.TextureData;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
+import dev.engine.graphics.renderstate.BlendMode;
+import dev.engine.graphics.renderstate.CompareFunc;
 import dev.engine.graphics.renderstate.CullMode;
+import dev.engine.graphics.renderstate.FrontFace;
 import dev.engine.graphics.renderstate.RenderState;
+import dev.engine.graphics.renderstate.StencilOp;
+import dev.engine.graphics.sampler.SamplerDescriptor;
 
 /**
  * Comprehensive test scenes exercising rendering features.
@@ -132,6 +138,51 @@ public final class ScreenshotTestSuite {
         sphere.add(Transform.IDENTITY);
     };
 
+    /** Additive blending — front cube blends additively with back cube. */
+    static final RenderTestScene BLEND_ADDITIVE = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Back: red cube
+        var back = renderer.scene().createEntity();
+        back.add(PrimitiveMeshes.cube());
+        back.add(MaterialData.unlit(new Vec3(0.8f, 0.0f, 0.0f)));
+        back.add(Transform.at(0, 0, -1));
+
+        // Front: green cube with additive blending (should appear yellow where overlapping)
+        var front = renderer.scene().createEntity();
+        front.add(PrimitiveMeshes.cube());
+        front.add(MaterialData.unlit(new Vec3(0.0f, 0.8f, 0.0f))
+            .set(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
+            .set(RenderState.DEPTH_WRITE, false));
+        front.add(Transform.at(0, 0, 1));
+    };
+
+    /** Depth write disabled — back object visible through front. */
+    static final RenderTestScene DEPTH_WRITE_OFF = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Back: blue sphere
+        var back = renderer.scene().createEntity();
+        back.add(PrimitiveMeshes.sphere());
+        back.add(MaterialData.unlit(new Vec3(0.1f, 0.1f, 0.9f)));
+        back.add(Transform.at(0, 0, -1));
+
+        // Front: red cube with depth write off
+        // The red cube renders first with depth write off,
+        // so the blue sphere behind it is still visible where it extends beyond the cube
+        var front = renderer.scene().createEntity();
+        front.add(PrimitiveMeshes.cube());
+        front.add(MaterialData.unlit(new Vec3(0.9f, 0.1f, 0.1f))
+            .set(RenderState.DEPTH_WRITE, false));
+        front.add(Transform.at(0, 0, 1));
+    };
+
     /** PBR material test — rough vs metallic spheres. */
     static final RenderTestScene PBR_MATERIALS = (renderer, w, h) -> {
         var cam = renderer.createCamera();
@@ -150,5 +201,147 @@ public final class ScreenshotTestSuite {
         metal.add(PrimitiveMeshes.sphere());
         metal.add(MaterialData.pbr(new Vec3(0.9f, 0.9f, 0.9f), 0.1f, 0.9f));
         metal.add(Transform.at(2, 0, 0));
+    };
+
+    /** Procedural checkerboard texture upload + sampler creation alongside scene rendering. */
+    static final RenderTestScene TEXTURED_QUAD = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 0, 3), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Create 4x4 checkerboard RGBA texture
+        int texW = 4, texH = 4;
+        var pixels = java.nio.ByteBuffer.allocateDirect(texW * texH * 4);
+        for (int y = 0; y < texH; y++) {
+            for (int x = 0; x < texW; x++) {
+                boolean white = (x + y) % 2 == 0;
+                byte c = white ? (byte) 255 : (byte) 50;
+                pixels.put(c).put(c).put(c).put((byte) 255);
+            }
+        }
+        pixels.flip();
+
+        // Upload texture and create sampler via renderer/device API
+        var texData = TextureData.rgba(texW, texH, pixels);
+        var texHandle = renderer.uploadTexture(texData);
+        var sampler = renderer.device().createSampler(SamplerDescriptor.nearest());
+
+        // Render a quad with unlit material — texture isn't auto-bound by materials yet,
+        // but this verifies texture upload + sampler creation work alongside rendering
+        var quad = renderer.scene().createEntity();
+        quad.add(PrimitiveMeshes.quad());
+        quad.add(MaterialData.unlit(new Vec3(1f, 1f, 1f)));
+        quad.add(Transform.IDENTITY);
+    };
+
+    /** All blend modes side by side over a red background. */
+    static final RenderTestScene ALL_BLEND_MODES = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 0, 8), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Background: bright red plane
+        var bg = renderer.scene().createEntity();
+        bg.add(PrimitiveMeshes.quad());
+        bg.add(MaterialData.unlit(new Vec3(0.9f, 0.0f, 0.0f)));
+        bg.add(Transform.at(0, 0, -2).withScale(new Vec3(10, 10, 1)));
+
+        // Alpha blend
+        var alpha = renderer.scene().createEntity();
+        alpha.add(PrimitiveMeshes.cube());
+        alpha.add(MaterialData.unlit(new Vec3(0.0f, 0.0f, 1.0f))
+            .set(RenderState.BLEND_MODE, BlendMode.ALPHA)
+            .set(RenderState.DEPTH_WRITE, false));
+        alpha.add(Transform.at(-3, 0, 0));
+
+        // Additive
+        var additive = renderer.scene().createEntity();
+        additive.add(PrimitiveMeshes.cube());
+        additive.add(MaterialData.unlit(new Vec3(0.0f, 1.0f, 0.0f))
+            .set(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
+            .set(RenderState.DEPTH_WRITE, false));
+        additive.add(Transform.at(0, 0, 0));
+
+        // Multiply
+        var multiply = renderer.scene().createEntity();
+        multiply.add(PrimitiveMeshes.cube());
+        multiply.add(MaterialData.unlit(new Vec3(0.5f, 0.5f, 1.0f))
+            .set(RenderState.BLEND_MODE, BlendMode.MULTIPLY)
+            .set(RenderState.DEPTH_WRITE, false));
+        multiply.add(Transform.at(3, 0, 0));
+    };
+
+    /** Depth function GREATER — back cube visible, front cube occluded (reversed depth test). */
+    static final RenderTestScene DEPTH_FUNC_GREATER = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Force GREATER depth on all entities
+        renderer.setDefault(RenderState.DEPTH_FUNC, CompareFunc.GREATER);
+
+        // Front: red cube (should be occluded with GREATER)
+        var front = renderer.scene().createEntity();
+        front.add(PrimitiveMeshes.cube());
+        front.add(MaterialData.unlit(new Vec3(0.9f, 0.1f, 0.1f)));
+        front.add(Transform.at(0, 0, 0));
+
+        // Back: blue cube (should show with GREATER)
+        var back = renderer.scene().createEntity();
+        back.add(PrimitiveMeshes.cube());
+        back.add(MaterialData.unlit(new Vec3(0.1f, 0.1f, 0.9f)));
+        back.add(Transform.at(0, 0, -3));
+    };
+
+    /** CW front face — default CCW geometry should be culled with back-face culling. */
+    static final RenderTestScene FRONT_FACE_CW = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // With CW front face + back culling, the default CCW geometry should be culled
+        var cube = renderer.scene().createEntity();
+        cube.add(PrimitiveMeshes.cube());
+        cube.add(MaterialData.unlit(new Vec3(0.9f, 0.9f, 0.1f))
+            .set(RenderState.FRONT_FACE, FrontFace.CW));
+        cube.add(Transform.IDENTITY);
+    };
+
+    /** Stencil write + test — left quad writes to stencil, right quad only shows where stencil is set. */
+    static final RenderTestScene STENCIL_MASKING = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // First pass: small green quad writes 1 to stencil buffer
+        var stencilWriter = renderer.scene().createEntity();
+        stencilWriter.add(PrimitiveMeshes.quad());
+        stencilWriter.add(MaterialData.unlit(new Vec3(0.0f, 0.8f, 0.0f))
+            .set(RenderState.STENCIL_TEST, true)
+            .set(RenderState.STENCIL_FUNC, CompareFunc.ALWAYS)
+            .set(RenderState.STENCIL_REF, 1)
+            .set(RenderState.STENCIL_MASK, 0xFF)
+            .set(RenderState.STENCIL_PASS, StencilOp.REPLACE)
+            .set(RenderState.STENCIL_FAIL, StencilOp.KEEP)
+            .set(RenderState.STENCIL_DEPTH_FAIL, StencilOp.KEEP));
+        stencilWriter.add(Transform.at(0, 0, 0).withScale(new Vec3(0.5f, 0.5f, 1)));
+
+        // Second pass: large blue quad only renders where stencil == 1
+        var stencilReader = renderer.scene().createEntity();
+        stencilReader.add(PrimitiveMeshes.quad());
+        stencilReader.add(MaterialData.unlit(new Vec3(0.0f, 0.0f, 0.9f))
+            .set(RenderState.STENCIL_TEST, true)
+            .set(RenderState.STENCIL_FUNC, CompareFunc.EQUAL)
+            .set(RenderState.STENCIL_REF, 1)
+            .set(RenderState.STENCIL_MASK, 0xFF)
+            .set(RenderState.STENCIL_PASS, StencilOp.KEEP)
+            .set(RenderState.STENCIL_FAIL, StencilOp.KEEP)
+            .set(RenderState.STENCIL_DEPTH_FAIL, StencilOp.KEEP));
+        stencilReader.add(Transform.at(0, 0, 0.1f).withScale(new Vec3(2, 2, 1)));
     };
 }

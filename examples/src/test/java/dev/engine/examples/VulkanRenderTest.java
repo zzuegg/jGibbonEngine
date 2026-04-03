@@ -38,4 +38,31 @@ class VulkanRenderTest {
     @Test void forcedWireframe() throws IOException {
         harness.assertVulkanMatchesReference(ScreenshotTestSuite.FORCED_WIREFRAME, "forced_wireframe");
     }
+
+    @Test void blendAdditive() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.BLEND_ADDITIVE, "blend_additive");
+    }
+
+    @Test void depthWriteOff() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.DEPTH_WRITE_OFF, "depth_write_off");
+    }
+
+    @Test void texturedQuad() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.TEXTURED_QUAD, "textured_quad");
+    }
+
+    @Test void allBlendModes() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.ALL_BLEND_MODES, "all_blend_modes");
+    }
+
+    @Test void frontFaceCw() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.FRONT_FACE_CW, "front_face_cw");
+    }
+
+    @Test void stencilMasking() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.STENCIL_MASKING, "stencil_masking");
+    }
+
+    // DEPTH_FUNC_GREATER omitted — Vulkan pipeline has hardcoded LESS depth compare op,
+    // no dynamic state for depth function.
 }
