@@ -35,7 +35,7 @@ jobs:
           cache: gradle
 
       - name: Grant Gradle wrapper execute permission
-        run: chmod +x gradlew || true
+        run: chmod +x gradlew
 
       - name: Generate Dokka HTML documentation
         run: ./gradlew copyDokkaToPages --no-daemon
