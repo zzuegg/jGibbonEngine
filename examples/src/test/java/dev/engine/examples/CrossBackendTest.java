@@ -71,9 +71,11 @@ class CrossBackendTest {
             RenderTestHarness.Tolerance.loose());
     }
 
+    @Test void depthFuncGreater() {
+        harness.assertCrossBackend(ScreenshotTestSuite.DEPTH_FUNC_GREATER, "depth_func_greater",
+            RenderTestHarness.Tolerance.loose());
+    }
+
     // Wireframe is not cross-backend comparable — Vulkan doesn't support dynamic polygon mode.
     // Per-backend wireframe tests exist in OpenGlRenderTest and VulkanRenderTest.
-
-    // DEPTH_FUNC_GREATER is not cross-backend — Vulkan doesn't support dynamic depth compare op.
-    // Per-backend test exists in OpenGlRenderTest.
 }

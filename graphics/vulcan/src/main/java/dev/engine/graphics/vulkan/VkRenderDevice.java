@@ -1640,6 +1640,9 @@ public class VkRenderDevice implements RenderDevice {
                     if (props.contains(RenderState.DEPTH_WRITE)) {
                         VK13.vkCmdSetDepthWriteEnable(cmd, props.get(RenderState.DEPTH_WRITE));
                     }
+                    if (props.contains(RenderState.DEPTH_FUNC)) {
+                        VK13.vkCmdSetDepthCompareOp(cmd, mapCompareFunc(props.get(RenderState.DEPTH_FUNC)));
+                    }
                     if (props.contains(RenderState.CULL_MODE)) {
                         CullMode mode = props.get(RenderState.CULL_MODE);
                         int vkMode = switch (mode.name()) {

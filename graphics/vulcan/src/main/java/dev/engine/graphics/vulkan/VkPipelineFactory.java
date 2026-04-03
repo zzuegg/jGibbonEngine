@@ -125,6 +125,7 @@ final class VkPipelineFactory {
                     VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
                     VK13.VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE,
                     VK13.VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
+                    VK13.VK_DYNAMIC_STATE_DEPTH_COMPARE_OP,
                     VK13.VK_DYNAMIC_STATE_CULL_MODE,
                     VK13.VK_DYNAMIC_STATE_FRONT_FACE,
                     VK13.VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE,

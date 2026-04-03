@@ -63,6 +63,7 @@ class VulkanRenderTest {
         harness.assertVulkanMatchesReference(ScreenshotTestSuite.STENCIL_MASKING, "stencil_masking");
     }
 
-    // DEPTH_FUNC_GREATER omitted — Vulkan pipeline has hardcoded LESS depth compare op,
-    // no dynamic state for depth function.
+    @Test void depthFuncGreater() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.DEPTH_FUNC_GREATER, "depth_func_greater");
+    }
 }
