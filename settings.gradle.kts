@@ -1,6 +1,7 @@
 rootProject.name = "engine"
 
 include("core")
+include("core-processor")
 include("graphics:api")
 include("graphics:common")
 include("graphics:opengl")

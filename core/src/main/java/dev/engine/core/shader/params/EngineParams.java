@@ -1,5 +1,6 @@
 package dev.engine.core.shader.params;
 
+import dev.engine.core.layout.NativeStruct;
 import dev.engine.core.math.Vec2;
 
 /**
@@ -7,6 +8,7 @@ import dev.engine.core.math.Vec2;
  * Used by {@link dev.engine.core.shader.SlangParamsBlock} to generate
  * the Slang {@code engine} global (e.g., {@code engine.get_time()}).
  */
+@NativeStruct
 public record EngineParams(
         float time,
         float deltaTime,

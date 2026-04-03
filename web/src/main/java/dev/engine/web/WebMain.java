@@ -54,10 +54,12 @@ public class WebMain {
     private static native int getCanvasHeight();
 
     public static void main(String[] args) {
-        // Register struct layouts for TeaVM (no reflection available)
-        // TeaVM has no reflection — disable it and register layouts manually
+        // TeaVM has no reflection — disable it.
+        // Generated _Layout classes register themselves in static {} blocks.
         dev.engine.core.layout.StructLayout.disableReflection();
-        WebStructLayouts.registerAll();
+        dev.engine.core.shader.params.EngineParams_Layout.init();
+        dev.engine.core.shader.params.CameraParams_Layout.init();
+        dev.engine.core.shader.params.ObjectParams_Layout.init();
 
         setStatus("Initializing WebGPU...");
 

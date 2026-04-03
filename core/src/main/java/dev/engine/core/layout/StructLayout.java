@@ -56,14 +56,24 @@ public final class StructLayout {
         var key = recordType.getName() + ":" + mode.name();
         var cached = CACHE.get(key);
         if (cached != null) return cached;
-        if (buildStrategy == null) {
-            throw new IllegalStateException(
-                "StructLayout for " + recordType.getName() + " not registered. " +
-                "On platforms without reflection, call StructLayout.register() for all struct types.");
+
+        // Try loading generated layout class (triggers static registration)
+        try {
+            Class.forName(recordType.getName() + "_Layout");
+            cached = CACHE.get(key);
+            if (cached != null) return cached;
+        } catch (ClassNotFoundException ignored) {}
+
+        // Fallback to reflection (desktop only)
+        if (buildStrategy != null) {
+            var layout = buildStrategy.apply(recordType, mode);
+            CACHE.put(key, layout);
+            return layout;
         }
-        var layout = buildStrategy.apply(recordType, mode);
-        CACHE.put(key, layout);
-        return layout;
+
+        throw new IllegalStateException(
+            "No layout for " + recordType.getName() +
+            ". Add @NativeStruct annotation or call StructLayout.register().");
     }
 
     /**
