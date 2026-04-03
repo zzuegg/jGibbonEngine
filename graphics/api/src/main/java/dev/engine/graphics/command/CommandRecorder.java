@@ -37,11 +37,11 @@ public class CommandRecorder {
     public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) { commands.add(new RenderCommand.BindRenderTarget(renderTarget)); }
     public void bindDefaultRenderTarget() { commands.add(new RenderCommand.BindDefaultRenderTarget()); }
 
-    // --- State ---
-    public void setDepthTest(boolean enabled) { commands.add(new RenderCommand.SetDepthTest(enabled)); }
-    public void setBlending(boolean enabled) { commands.add(new RenderCommand.SetBlending(enabled)); }
-    public void setCullFace(boolean enabled) { commands.add(new RenderCommand.SetCullFace(enabled)); }
-    public void setWireframe(boolean enabled) { commands.add(new RenderCommand.SetWireframe(enabled)); }
+    // --- State (deprecated — use setRenderState with PropertyMap instead) ---
+    @Deprecated public void setDepthTest(boolean enabled) { commands.add(new RenderCommand.SetDepthTest(enabled)); }
+    @Deprecated public void setBlending(boolean enabled) { commands.add(new RenderCommand.SetBlending(enabled)); }
+    @Deprecated public void setCullFace(boolean enabled) { commands.add(new RenderCommand.SetCullFace(enabled)); }
+    @Deprecated public void setWireframe(boolean enabled) { commands.add(new RenderCommand.SetWireframe(enabled)); }
 
     // --- Render state (property-based) ---
     public void setRenderState(PropertyMap properties) { commands.add(new RenderCommand.SetRenderState(properties)); }

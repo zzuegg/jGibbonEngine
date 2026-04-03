@@ -31,11 +31,11 @@ public sealed interface RenderCommand {
     record BindRenderTarget(Handle<RenderTargetResource> renderTarget) implements RenderCommand {}
     record BindDefaultRenderTarget() implements RenderCommand {}
 
-    // --- State ---
-    record SetDepthTest(boolean enabled) implements RenderCommand {}
-    record SetBlending(boolean enabled) implements RenderCommand {}
-    record SetCullFace(boolean enabled) implements RenderCommand {}
-    record SetWireframe(boolean enabled) implements RenderCommand {}
+    // --- State (deprecated — use SetRenderState with PropertyMap instead) ---
+    @Deprecated record SetDepthTest(boolean enabled) implements RenderCommand {}
+    @Deprecated record SetBlending(boolean enabled) implements RenderCommand {}
+    @Deprecated record SetCullFace(boolean enabled) implements RenderCommand {}
+    @Deprecated record SetWireframe(boolean enabled) implements RenderCommand {}
 
     // --- Render state (property-based) ---
     record SetRenderState(PropertyMap properties) implements RenderCommand {}
