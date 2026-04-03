@@ -46,7 +46,7 @@ override fun init() {
         material = assetManager.loadMaterial("Materials/Terrain.jgmat")
     )
     floor.localRotation = Quaternion.fromAngleAxis(
-        angle = -Math.PI.toFloat() / 2f,
+        angle = -kotlin.math.PI.toFloat() / 2f,
         axis  = Vector3f.UNIT_X
     )
     rootNode.attachChild(floor)
