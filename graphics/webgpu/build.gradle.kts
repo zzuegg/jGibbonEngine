@@ -7,7 +7,7 @@ tasks.test {
 dependencies {
     api(project(":graphics:api"))
     implementation(project(":graphics:common"))
-    implementation(project(":windowing:glfw"))
+    implementation(project(":providers:lwjgl-glfw"))
 
     testImplementation(project(":providers:jwebgpu"))
 
