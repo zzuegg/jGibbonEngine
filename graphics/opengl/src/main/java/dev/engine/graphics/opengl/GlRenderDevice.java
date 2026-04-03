@@ -1,7 +1,6 @@
 package dev.engine.graphics.opengl;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.BufferResource;
 import dev.engine.graphics.CapabilityRegistry;
 import dev.engine.graphics.DeviceCapability;
@@ -28,6 +27,7 @@ import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.BufferWriter;
 import dev.engine.graphics.buffer.StreamingBuffer;
 import dev.engine.graphics.sync.GpuFence;
+import dev.engine.graphics.resource.ResourceRegistry;
 import dev.engine.graphics.sampler.FilterMode;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.sampler.WrapMode;
@@ -54,29 +54,30 @@ public class GlRenderDevice implements RenderDevice {
 
     private static final Logger log = LoggerFactory.getLogger(GlRenderDevice.class);
 
-    private final HandlePool<BufferResource> bufferPool = new HandlePool<>();
-    private final Map<Integer, Integer> bufferGlNames = new HashMap<>();
-    private final Map<Integer, Long> bufferSizes = new HashMap<>();
-    private final HandlePool<TextureResource> texturePool = new HandlePool<>();
-    private final Map<Integer, Integer> textureGlNames = new HashMap<>();
-    private final Map<Integer, TextureDescriptor> textureDescs = new HashMap<>();
-    private final HandlePool<VertexInputResource> vertexInputPool = new HandlePool<>();
-    private final Map<Integer, Integer> vertexInputVaos = new HashMap<>();
-    private final Map<Integer, Integer> vertexInputStrides = new HashMap<>();
-    private final HandlePool<RenderTargetResource> renderTargetPool = new HandlePool<>();
-    private final Map<Integer, Integer> renderTargetFbos = new HashMap<>();
-    private final Map<Integer, List<Handle<TextureResource>>> renderTargetColorTextures = new HashMap<>();
+    private record GlBuffer(int glName, long size) {}
+    private final ResourceRegistry<BufferResource, GlBuffer> buffers = new ResourceRegistry<>("buffer");
+
+    private record GlTexture(int glName, TextureDescriptor desc) {}
+    private final ResourceRegistry<TextureResource, GlTexture> textures = new ResourceRegistry<>("texture");
+
+    private record GlVertexInput(int vao, int stride) {}
+    private final ResourceRegistry<VertexInputResource, GlVertexInput> vertexInputs = new ResourceRegistry<>("vertex-input");
+
+    private record GlRenderTarget(int fbo, List<Handle<TextureResource>> colorTextures) {}
+    private final ResourceRegistry<RenderTargetResource, GlRenderTarget> renderTargets = new ResourceRegistry<>("render-target");
+
     private final Map<Integer, Boolean> textureMipsDirty = new HashMap<>();
-    private final HandlePool<SamplerResource> samplerPool = new HandlePool<>();
-    private final Map<Integer, Integer> samplerGlNames = new HashMap<>();
-    private final Map<Integer, SamplerDescriptor> samplerDescs = new HashMap<>();
+
+    private record GlSampler(int glName, SamplerDescriptor desc) {}
+    private final ResourceRegistry<SamplerResource, GlSampler> samplers = new ResourceRegistry<>("sampler");
+
     @SuppressWarnings("unchecked")
     private final Handle<TextureResource>[] boundTextures = new Handle[16];
     @SuppressWarnings("unchecked")
     private final Handle<SamplerResource>[] boundSamplers = new Handle[16];
     private Handle<RenderTargetResource> currentRenderTarget;
-    private final HandlePool<PipelineResource> pipelinePool = new HandlePool<>();
-    private final Map<Integer, Integer> pipelineGlPrograms = new HashMap<>();
+
+    private final ResourceRegistry<PipelineResource, Integer> pipelines = new ResourceRegistry<>("pipeline");
     private final AtomicLong frameCounter = new AtomicLong(0);
     private final CapabilityRegistry capabilities = new CapabilityRegistry();
     private final long glfwWindow;
@@ -122,36 +123,31 @@ public class GlRenderDevice implements RenderDevice {
         int usage = mapUsage(descriptor.accessPattern());
         GL45.glNamedBufferData(glBuffer, descriptor.size(), usage);
 
-        var handle = bufferPool.allocate();
-        bufferGlNames.put(handle.index(), glBuffer);
-        bufferSizes.put(handle.index(), descriptor.size());
-        return handle;
+        return buffers.register(new GlBuffer(glBuffer, descriptor.size()));
     }
 
     @Override
     public void destroyBuffer(Handle<BufferResource> buffer) {
-        if (!bufferPool.isValid(buffer)) return;
-        Integer glName = bufferGlNames.remove(buffer.index());
-        if (glName != null) {
-            GL45.glDeleteBuffers(glName);
-        }
-        bufferPool.release(buffer);
+        if (!buffers.isValid(buffer)) return;
+        var buf = buffers.remove(buffer);
+        if (buf != null) GL45.glDeleteBuffers(buf.glName());
     }
 
     @Override
     public boolean isValidBuffer(Handle<BufferResource> buffer) {
-        return bufferPool.isValid(buffer);
+        return buffers.isValid(buffer);
     }
 
     @Override
     public BufferWriter writeBuffer(Handle<BufferResource> buffer) {
-        long size = bufferSizes.getOrDefault(buffer.index(), 0L);
+        var buf = buffers.get(buffer);
+        long size = buf != null ? buf.size() : 0L;
         return writeBuffer(buffer, 0, size);
     }
 
     @Override
     public BufferWriter writeBuffer(Handle<BufferResource> buffer, long offset, long length) {
-        int glName = bufferGlNames.get(buffer.index());
+        int glName = buffers.get(buffer).glName();
         var arena = Arena.ofConfined();
         var segment = arena.allocate(length);
         return new BufferWriter() {
@@ -173,16 +169,14 @@ public class GlRenderDevice implements RenderDevice {
         int levels = computeMipLevels(descriptor);
         GL45.glTextureStorage2D(glTex, levels, internalFormat, descriptor.width(), descriptor.height());
 
-        var handle = texturePool.allocate();
-        textureGlNames.put(handle.index(), glTex);
-        textureDescs.put(handle.index(), descriptor);
-        return handle;
+        return textures.register(new GlTexture(glTex, descriptor));
     }
 
     @Override
     public void uploadTexture(Handle<TextureResource> texture, ByteBuffer pixels) {
-        int glName = textureGlNames.get(texture.index());
-        var desc = textureDescs.get(texture.index());
+        var tex = textures.get(texture);
+        int glName = tex.glName();
+        var desc = tex.desc();
         int[] formatAndType = mapUploadFormat(desc.format());
         GL45.glTextureSubImage2D(glName, 0, 0, 0, desc.width(), desc.height(),
                 formatAndType[0], formatAndType[1], pixels);
@@ -191,17 +185,15 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public void destroyTexture(Handle<TextureResource> texture) {
-        if (!texturePool.isValid(texture)) return;
-        Integer glName = textureGlNames.remove(texture.index());
-        textureDescs.remove(texture.index());
+        if (!textures.isValid(texture)) return;
+        var tex = textures.remove(texture);
         textureMipsDirty.remove(texture.index());
-        if (glName != null) GL45.glDeleteTextures(glName);
-        texturePool.release(texture);
+        if (tex != null) GL45.glDeleteTextures(tex.glName());
     }
 
     @Override
     public boolean isValidTexture(Handle<TextureResource> texture) {
-        return texturePool.isValid(texture);
+        return textures.isValid(texture);
     }
 
     @Override
@@ -215,10 +207,9 @@ public class GlRenderDevice implements RenderDevice {
             GL45.glTextureStorage2D(glTex, 1, mapTextureFormat(format), descriptor.width(), descriptor.height());
             GL45.glNamedFramebufferTexture(fbo, GL45.GL_COLOR_ATTACHMENT0 + i, glTex, 0);
 
-            var texHandle = texturePool.allocate();
-            textureGlNames.put(texHandle.index(), glTex);
-            textureDescs.put(texHandle.index(), new dev.engine.graphics.texture.TextureDescriptor(
-                    descriptor.width(), descriptor.height(), format));
+            var texHandle = textures.register(new GlTexture(glTex,
+                    new dev.engine.graphics.texture.TextureDescriptor(
+                            descriptor.width(), descriptor.height(), format)));
             colorTextures.add(texHandle);
         }
 
@@ -229,31 +220,27 @@ public class GlRenderDevice implements RenderDevice {
             GL45.glNamedFramebufferTexture(fbo, GL45.GL_DEPTH_ATTACHMENT, depthTex, 0);
         }
 
-        var handle = renderTargetPool.allocate();
-        renderTargetFbos.put(handle.index(), fbo);
-        renderTargetColorTextures.put(handle.index(), colorTextures);
-        return handle;
+        return renderTargets.register(new GlRenderTarget(fbo, colorTextures));
     }
 
     @Override
     public Handle<TextureResource> getRenderTargetColorTexture(Handle<RenderTargetResource> renderTarget, int index) {
-        return renderTargetColorTextures.get(renderTarget.index()).get(index);
+        return renderTargets.get(renderTarget).colorTextures().get(index);
     }
 
     @Override
     public void destroyRenderTarget(Handle<RenderTargetResource> renderTarget) {
-        if (!renderTargetPool.isValid(renderTarget)) return;
-        Integer fbo = renderTargetFbos.remove(renderTarget.index());
-        var textures = renderTargetColorTextures.remove(renderTarget.index());
-        if (fbo != null) GL45.glDeleteFramebuffers(fbo);
-        if (textures != null) {
-            for (var tex : textures) destroyTexture(tex);
+        if (!renderTargets.isValid(renderTarget)) return;
+        var rt = renderTargets.remove(renderTarget);
+        if (rt != null) {
+            GL45.glDeleteFramebuffers(rt.fbo());
+            for (var tex : rt.colorTextures()) destroyTexture(tex);
         }
-        renderTargetPool.release(renderTarget);
     }
 
     int getGlFboName(Handle<RenderTargetResource> renderTarget) {
-        return renderTargetFbos.getOrDefault(renderTarget.index(), 0);
+        var rt = renderTargets.get(renderTarget);
+        return rt != null ? rt.fbo() : 0;
     }
 
     @Override
@@ -267,27 +254,24 @@ public class GlRenderDevice implements RenderDevice {
             GL45.glVertexArrayAttribBinding(vao, attr.location(), 0); // binding point 0
         }
 
-        var handle = vertexInputPool.allocate();
-        vertexInputVaos.put(handle.index(), vao);
-        vertexInputStrides.put(handle.index(), format.stride());
-        return handle;
+        return vertexInputs.register(new GlVertexInput(vao, format.stride()));
     }
 
     @Override
     public void destroyVertexInput(Handle<VertexInputResource> vertexInput) {
-        if (!vertexInputPool.isValid(vertexInput)) return;
-        Integer vao = vertexInputVaos.remove(vertexInput.index());
-        vertexInputStrides.remove(vertexInput.index());
-        if (vao != null) GL45.glDeleteVertexArrays(vao);
-        vertexInputPool.release(vertexInput);
+        if (!vertexInputs.isValid(vertexInput)) return;
+        var vi = vertexInputs.remove(vertexInput);
+        if (vi != null) GL45.glDeleteVertexArrays(vi.vao());
     }
 
     int getGlVaoName(Handle<VertexInputResource> vertexInput) {
-        return vertexInputVaos.getOrDefault(vertexInput.index(), 0);
+        var vi = vertexInputs.get(vertexInput);
+        return vi != null ? vi.vao() : 0;
     }
 
     int getVertexInputStride(Handle<VertexInputResource> vertexInput) {
-        return vertexInputStrides.getOrDefault(vertexInput.index(), 0);
+        var vi = vertexInputs.get(vertexInput);
+        return vi != null ? vi.stride() : 0;
     }
 
     @Override
@@ -298,27 +282,24 @@ public class GlRenderDevice implements RenderDevice {
         GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_WRAP_S, mapWrapMode(descriptor.wrapS()));
         GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_WRAP_T, mapWrapMode(descriptor.wrapT()));
 
-        var handle = samplerPool.allocate();
-        samplerGlNames.put(handle.index(), glSampler);
-        samplerDescs.put(handle.index(), descriptor);
-        return handle;
+        return samplers.register(new GlSampler(glSampler, descriptor));
     }
 
     @Override
     public void destroySampler(Handle<SamplerResource> sampler) {
-        if (!samplerPool.isValid(sampler)) return;
-        Integer glName = samplerGlNames.remove(sampler.index());
-        samplerDescs.remove(sampler.index());
-        if (glName != null) GL45.glDeleteSamplers(glName);
-        samplerPool.release(sampler);
+        if (!samplers.isValid(sampler)) return;
+        var s = samplers.remove(sampler);
+        if (s != null) GL45.glDeleteSamplers(s.glName());
     }
 
     int getGlSamplerName(Handle<SamplerResource> sampler) {
-        return samplerGlNames.getOrDefault(sampler.index(), 0);
+        var s = samplers.get(sampler);
+        return s != null ? s.glName() : 0;
     }
 
     int getGlProgramName(Handle<PipelineResource> pipeline) {
-        return pipelineGlPrograms.getOrDefault(pipeline.index(), 0);
+        var p = pipelines.get(pipeline);
+        return p != null ? p : 0;
     }
 
     private static int mapFilterMode(FilterMode mode) {
@@ -378,17 +359,14 @@ public class GlRenderDevice implements RenderDevice {
             }
         }
 
-        var handle = pipelinePool.allocate();
-        pipelineGlPrograms.put(handle.index(), program);
-        return handle;
+        return pipelines.register(program);
     }
 
     @Override
     public void destroyPipeline(Handle<PipelineResource> pipeline) {
-        if (!pipelinePool.isValid(pipeline)) return;
-        Integer program = pipelineGlPrograms.remove(pipeline.index());
+        if (!pipelines.isValid(pipeline)) return;
+        var program = pipelines.remove(pipeline);
         if (program != null) GL45.glDeleteProgram(program);
-        pipelinePool.release(pipeline);
     }
 
     @Override
@@ -421,14 +399,12 @@ public class GlRenderDevice implements RenderDevice {
         }
 
         GL45.glDeleteShader(shader);
-        var handle = pipelinePool.allocate();
-        pipelineGlPrograms.put(handle.index(), program);
-        return handle;
+        return pipelines.register(program);
     }
 
     @Override
     public boolean isValidPipeline(Handle<PipelineResource> pipeline) {
-        return pipelinePool.isValid(pipeline);
+        return pipelines.isValid(pipeline);
     }
 
     private static int mapShaderStage(ShaderStage stage) {
@@ -440,11 +416,13 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     public int getGlTextureName(Handle<TextureResource> texture) {
-        return textureGlNames.getOrDefault(texture.index(), 0);
+        var tex = textures.get(texture);
+        return tex != null ? tex.glName() : 0;
     }
 
     public int getGlBufferName(Handle<BufferResource> buffer) {
-        return bufferGlNames.getOrDefault(buffer.index(), 0);
+        var buf = buffers.get(buffer);
+        return buf != null ? buf.glName() : 0;
     }
 
     @Override
@@ -515,9 +493,9 @@ public class GlRenderDevice implements RenderDevice {
             case RenderCommand.BindDefaultRenderTarget cmd -> {
                 // Mark all color attachment textures of the previous render target as mips-dirty
                 if (currentRenderTarget != null) {
-                    var colorTextures = renderTargetColorTextures.get(currentRenderTarget.index());
-                    if (colorTextures != null) {
-                        for (var tex : colorTextures) {
+                    var rt = renderTargets.get(currentRenderTarget);
+                    if (rt != null) {
+                        for (var tex : rt.colorTextures()) {
                             textureMipsDirty.put(tex.index(), true);
                         }
                     }
@@ -662,10 +640,7 @@ public class GlRenderDevice implements RenderDevice {
      * the device's buffer pool so that {@link #getGlBufferName} works for it.
      */
     Handle<BufferResource> registerStreamingBuffer(int glBuffer, long size) {
-        var handle = bufferPool.allocate();
-        bufferGlNames.put(handle.index(), glBuffer);
-        bufferSizes.put(handle.index(), size);
-        return handle;
+        return buffers.register(new GlBuffer(glBuffer, size));
     }
 
     @Override
@@ -688,13 +663,14 @@ public class GlRenderDevice implements RenderDevice {
         var sampler = boundSamplers[unit];
         if (texture == null || sampler == null) return;
 
-        var desc = textureDescs.get(texture.index());
-        if (desc == null || desc.mipMode() == MipMode.NONE) return;
+        var tex = textures.get(texture);
+        if (tex == null || tex.desc().mipMode() == MipMode.NONE) return;
 
         Boolean dirty = textureMipsDirty.get(texture.index());
         if (dirty == null || !dirty) return;
 
-        SamplerDescriptor sd = samplerDescs.get(sampler.index());
+        var s = samplers.get(sampler);
+        SamplerDescriptor sd = s != null ? s.desc() : null;
         if (sd != null && usesMipmaps(sd)) {
             int glTex = getGlTextureName(texture);
             GL45.glGenerateTextureMipmap(glTex);
@@ -716,26 +692,23 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public void close() {
-        for (var glName : bufferGlNames.values()) {
-            GL45.glDeleteBuffers(glName);
+        // Report leaked resources
+        int leaks = buffers.reportLeaks()
+                + textures.reportLeaks()
+                + vertexInputs.reportLeaks()
+                + renderTargets.reportLeaks()
+                + samplers.reportLeaks()
+                + pipelines.reportLeaks();
+        if (leaks > 0) {
+            log.warn("Total {} resource handle(s) leaked at GL device shutdown", leaks);
         }
-        bufferGlNames.clear();
-        for (var glName : textureGlNames.values()) {
-            GL45.glDeleteTextures(glName);
-        }
-        textureGlNames.clear();
-        for (var program : pipelineGlPrograms.values()) {
-            GL45.glDeleteProgram(program);
-        }
-        pipelineGlPrograms.clear();
-        for (var vao : vertexInputVaos.values()) {
-            GL45.glDeleteVertexArrays(vao);
-        }
-        vertexInputVaos.clear();
-        for (var glSampler : samplerGlNames.values()) {
-            GL45.glDeleteSamplers(glSampler);
-        }
-        samplerGlNames.clear();
+
+        buffers.destroyAll(buf -> GL45.glDeleteBuffers(buf.glName()));
+        textures.destroyAll(tex -> GL45.glDeleteTextures(tex.glName()));
+        pipelines.destroyAll(GL45::glDeleteProgram);
+        vertexInputs.destroyAll(vi -> GL45.glDeleteVertexArrays(vi.vao()));
+        samplers.destroyAll(s -> GL45.glDeleteSamplers(s.glName()));
+        renderTargets.destroyAll(rt -> GL45.glDeleteFramebuffers(rt.fbo()));
         GL45.glDeleteBuffers(pushConstantUbo);
         log.info("GlRenderDevice closed");
     }
