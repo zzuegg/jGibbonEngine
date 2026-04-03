@@ -48,13 +48,12 @@ public class TeaVmSlangCompiler {
         var targets = slang.getCompileTargets();
         var wgslTarget = 0;
         for (var i = 0; i < targets.length; i++) {
-            console.log('[Slang WASM] Target ' + i + ': name=' + targets[i].name + ' value=' + targets[i].value);
             if (targets[i].name === 'WGSL') {
                 wgslTarget = targets[i].value;
+                break;
             }
         }
         if (wgslTarget === 0) throw new Error('WGSL target not found in compile targets');
-        console.log('[Slang WASM] Using WGSL target value: ' + wgslTarget);
         var session = globalSession.createSession(wgslTarget);
         if (!session) throw new Error('Failed to create Slang WGSL session');
 
