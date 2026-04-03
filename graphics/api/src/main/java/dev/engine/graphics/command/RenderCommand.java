@@ -31,6 +31,10 @@ public sealed interface RenderCommand {
     record DrawInstanced(int vertexCount, int firstVertex, int instanceCount, int firstInstance) implements RenderCommand {}
     record DrawIndexedInstanced(int indexCount, int firstIndex, int instanceCount, int firstInstance) implements RenderCommand {}
 
+    // --- Indirect draw commands ---
+    record DrawIndirect(Handle<BufferResource> buffer, long offset, int drawCount, int stride) implements RenderCommand {}
+    record DrawIndexedIndirect(Handle<BufferResource> buffer, long offset, int drawCount, int stride) implements RenderCommand {}
+
     // --- Render targets ---
     record BindRenderTarget(Handle<RenderTargetResource> renderTarget) implements RenderCommand {}
     record BindDefaultRenderTarget() implements RenderCommand {}

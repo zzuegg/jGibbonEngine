@@ -1453,6 +1453,20 @@ public class VkRenderDevice implements RenderDevice {
                     flushDescriptorSet(cmd);
                     vkCmdDrawIndexed(cmd, di.indexCount(), di.instanceCount(), di.firstIndex(), 0, di.firstInstance());
                 }
+                case dev.engine.graphics.command.RenderCommand.DrawIndirect(var buffer, long offset, int drawCount, int stride) -> {
+                    flushDescriptorSet(cmd);
+                    var alloc = bufferRegistry.get(buffer);
+                    if (alloc != null) {
+                        vkCmdDrawIndirect(cmd, alloc.buffer(), offset, drawCount, stride == 0 ? 16 : stride);
+                    }
+                }
+                case dev.engine.graphics.command.RenderCommand.DrawIndexedIndirect(var buffer, long offset, int drawCount, int stride) -> {
+                    flushDescriptorSet(cmd);
+                    var alloc = bufferRegistry.get(buffer);
+                    if (alloc != null) {
+                        vkCmdDrawIndexedIndirect(cmd, alloc.buffer(), offset, drawCount, stride == 0 ? 20 : stride);
+                    }
+                }
                 case dev.engine.graphics.command.RenderCommand.Viewport vp -> {
                     try (var stack = stackPush()) {
                         // Negative height flips Y axis to match OpenGL convention

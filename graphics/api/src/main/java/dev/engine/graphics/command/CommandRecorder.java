@@ -34,6 +34,8 @@ public class CommandRecorder {
     public void drawIndexed(int indexCount, int firstIndex) { commands.add(new RenderCommand.DrawIndexed(indexCount, firstIndex)); }
     public void drawInstanced(int vertexCount, int firstVertex, int instanceCount, int firstInstance) { commands.add(new RenderCommand.DrawInstanced(vertexCount, firstVertex, instanceCount, firstInstance)); }
     public void drawIndexedInstanced(int indexCount, int firstIndex, int instanceCount, int firstInstance) { commands.add(new RenderCommand.DrawIndexedInstanced(indexCount, firstIndex, instanceCount, firstInstance)); }
+    public void drawIndirect(Handle<BufferResource> buffer, long offset, int drawCount, int stride) { commands.add(new RenderCommand.DrawIndirect(buffer, offset, drawCount, stride)); }
+    public void drawIndexedIndirect(Handle<BufferResource> buffer, long offset, int drawCount, int stride) { commands.add(new RenderCommand.DrawIndexedIndirect(buffer, offset, drawCount, stride)); }
 
     // --- Render targets ---
     public void bindRenderTarget(Handle<RenderTargetResource> renderTarget) { commands.add(new RenderCommand.BindRenderTarget(renderTarget)); }

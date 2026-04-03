@@ -500,6 +500,24 @@ public class GlRenderDevice implements RenderDevice {
                 GL45.glDrawElementsInstancedBaseInstance(GL45.GL_TRIANGLES, cmd.indexCount(), GL45.GL_UNSIGNED_INT,
                         (long) cmd.firstIndex() * Integer.BYTES, cmd.instanceCount(), cmd.firstInstance());
             }
+            case RenderCommand.DrawIndirect(var buffer, long offset, int drawCount, int stride) -> {
+                int buf = buffers.get(buffer).glName();
+                GL45.glBindBuffer(GL45.GL_DRAW_INDIRECT_BUFFER, buf);
+                if (drawCount == 1) {
+                    GL45.glDrawArraysIndirect(GL45.GL_TRIANGLES, offset);
+                } else {
+                    GL45.glMultiDrawArraysIndirect(GL45.GL_TRIANGLES, offset, drawCount, stride == 0 ? 16 : stride);
+                }
+            }
+            case RenderCommand.DrawIndexedIndirect(var buffer, long offset, int drawCount, int stride) -> {
+                int buf = buffers.get(buffer).glName();
+                GL45.glBindBuffer(GL45.GL_DRAW_INDIRECT_BUFFER, buf);
+                if (drawCount == 1) {
+                    GL45.glDrawElementsIndirect(GL45.GL_TRIANGLES, GL45.GL_UNSIGNED_INT, offset);
+                } else {
+                    GL45.glMultiDrawElementsIndirect(GL45.GL_TRIANGLES, GL45.GL_UNSIGNED_INT, offset, drawCount, stride == 0 ? 20 : stride);
+                }
+            }
             case RenderCommand.BindRenderTarget cmd -> {
                 int fbo = getGlFboName(cmd.renderTarget());
                 GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);

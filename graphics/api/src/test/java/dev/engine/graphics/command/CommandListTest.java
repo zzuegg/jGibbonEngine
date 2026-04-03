@@ -192,6 +192,28 @@ class CommandListTest {
         assertTrue(cmd.linearFilter());
     }
 
+    @Test void drawIndirectCommand() {
+        var pool = new HandlePool<BufferResource>();
+        var buf = pool.allocate();
+        var recorder = new CommandRecorder();
+        recorder.drawIndirect(buf, 0, 10, 16);
+        var list = recorder.finish();
+        var cmd = (RenderCommand.DrawIndirect) list.commands().getFirst();
+        assertEquals(10, cmd.drawCount());
+        assertEquals(16, cmd.stride());
+    }
+
+    @Test void drawIndexedIndirectCommand() {
+        var pool = new HandlePool<BufferResource>();
+        var buf = pool.allocate();
+        var recorder = new CommandRecorder();
+        recorder.drawIndexedIndirect(buf, 64, 5, 20);
+        var list = recorder.finish();
+        var cmd = (RenderCommand.DrawIndexedIndirect) list.commands().getFirst();
+        assertEquals(5, cmd.drawCount());
+        assertEquals(64, cmd.offset());
+    }
+
     @Test void uniformAndTextureBindingRecorded() {
         var ctx = new CommandRecorder();
         ctx.bindUniformBuffer(0, new Handle<>(1, 0));
