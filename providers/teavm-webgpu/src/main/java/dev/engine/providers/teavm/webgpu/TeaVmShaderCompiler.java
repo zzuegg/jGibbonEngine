@@ -39,9 +39,62 @@ public class TeaVmShaderCompiler implements ShaderCompiler {
     @Override
     public CompileResult compileWithTypeMap(String source, List<EntryPointDesc> entryPoints,
                                             int target, Map<String, String> typeMap) {
-        // Slang WASM handles generics via findAndCheckEntryPoint + link().
-        // The concrete types (UboCameraParams etc.) are already in the source
-        // (prepended by ShaderManager). No explicit specialize() needed.
-        return compile(source, entryPoints, target);
+        // Slang WASM's WGSL backend returns null for generic entry points.
+        // Workaround: resolve generics at the source level before compilation.
+        // Replace <C : ICameraParams> with concrete types from the type map.
+        String specialized = sourceSpecialize(source, typeMap);
+        return compile(specialized, entryPoints, target);
+    }
+
+    /**
+     * Source-level generic specialization. Replaces generic parameter declarations
+     * and their usage with concrete types from the type map.
+     */
+    private String sourceSpecialize(String source, Map<String, String> typeMap) {
+        // Build interface→concrete mapping: "ICameraParams" → "UboCameraParams"
+        var ifaceToType = new java.util.HashMap<String, String>();
+        for (var e : typeMap.entrySet()) {
+            ifaceToType.put("I" + e.getKey() + "Params", e.getValue());
+        }
+
+        // Parse and remove generic declarations, track replacements
+        var result = new StringBuilder();
+        var replacements = new java.util.HashMap<String, String>();
+        int i = 0;
+
+        while (i < source.length()) {
+            if (source.charAt(i) == '<' && i > 0 && Character.isLetterOrDigit(source.charAt(i - 1))) {
+                int close = source.indexOf('>', i);
+                if (close > i) {
+                    String generic = source.substring(i + 1, close);
+                    boolean resolved = true;
+                    for (String param : generic.split(",")) {
+                        String[] parts = param.trim().split("\\s*:\\s*");
+                        if (parts.length == 2) {
+                            String concrete = ifaceToType.get(parts[1].trim());
+                            if (concrete != null) {
+                                replacements.put(parts[0].trim(), concrete);
+                            } else {
+                                resolved = false;
+                            }
+                        } else {
+                            resolved = false;
+                        }
+                    }
+                    if (resolved) {
+                        i = close + 1;
+                        continue;
+                    }
+                }
+            }
+            result.append(source.charAt(i));
+            i++;
+        }
+
+        String out = result.toString();
+        for (var e : replacements.entrySet()) {
+            out = out.replaceAll("\\b" + e.getKey() + "\\b", e.getValue());
+        }
+        return out;
     }
 }
