@@ -6,11 +6,18 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a record for compile-time struct layout generation.
+ * Marks a record for compile-time metadata and struct layout generation.
  *
- * <p>The annotation processor generates a {@code <RecordName>_Layout} class
- * that registers PACKED and STD140 layouts in a {@code static {}} block,
- * eliminating the need for runtime reflection.
+ * <p>The annotation processor generates a {@code <RecordName>_NativeStruct} class
+ * that registers:
+ * <ul>
+ *   <li>Record component metadata in {@link RecordRegistry} (replaces
+ *       {@code Class.getRecordComponents()} for TeaVM compatibility)</li>
+ *   <li>PACKED and STD140 struct layouts in {@link StructLayout}</li>
+ * </ul>
+ *
+ * <p>This enables the full engine pipeline (StructLayout, SlangParamsBlock)
+ * to work on platforms without reflection support.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)

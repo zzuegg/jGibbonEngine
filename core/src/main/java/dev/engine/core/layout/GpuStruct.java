@@ -4,7 +4,7 @@ import java.lang.annotation.*;
 
 /**
  * Marks a record as a GPU struct, triggering compile-time generation of a
- * {@code *_Layout} class that provides reflection-free {@link StructLayout}
+ * {@code *_NativeStruct} class that provides reflection-free {@link StructLayout}
  * registration for all platforms (desktop, web/TeaVM, mobile).
  *
  * <p>The annotation processor computes field offsets, sizes, and alignment

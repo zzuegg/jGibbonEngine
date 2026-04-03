@@ -14,12 +14,16 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Annotation processor that generates {@code <RecordName>_Layout} classes
+ * Annotation processor that generates {@code <RecordName>_NativeStruct} classes
  * for records annotated with {@code @NativeStruct}.
  *
- * <p>Generated classes register PACKED and STD140 layouts in a {@code static {}}
- * block, eliminating the need for runtime reflection. This is required for
- * platforms like TeaVM where reflection is not available.
+ * <p>Generated classes register record component metadata in {@code RecordRegistry}
+ * via a {@code static {}} block. This provides the same information as
+ * {@code Class.getRecordComponents()} without requiring runtime reflection,
+ * making it work on TeaVM and other platforms without reflection support.
+ *
+ * <p>The processor ALSO generates the layout registration (PACKED + STD140)
+ * and direct write methods, so no reflection is needed for struct layout either.
  *
  * <p>This processor uses string-based annotation lookup to avoid a circular
  * dependency between the {@code core} and {@code core-processor} modules.
@@ -39,7 +43,7 @@ public class NativeStructProcessor extends AbstractProcessor {
                             Diagnostic.Kind.ERROR, "@NativeStruct can only be applied to records", element);
                     continue;
                 }
-                generateLayout((TypeElement) element);
+                generateNativeStruct((TypeElement) element);
             }
         }
         return true;
@@ -198,10 +202,10 @@ public class NativeStructProcessor extends AbstractProcessor {
 
     // --- Code generation ---
 
-    private void generateLayout(TypeElement record) {
+    private void generateNativeStruct(TypeElement record) {
         var packageName = processingEnv.getElementUtils().getPackageOf(record).getQualifiedName().toString();
         var className = record.getSimpleName().toString();
-        var layoutClassName = className + "_Layout";
+        var genClassName = className + "_NativeStruct";
         var qualifiedRecordName = record.getQualifiedName().toString();
 
         var components = record.getRecordComponents();
@@ -211,18 +215,18 @@ public class NativeStructProcessor extends AbstractProcessor {
         int std140Size = computeTotalSize(std140Fields, true);
 
         try {
-            var file = processingEnv.getFiler().createSourceFile(packageName + "." + layoutClassName, record);
+            var file = processingEnv.getFiler().createSourceFile(packageName + "." + genClassName, record);
             try (var writer = file.openWriter()) {
-                generateSource(writer, packageName, className, layoutClassName,
+                generateSource(writer, packageName, className, genClassName,
                         qualifiedRecordName, components, packedFields, std140Fields, packedSize, std140Size);
             }
         } catch (IOException e) {
             processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-                    "Failed to generate layout: " + e.getMessage(), record);
+                    "Failed to generate _NativeStruct class: " + e.getMessage(), record);
         }
     }
 
-    private void generateSource(Writer w, String packageName, String className, String layoutClassName,
+    private void generateSource(Writer w, String packageName, String className, String genClassName,
                                 String qualifiedRecordName,
                                 List<? extends RecordComponentElement> components,
                                 List<FieldInfo> packedFields, List<FieldInfo> std140Fields,
@@ -233,10 +237,11 @@ public class NativeStructProcessor extends AbstractProcessor {
         w.write("import dev.engine.core.math.*;\n");
         w.write("import java.util.List;\n\n");
         w.write("/**\n");
-        w.write(" * Generated struct layout for {@link " + className + "}.\n");
-        w.write(" * Registers PACKED and STD140 layouts on class load.\n");
+        w.write(" * Generated metadata and struct layout for {@link " + className + "}.\n");
+        w.write(" * Registers record component info in {@link RecordRegistry} and\n");
+        w.write(" * PACKED/STD140 layouts in {@link StructLayout} on class load.\n");
         w.write(" */\n");
-        w.write("public final class " + layoutClassName + " {\n\n");
+        w.write("public final class " + genClassName + " {\n\n");
         w.write("    public static final int SIZE_PACKED = " + packedSize + ";\n");
         w.write("    public static final int SIZE_STD140 = " + std140Size + ";\n\n");
 
@@ -260,6 +265,24 @@ public class NativeStructProcessor extends AbstractProcessor {
 
         // Static registration block
         w.write("    static {\n");
+
+        // 1. Register record component metadata in RecordRegistry
+        w.write("        // Register record component metadata (replaces Class.getRecordComponents())\n");
+        w.write("        RecordRegistry.register(" + className + ".class, new RecordRegistry.ComponentInfo[]{\n");
+        for (int i = 0; i < components.size(); i++) {
+            var comp = components.get(i);
+            var compName = comp.getSimpleName().toString();
+            var compType = comp.asType().toString();
+            var typeClassStr = typeClassLiteral(compType);
+            w.write("            new RecordRegistry.ComponentInfo(\"" + compName + "\", " + typeClassStr + ",\n");
+            w.write("                rec -> ((" + className + ") rec)." + compName + "())");
+            if (i < components.size() - 1) w.write(",");
+            w.write("\n");
+        }
+        w.write("        });\n\n");
+
+        // 2. Register struct layouts (same as before)
+        w.write("        // Register struct layouts\n");
         emitRegistration(w, className, "PACKED", packedFields, packedSize);
         emitRegistration(w, className, "STD140", std140Fields, std140Size);
         w.write("    }\n\n");
@@ -273,7 +296,6 @@ public class NativeStructProcessor extends AbstractProcessor {
     private void emitWriteStatements(Writer w, List<FieldInfo> fields,
                                      List<? extends RecordComponentElement> components,
                                      String recordVar, String offsetVar) throws IOException {
-        // We need to write from the record's top-level components, resolving nested paths
         for (var field : fields) {
             String accessor = buildAccessor(recordVar, field.name, components);
             emitWriteForType(w, field.typeName, offsetVar + " + " + field.offset, accessor);
@@ -282,7 +304,6 @@ public class NativeStructProcessor extends AbstractProcessor {
 
     private String buildAccessor(String recordVar, String fieldPath,
                                  List<? extends RecordComponentElement> components) {
-        // field.name can be "foo" or "nested.foo"
         var parts = fieldPath.split("\\.");
         var sb = new StringBuilder(recordVar);
         for (var part : parts) {
@@ -377,7 +398,7 @@ public class NativeStructProcessor extends AbstractProcessor {
             w.write("\n");
         }
         w.write("                ),\n");
-        w.write("                " + size + ", (mem, rec) -> write" + modeName.substring(0, 1) +
-                modeName.substring(1).toLowerCase() + "(mem, 0, (" + className + ") rec)));\n");
+        w.write("                " + size + ", (mem, off, rec) -> write" + modeName.substring(0, 1) +
+                modeName.substring(1).toLowerCase() + "(mem, off, (" + className + ") rec)));\n");
     }
 }

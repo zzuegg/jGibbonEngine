@@ -1,6 +1,7 @@
 package dev.engine.core.shader;
 
 import dev.engine.core.asset.TextureData;
+import dev.engine.core.layout.RecordRegistry;
 import dev.engine.core.math.*;
 import dev.engine.core.property.PropertyKey;
 
@@ -67,21 +68,47 @@ public final class SlangParamsBlock {
     /**
      * Creates a params block from a Java record (for camera, engine, etc.).
      * Generates interface + implementation + static global instance.
+     *
+     * <p>Uses {@link RecordRegistry} first (populated by {@code @NativeStruct} processor),
+     * falling back to native reflection for unregistered types (desktop only).
      */
     public static SlangParamsBlock fromRecord(String name, Class<?> recordType) {
-        if (!recordType.isRecord()) {
-            throw new IllegalArgumentException(recordType.getName() + " is not a record");
-        }
-        var fields = new ArrayList<Field>();
-        for (var comp : recordType.getRecordComponents()) {
-            var slangType = TYPE_MAP.get(comp.getType());
-            if (slangType == null) {
-                throw new IllegalArgumentException("Unsupported type: " + comp.getType().getName()
-                        + " for field " + comp.getName());
+        // Try loading generated metadata class (triggers RecordRegistry registration)
+        try {
+            Class.forName(recordType.getName() + "_NativeStruct");
+        } catch (ClassNotFoundException ignored) {}
+
+        // Check RecordRegistry first (works on all platforms)
+        var components = RecordRegistry.getComponents(recordType);
+        if (components != null) {
+            var fields = new ArrayList<Field>();
+            for (var comp : components) {
+                var slangType = TYPE_MAP.get(comp.type());
+                if (slangType == null) {
+                    throw new IllegalArgumentException("Unsupported type: " + comp.type().getName()
+                            + " for field " + comp.name());
+                }
+                fields.add(new Field(comp.name(), slangType));
             }
-            fields.add(new Field(comp.getName(), slangType));
+            return new SlangParamsBlock(name, fields, -1);
         }
-        return new SlangParamsBlock(name, fields, -1);
+
+        // Fallback: native reflection (desktop only, not available on TeaVM)
+        try {
+            var helperClass = Class.forName("dev.engine.core.shader.ReflectiveSlangHelper");
+            var method = helperClass.getMethod("fromRecord", String.class, Class.class);
+            return (SlangParamsBlock) method.invoke(null, name, recordType);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("No metadata for " + recordType.getName()
+                    + ". Add @NativeStruct annotation for cross-platform compatibility.");
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            var cause = e.getCause();
+            if (cause instanceof RuntimeException re) throw re;
+            if (cause instanceof IllegalArgumentException iae) throw iae;
+            throw new RuntimeException("Failed to build SlangParamsBlock for " + recordType.getName(), cause);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build SlangParamsBlock for " + recordType.getName(), e);
+        }
     }
 
     /** Generates the full UBO-backed block with a static global instance. */
@@ -240,4 +267,13 @@ public final class SlangParamsBlock {
     }
 
     private record Field(String name, String slangType) {}
+
+    /** Package-private entry type for reflective construction. */
+    record FieldEntry(String name, String slangType) {}
+
+    /** Package-private factory for {@link ReflectiveSlangHelper}. */
+    static SlangParamsBlock createFromEntries(String name, java.util.List<FieldEntry> entries) {
+        var fields = entries.stream().map(e -> new Field(e.name, e.slangType)).toList();
+        return new SlangParamsBlock(name, fields, -1);
+    }
 }

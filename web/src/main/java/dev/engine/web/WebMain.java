@@ -54,10 +54,10 @@ public class WebMain {
     private static native int getCanvasHeight();
 
     public static void main(String[] args) {
-        // Force-load generated _Layout classes (triggers static registration)
-        dev.engine.core.shader.params.EngineParams_Layout.init();
-        dev.engine.core.shader.params.CameraParams_Layout.init();
-        dev.engine.core.shader.params.ObjectParams_Layout.init();
+        // Force-load generated _NativeStruct classes (triggers RecordRegistry + StructLayout registration)
+        dev.engine.core.shader.params.EngineParams_NativeStruct.init();
+        dev.engine.core.shader.params.CameraParams_NativeStruct.init();
+        dev.engine.core.shader.params.ObjectParams_NativeStruct.init();
 
         setStatus("Initializing WebGPU...");
 

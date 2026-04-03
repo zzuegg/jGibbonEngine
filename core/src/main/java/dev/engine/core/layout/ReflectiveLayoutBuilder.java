@@ -16,7 +16,7 @@ import java.util.List;
  * only on platforms that support reflection.
  *
  * <p>On TeaVM, this class is never loaded because StructLayout.of() checks
- * for generated _Layout classes first, and the reflection fallback uses
+ * for generated _NativeStruct classes first, and the reflection fallback uses
  * Class.forName() to load this class — which fails on TeaVM since this
  * class is not on the web classpath.
  */
@@ -88,8 +88,8 @@ public final class ReflectiveLayoutBuilder {
         int finalSize = currentOffset;
         var finalWriters = List.copyOf(writers);
         return StructLayout.manual(type, mode, fields, finalSize,
-                (mem, record) -> {
-                    for (var w : finalWriters) w.write(mem, 0, record);
+                (mem, off, record) -> {
+                    for (var w : finalWriters) w.write(mem, off, record);
                 });
     }
 

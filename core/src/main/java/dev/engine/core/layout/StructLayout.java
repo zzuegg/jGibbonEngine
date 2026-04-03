@@ -37,9 +37,9 @@ public final class StructLayout {
         var cached = CACHE.get(key);
         if (cached != null) return cached;
 
-        // Try loading generated layout class (triggers static registration)
+        // Try loading generated metadata class (triggers static registration in RecordRegistry + CACHE)
         try {
-            Class.forName(recordType.getName() + "_Layout");
+            Class.forName(recordType.getName() + "_NativeStruct");
             cached = CACHE.get(key);
             if (cached != null) return cached;
         } catch (ClassNotFoundException ignored) {}
@@ -74,12 +74,21 @@ public final class StructLayout {
 
     /**
      * Creates a StructLayout from manually specified fields (no reflection needed).
-     * The write function must be provided externally.
+     * The write function receives (memory, baseOffset, record) and must write
+     * all fields relative to the given base offset.
      */
     public static StructLayout manual(Class<?> recordType, LayoutMode mode, List<Field> fields, int size,
-                                       java.util.function.BiConsumer<NativeMemory, Object> writeFunc) {
-        var writers = List.of((FieldWriter) (mem, offset, record) -> writeFunc.accept(mem, record));
+                                       WriteFunction writeFunc) {
+        var writers = List.of((FieldWriter) (mem, offset, record) -> writeFunc.write(mem, offset, record));
         return new StructLayout(recordType, mode, fields, size, writers);
+    }
+
+    /**
+     * A write function that serializes a record to native memory at a given offset.
+     */
+    @FunctionalInterface
+    public interface WriteFunction {
+        void write(NativeMemory memory, long baseOffset, Object record);
     }
 
     public List<Field> fields() { return fields; }
@@ -93,7 +102,7 @@ public final class StructLayout {
     }
 
     // Layout computation is done at compile time by the @NativeStruct annotation processor.
-    // No reflection-based build() method — all layouts are generated or manually registered.
+    // On desktop, unregistered types fall back to ReflectiveLayoutBuilder via Class.forName().
 
     @FunctionalInterface
     private interface FieldWriter {
