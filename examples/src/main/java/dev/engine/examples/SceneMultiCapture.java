@@ -37,7 +37,7 @@ public class SceneMultiCapture {
     public static void main(String[] args) throws Exception {
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Capture", 800, 600));
-        var renderer = new Renderer(new GlRenderDevice(window));
+        var renderer = new Renderer(new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()));
 
         var pipeline = renderer.createPipeline(PipelineDescriptor.of(
                 new ShaderSource(ShaderStage.VERTEX, VS),

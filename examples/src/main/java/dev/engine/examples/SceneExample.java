@@ -61,7 +61,7 @@ public class SceneExample {
         // Window + device
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Engine - Scene Demo", 1024, 768));
-        var device = new GlRenderDevice(window);
+        var device = new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
         window.show();
 
         // Scene + renderer

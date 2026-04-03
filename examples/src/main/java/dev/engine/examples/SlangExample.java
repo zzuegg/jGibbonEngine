@@ -21,7 +21,7 @@ public class SlangExample {
     public static void main(String[] args) {
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Engine - Slang Shaders", 1024, 768));
-        var renderer = new Renderer(new GlRenderDevice(window));
+        var renderer = new Renderer(new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()));
         window.show();
 
         System.out.println("Backend: " + renderer.backendName());

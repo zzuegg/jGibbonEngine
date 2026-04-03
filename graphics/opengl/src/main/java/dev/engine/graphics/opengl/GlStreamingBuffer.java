@@ -4,7 +4,6 @@ import dev.engine.core.handle.Handle;
 import dev.engine.graphics.BufferResource;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.StreamingBuffer;
-import org.lwjgl.opengl.GL45;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -19,6 +18,7 @@ import java.nio.ByteBuffer;
 public class GlStreamingBuffer implements StreamingBuffer {
 
     private final GlRenderDevice device;
+    private final GlBindings gl;
     private final long frameSize;
     private final int frameCount;
     private final Handle<BufferResource> handle;
@@ -29,6 +29,7 @@ public class GlStreamingBuffer implements StreamingBuffer {
 
     GlStreamingBuffer(GlRenderDevice device, long frameSize, int frameCount, BufferUsage usage) {
         this.device = device;
+        this.gl = device.glBindings();
         this.frameSize = frameSize;
         this.frameCount = frameCount;
         this.currentFrame = 0;
@@ -36,16 +37,16 @@ public class GlStreamingBuffer implements StreamingBuffer {
         long totalSize = frameSize * frameCount;
 
         // Create the GL buffer
-        this.glBuffer = GL45.glCreateBuffers();
+        this.glBuffer = gl.glCreateBuffers();
 
         // Allocate immutable storage with persistent coherent write mapping flags
-        int flags = GL45.GL_MAP_WRITE_BIT | GL45.GL_MAP_PERSISTENT_BIT | GL45.GL_MAP_COHERENT_BIT;
-        GL45.glNamedBufferStorage(glBuffer, totalSize, flags);
+        int flags = GlBindings.GL_MAP_WRITE_BIT | GlBindings.GL_MAP_PERSISTENT_BIT | GlBindings.GL_MAP_COHERENT_BIT;
+        gl.glNamedBufferStorage(glBuffer, totalSize, flags);
 
         // Persistently map the entire buffer
-        this.mappedByteBuffer = GL45.glMapNamedBufferRange(glBuffer, 0, totalSize, flags);
+        this.mappedByteBuffer = gl.glMapNamedBufferRange(glBuffer, 0, totalSize, flags);
         if (mappedByteBuffer == null) {
-            GL45.glDeleteBuffers(glBuffer);
+            gl.glDeleteBuffers(glBuffer);
             throw new IllegalStateException("Failed to persistently map streaming buffer");
         }
         this.mappedSegment = MemorySegment.ofBuffer(mappedByteBuffer);
@@ -92,7 +93,7 @@ public class GlStreamingBuffer implements StreamingBuffer {
 
     @Override
     public void close() {
-        GL45.glUnmapNamedBuffer(glBuffer);
-        GL45.glDeleteBuffers(glBuffer);
+        gl.glUnmapNamedBuffer(glBuffer);
+        gl.glDeleteBuffers(glBuffer);
     }
 }

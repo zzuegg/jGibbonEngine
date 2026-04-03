@@ -5,12 +5,12 @@ dependencies {
     implementation(project(":graphics:common"))
     implementation(project(":windowing:glfw"))
 
-    implementation(platform(libs.lwjgl.bom))
-    implementation(libs.lwjgl.core)
-    implementation(libs.lwjgl.opengl)
-    implementation(libs.lwjgl.glfw)  // for glfwMakeContextCurrent, glfwSwapBuffers
-
-    runtimeOnly(libs.lwjgl.core.natives) { artifact { classifier = lwjglNatives } }
-    runtimeOnly(libs.lwjgl.opengl.natives) { artifact { classifier = lwjglNatives } }
-    runtimeOnly(libs.lwjgl.glfw.natives) { artifact { classifier = lwjglNatives } }
+    testImplementation(project(":providers:lwjgl-gl"))
+    testImplementation(platform(libs.lwjgl.bom))
+    testImplementation(libs.lwjgl.core)
+    testImplementation(libs.lwjgl.opengl)
+    testImplementation(libs.lwjgl.glfw)
+    testRuntimeOnly(libs.lwjgl.core.natives) { artifact { classifier = lwjglNatives } }
+    testRuntimeOnly(libs.lwjgl.opengl.natives) { artifact { classifier = lwjglNatives } }
+    testRuntimeOnly(libs.lwjgl.glfw.natives) { artifact { classifier = lwjglNatives } }
 }

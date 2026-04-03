@@ -57,8 +57,9 @@ class CrossBackendTest {
     }
 
     @Test void allBlendModes() {
+        // Multiple blend modes have slight rasterization differences across GL/VK
         harness.assertCrossBackend(ScreenshotTestSuite.ALL_BLEND_MODES, "all_blend_modes",
-            RenderTestHarness.Tolerance.loose());
+            new RenderTestHarness.Tolerance(5, 3.0));
     }
 
     @Test void frontFaceCw() {

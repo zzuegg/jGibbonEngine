@@ -36,9 +36,6 @@ import dev.engine.graphics.texture.MipMode;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureFormat;
 import dev.engine.graphics.texture.TextureType;
-import org.lwjgl.glfw.GLFW;
-import org.lwjgl.opengl.GL;
-import org.lwjgl.opengl.GL45;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,27 +80,32 @@ public class GlRenderDevice implements RenderDevice {
     private final CapabilityRegistry capabilities = new CapabilityRegistry();
     private final long glfwWindow;
     private final int pushConstantUbo;
+    private final GlBindings gl;
 
-    public GlRenderDevice(dev.engine.graphics.window.WindowHandle window) {
+    public GlRenderDevice(dev.engine.graphics.window.WindowHandle window, GlBindings gl) {
+        this.gl = gl;
         this.glfwWindow = window.nativeHandle();
-        GLFW.glfwMakeContextCurrent(glfwWindow);
-        GL.createCapabilities();
-        log.info("OpenGL context created: {}", GL45.glGetString(GL45.GL_VERSION));
+        gl.makeContextCurrent(glfwWindow);
+        gl.createCapabilities();
+        log.info("OpenGL context created: {}", gl.glGetString(GlBindings.GL_VERSION));
 
-        pushConstantUbo = GL45.glCreateBuffers();
-        GL45.glNamedBufferStorage(pushConstantUbo, 128, GL45.GL_DYNAMIC_STORAGE_BIT);
+        pushConstantUbo = gl.glCreateBuffers();
+        gl.glNamedBufferStorage(pushConstantUbo, 128, GlBindings.GL_DYNAMIC_STORAGE_BIT);
 
         registerCapabilities();
     }
 
+    /** Returns the {@link GlBindings} instance used by this device. */
+    public GlBindings glBindings() { return gl; }
+
     private void registerCapabilities() {
         // Limits (lazy — queried each time, cached by caller if needed)
-        capabilities.register(DeviceCapability.MAX_TEXTURE_SIZE, () -> GL45.glGetInteger(GL45.GL_MAX_TEXTURE_SIZE));
-        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_WIDTH, () -> GL45.glGetInteger(GL45.GL_MAX_FRAMEBUFFER_WIDTH));
-        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_HEIGHT, () -> GL45.glGetInteger(GL45.GL_MAX_FRAMEBUFFER_HEIGHT));
-        capabilities.register(DeviceCapability.MAX_ANISOTROPY, () -> GL45.glGetFloat(0x84FF));
-        capabilities.register(DeviceCapability.MAX_UNIFORM_BUFFER_SIZE, () -> GL45.glGetInteger(GL45.GL_MAX_UNIFORM_BLOCK_SIZE));
-        capabilities.register(DeviceCapability.MAX_STORAGE_BUFFER_SIZE, () -> GL45.glGetInteger(GL45.GL_MAX_SHADER_STORAGE_BLOCK_SIZE));
+        capabilities.register(DeviceCapability.MAX_TEXTURE_SIZE, () -> gl.glGetInteger(GlBindings.GL_MAX_TEXTURE_SIZE));
+        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_WIDTH, () -> gl.glGetInteger(GlBindings.GL_MAX_FRAMEBUFFER_WIDTH));
+        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_HEIGHT, () -> gl.glGetInteger(GlBindings.GL_MAX_FRAMEBUFFER_HEIGHT));
+        capabilities.register(DeviceCapability.MAX_ANISOTROPY, () -> gl.glGetFloat(GlBindings.GL_MAX_TEXTURE_MAX_ANISOTROPY));
+        capabilities.register(DeviceCapability.MAX_UNIFORM_BUFFER_SIZE, () -> gl.glGetInteger(GlBindings.GL_MAX_UNIFORM_BLOCK_SIZE));
+        capabilities.register(DeviceCapability.MAX_STORAGE_BUFFER_SIZE, () -> gl.glGetInteger(GlBindings.GL_MAX_SHADER_STORAGE_BLOCK_SIZE));
 
         // Features
         capabilities.registerStatic(DeviceCapability.COMPUTE_SHADERS, true);
@@ -114,15 +116,15 @@ public class GlRenderDevice implements RenderDevice {
 
         // Device info
         capabilities.registerStatic(DeviceCapability.BACKEND_NAME, "OpenGL");
-        capabilities.register(DeviceCapability.DEVICE_NAME, () -> GL45.glGetString(GL45.GL_RENDERER));
-        capabilities.register(DeviceCapability.API_VERSION, () -> GL45.glGetString(GL45.GL_VERSION));
+        capabilities.register(DeviceCapability.DEVICE_NAME, () -> gl.glGetString(GlBindings.GL_RENDERER));
+        capabilities.register(DeviceCapability.API_VERSION, () -> gl.glGetString(GlBindings.GL_VERSION));
     }
 
     @Override
     public Handle<BufferResource> createBuffer(BufferDescriptor descriptor) {
-        int glBuffer = GL45.glCreateBuffers();
+        int glBuffer = gl.glCreateBuffers();
         int usage = mapUsage(descriptor.accessPattern());
-        GL45.glNamedBufferData(glBuffer, descriptor.size(), usage);
+        gl.glNamedBufferData(glBuffer, descriptor.size(), usage);
 
         return buffers.register(new GlBuffer(glBuffer, descriptor.size()));
     }
@@ -131,7 +133,7 @@ public class GlRenderDevice implements RenderDevice {
     public void destroyBuffer(Handle<BufferResource> buffer) {
         if (!buffers.isValid(buffer)) return;
         var buf = buffers.remove(buffer);
-        if (buf != null) GL45.glDeleteBuffers(buf.glName());
+        if (buf != null) gl.glDeleteBuffers(buf.glName());
     }
 
     @Override
@@ -157,7 +159,7 @@ public class GlRenderDevice implements RenderDevice {
 
             @Override
             public void close() {
-                GL45.nglNamedBufferSubData(glName, offset, length, segment.address());
+                gl.nglNamedBufferSubData(glName, offset, length, segment.address());
                 arena.close();
             }
         };
@@ -166,25 +168,25 @@ public class GlRenderDevice implements RenderDevice {
     @Override
     public Handle<TextureResource> createTexture(TextureDescriptor descriptor) {
         int glTarget = switch (descriptor.type().name()) {
-            case "TEXTURE_3D"       -> GL45.GL_TEXTURE_3D;
-            case "TEXTURE_2D_ARRAY" -> GL45.GL_TEXTURE_2D_ARRAY;
-            case "TEXTURE_CUBE"     -> GL45.GL_TEXTURE_CUBE_MAP;
-            default                 -> GL45.GL_TEXTURE_2D;
+            case "TEXTURE_3D"       -> GlBindings.GL_TEXTURE_3D;
+            case "TEXTURE_2D_ARRAY" -> GlBindings.GL_TEXTURE_2D_ARRAY;
+            case "TEXTURE_CUBE"     -> GlBindings.GL_TEXTURE_CUBE_MAP;
+            default                 -> GlBindings.GL_TEXTURE_2D;
         };
 
-        int glTex = GL45.glCreateTextures(glTarget);
+        int glTex = gl.glCreateTextures(glTarget);
         int internalFormat = mapTextureFormat(descriptor.format());
         int levels = computeMipLevels(descriptor);
 
         if (descriptor.type() == TextureType.TEXTURE_3D) {
-            GL45.glTextureStorage3D(glTex, levels, internalFormat,
+            gl.glTextureStorage3D(glTex, levels, internalFormat,
                     descriptor.width(), descriptor.height(), descriptor.depth());
         } else if (descriptor.type() == TextureType.TEXTURE_2D_ARRAY) {
-            GL45.glTextureStorage3D(glTex, levels, internalFormat,
+            gl.glTextureStorage3D(glTex, levels, internalFormat,
                     descriptor.width(), descriptor.height(), descriptor.layers());
         } else {
             // TEXTURE_2D and TEXTURE_CUBE both use glTextureStorage2D
-            GL45.glTextureStorage2D(glTex, levels, internalFormat, descriptor.width(), descriptor.height());
+            gl.glTextureStorage2D(glTex, levels, internalFormat, descriptor.width(), descriptor.height());
         }
 
         return textures.register(new GlTexture(glTex, descriptor));
@@ -198,15 +200,15 @@ public class GlRenderDevice implements RenderDevice {
         int[] formatAndType = mapUploadFormat(desc.format());
 
         if (desc.type() == TextureType.TEXTURE_3D) {
-            GL45.glTextureSubImage3D(glName, 0, 0, 0, 0,
+            gl.glTextureSubImage3D(glName, 0, 0, 0, 0,
                     desc.width(), desc.height(), desc.depth(),
                     formatAndType[0], formatAndType[1], pixels);
         } else if (desc.type() == TextureType.TEXTURE_2D_ARRAY) {
-            GL45.glTextureSubImage3D(glName, 0, 0, 0, 0,
+            gl.glTextureSubImage3D(glName, 0, 0, 0, 0,
                     desc.width(), desc.height(), desc.layers(),
                     formatAndType[0], formatAndType[1], pixels);
         } else {
-            GL45.glTextureSubImage2D(glName, 0, 0, 0, desc.width(), desc.height(),
+            gl.glTextureSubImage2D(glName, 0, 0, 0, desc.width(), desc.height(),
                     formatAndType[0], formatAndType[1], pixels);
         }
         textureMipsDirty.put(texture.index(), true);
@@ -217,7 +219,7 @@ public class GlRenderDevice implements RenderDevice {
         if (!textures.isValid(texture)) return;
         var tex = textures.remove(texture);
         textureMipsDirty.remove(texture.index());
-        if (tex != null) GL45.glDeleteTextures(tex.glName());
+        if (tex != null) gl.glDeleteTextures(tex.glName());
     }
 
     @Override
@@ -227,14 +229,14 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public Handle<RenderTargetResource> createRenderTarget(RenderTargetDescriptor descriptor) {
-        int fbo = GL45.glCreateFramebuffers();
+        int fbo = gl.glCreateFramebuffers();
         var colorTextures = new ArrayList<Handle<TextureResource>>();
 
         for (int i = 0; i < descriptor.colorAttachments().size(); i++) {
             var format = descriptor.colorAttachments().get(i);
-            int glTex = GL45.glCreateTextures(GL45.GL_TEXTURE_2D);
-            GL45.glTextureStorage2D(glTex, 1, mapTextureFormat(format), descriptor.width(), descriptor.height());
-            GL45.glNamedFramebufferTexture(fbo, GL45.GL_COLOR_ATTACHMENT0 + i, glTex, 0);
+            int glTex = gl.glCreateTextures(GlBindings.GL_TEXTURE_2D);
+            gl.glTextureStorage2D(glTex, 1, mapTextureFormat(format), descriptor.width(), descriptor.height());
+            gl.glNamedFramebufferTexture(fbo, GlBindings.GL_COLOR_ATTACHMENT0 + i, glTex, 0);
 
             var texHandle = textures.register(new GlTexture(glTex,
                     new dev.engine.graphics.texture.TextureDescriptor(
@@ -243,10 +245,10 @@ public class GlRenderDevice implements RenderDevice {
         }
 
         if (descriptor.depthFormat() != null) {
-            int depthTex = GL45.glCreateTextures(GL45.GL_TEXTURE_2D);
-            GL45.glTextureStorage2D(depthTex, 1, mapTextureFormat(descriptor.depthFormat()),
+            int depthTex = gl.glCreateTextures(GlBindings.GL_TEXTURE_2D);
+            gl.glTextureStorage2D(depthTex, 1, mapTextureFormat(descriptor.depthFormat()),
                     descriptor.width(), descriptor.height());
-            GL45.glNamedFramebufferTexture(fbo, GL45.GL_DEPTH_ATTACHMENT, depthTex, 0);
+            gl.glNamedFramebufferTexture(fbo, GlBindings.GL_DEPTH_ATTACHMENT, depthTex, 0);
         }
 
         return renderTargets.register(new GlRenderTarget(fbo, colorTextures));
@@ -262,7 +264,7 @@ public class GlRenderDevice implements RenderDevice {
         if (!renderTargets.isValid(renderTarget)) return;
         var rt = renderTargets.remove(renderTarget);
         if (rt != null) {
-            GL45.glDeleteFramebuffers(rt.fbo());
+            gl.glDeleteFramebuffers(rt.fbo());
             for (var tex : rt.colorTextures()) destroyTexture(tex);
         }
     }
@@ -274,20 +276,20 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public Handle<VertexInputResource> createVertexInput(VertexFormat format) {
-        int vao = GL45.glCreateVertexArrays();
+        int vao = gl.glCreateVertexArrays();
         for (var attr : format.attributes()) {
-            GL45.glEnableVertexArrayAttrib(vao, attr.location());
+            gl.glEnableVertexArrayAttrib(vao, attr.location());
             int glType = mapComponentType(attr.componentType());
-            GL45.glVertexArrayAttribFormat(vao, attr.location(),
+            gl.glVertexArrayAttribFormat(vao, attr.location(),
                     attr.componentCount(), glType, attr.normalized(), attr.offset());
-            GL45.glVertexArrayAttribBinding(vao, attr.location(), 0); // binding point 0
+            gl.glVertexArrayAttribBinding(vao, attr.location(), 0); // binding point 0
         }
         // Set per-instance divisors for instanced attributes
         for (var attr : format.attributes()) {
             if (attr.divisor() > 0) {
-                GL45.glBindVertexArray(vao);
-                GL45.glVertexAttribDivisor(attr.location(), attr.divisor());
-                GL45.glBindVertexArray(0);
+                gl.glBindVertexArray(vao);
+                gl.glVertexAttribDivisor(attr.location(), attr.divisor());
+                gl.glBindVertexArray(0);
             }
         }
 
@@ -298,7 +300,7 @@ public class GlRenderDevice implements RenderDevice {
     public void destroyVertexInput(Handle<VertexInputResource> vertexInput) {
         if (!vertexInputs.isValid(vertexInput)) return;
         var vi = vertexInputs.remove(vertexInput);
-        if (vi != null) GL45.glDeleteVertexArrays(vi.vao());
+        if (vi != null) gl.glDeleteVertexArrays(vi.vao());
     }
 
     int getGlVaoName(Handle<VertexInputResource> vertexInput) {
@@ -313,11 +315,11 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public Handle<SamplerResource> createSampler(SamplerDescriptor descriptor) {
-        int glSampler = GL45.glCreateSamplers();
-        GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_MIN_FILTER, mapFilterMode(descriptor.minFilter()));
-        GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_MAG_FILTER, mapFilterMode(descriptor.magFilter()));
-        GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_WRAP_S, mapWrapMode(descriptor.wrapS()));
-        GL45.glSamplerParameteri(glSampler, GL45.GL_TEXTURE_WRAP_T, mapWrapMode(descriptor.wrapT()));
+        int glSampler = gl.glCreateSamplers();
+        gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_MIN_FILTER, mapFilterMode(descriptor.minFilter()));
+        gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_MAG_FILTER, mapFilterMode(descriptor.magFilter()));
+        gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_WRAP_S, mapWrapMode(descriptor.wrapS()));
+        gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_WRAP_T, mapWrapMode(descriptor.wrapT()));
 
         return samplers.register(new GlSampler(glSampler, descriptor));
     }
@@ -326,7 +328,7 @@ public class GlRenderDevice implements RenderDevice {
     public void destroySampler(Handle<SamplerResource> sampler) {
         if (!samplers.isValid(sampler)) return;
         var s = samplers.remove(sampler);
-        if (s != null) GL45.glDeleteSamplers(s.glName());
+        if (s != null) gl.glDeleteSamplers(s.glName());
     }
 
     int getGlSamplerName(Handle<SamplerResource> sampler) {
@@ -340,59 +342,59 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     private static int mapFilterMode(FilterMode mode) {
-        if (mode == FilterMode.NEAREST) return GL45.GL_NEAREST;
-        if (mode == FilterMode.LINEAR) return GL45.GL_LINEAR;
-        if (mode == FilterMode.NEAREST_MIPMAP_NEAREST) return GL45.GL_NEAREST_MIPMAP_NEAREST;
-        if (mode == FilterMode.LINEAR_MIPMAP_LINEAR) return GL45.GL_LINEAR_MIPMAP_LINEAR;
-        return GL45.GL_LINEAR;
+        if (mode == FilterMode.NEAREST) return GlBindings.GL_NEAREST;
+        if (mode == FilterMode.LINEAR) return GlBindings.GL_LINEAR;
+        if (mode == FilterMode.NEAREST_MIPMAP_NEAREST) return GlBindings.GL_NEAREST_MIPMAP_NEAREST;
+        if (mode == FilterMode.LINEAR_MIPMAP_LINEAR) return GlBindings.GL_LINEAR_MIPMAP_LINEAR;
+        return GlBindings.GL_LINEAR;
     }
 
     private static int mapWrapMode(WrapMode mode) {
-        if (mode == WrapMode.REPEAT) return GL45.GL_REPEAT;
-        if (mode == WrapMode.CLAMP_TO_EDGE) return GL45.GL_CLAMP_TO_EDGE;
-        if (mode == WrapMode.MIRRORED_REPEAT) return GL45.GL_MIRRORED_REPEAT;
-        return GL45.GL_REPEAT;
+        if (mode == WrapMode.REPEAT) return GlBindings.GL_REPEAT;
+        if (mode == WrapMode.CLAMP_TO_EDGE) return GlBindings.GL_CLAMP_TO_EDGE;
+        if (mode == WrapMode.MIRRORED_REPEAT) return GlBindings.GL_MIRRORED_REPEAT;
+        return GlBindings.GL_REPEAT;
     }
 
     private static int mapComponentType(ComponentType type) {
-        if (type == ComponentType.FLOAT) return GL45.GL_FLOAT;
-        if (type == ComponentType.BYTE) return GL45.GL_BYTE;
-        if (type == ComponentType.INT) return GL45.GL_INT;
-        return GL45.GL_FLOAT;
+        if (type == ComponentType.FLOAT) return GlBindings.GL_FLOAT;
+        if (type == ComponentType.BYTE) return GlBindings.GL_BYTE;
+        if (type == ComponentType.INT) return GlBindings.GL_INT;
+        return GlBindings.GL_FLOAT;
     }
 
     @Override
     public Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor) {
-        int program = GL45.glCreateProgram();
+        int program = gl.glCreateProgram();
         var shaderIds = new java.util.ArrayList<Integer>();
 
         try {
             for (var shaderSource : descriptor.shaders()) {
                 int type = mapShaderStage(shaderSource.stage());
-                int shader = GL45.glCreateShader(type);
-                GL45.glShaderSource(shader, shaderSource.source());
-                GL45.glCompileShader(shader);
+                int shader = gl.glCreateShader(type);
+                gl.glShaderSource(shader, shaderSource.source());
+                gl.glCompileShader(shader);
 
-                if (GL45.glGetShaderi(shader, GL45.GL_COMPILE_STATUS) == GL45.GL_FALSE) {
-                    String infoLog = GL45.glGetShaderInfoLog(shader);
-                    GL45.glDeleteShader(shader);
-                    GL45.glDeleteProgram(program);
+                if (gl.glGetShaderi(shader, GlBindings.GL_COMPILE_STATUS) == GlBindings.GL_FALSE) {
+                    String infoLog = gl.glGetShaderInfoLog(shader);
+                    gl.glDeleteShader(shader);
+                    gl.glDeleteProgram(program);
                     throw new ShaderCompilationException(
                             "Failed to compile " + shaderSource.stage().name() + " shader: " + infoLog);
                 }
                 shaderIds.add(shader);
-                GL45.glAttachShader(program, shader);
+                gl.glAttachShader(program, shader);
             }
 
-            GL45.glLinkProgram(program);
-            if (GL45.glGetProgrami(program, GL45.GL_LINK_STATUS) == GL45.GL_FALSE) {
-                String infoLog = GL45.glGetProgramInfoLog(program);
-                GL45.glDeleteProgram(program);
+            gl.glLinkProgram(program);
+            if (gl.glGetProgrami(program, GlBindings.GL_LINK_STATUS) == GlBindings.GL_FALSE) {
+                String infoLog = gl.glGetProgramInfoLog(program);
+                gl.glDeleteProgram(program);
                 throw new ShaderCompilationException("Failed to link program: " + infoLog);
             }
         } finally {
             for (int shader : shaderIds) {
-                GL45.glDeleteShader(shader);
+                gl.glDeleteShader(shader);
             }
         }
 
@@ -403,39 +405,39 @@ public class GlRenderDevice implements RenderDevice {
     public void destroyPipeline(Handle<PipelineResource> pipeline) {
         if (!pipelines.isValid(pipeline)) return;
         var program = pipelines.remove(pipeline);
-        if (program != null) GL45.glDeleteProgram(program);
+        if (program != null) gl.glDeleteProgram(program);
     }
 
     @Override
     public Handle<PipelineResource> createComputePipeline(ComputePipelineDescriptor descriptor) {
-        int program = GL45.glCreateProgram();
+        int program = gl.glCreateProgram();
 
         ShaderSource source = descriptor.shader();
         if (source == null) {
-            GL45.glDeleteProgram(program);
+            gl.glDeleteProgram(program);
             throw new UnsupportedOperationException("OpenGL compute requires GLSL source, not SPIRV");
         }
 
-        int shader = GL45.glCreateShader(GL45.GL_COMPUTE_SHADER);
-        GL45.glShaderSource(shader, source.source());
-        GL45.glCompileShader(shader);
-        if (GL45.glGetShaderi(shader, GL45.GL_COMPILE_STATUS) == GL45.GL_FALSE) {
-            String infoLog = GL45.glGetShaderInfoLog(shader);
-            GL45.glDeleteShader(shader);
-            GL45.glDeleteProgram(program);
+        int shader = gl.glCreateShader(GlBindings.GL_COMPUTE_SHADER);
+        gl.glShaderSource(shader, source.source());
+        gl.glCompileShader(shader);
+        if (gl.glGetShaderi(shader, GlBindings.GL_COMPILE_STATUS) == GlBindings.GL_FALSE) {
+            String infoLog = gl.glGetShaderInfoLog(shader);
+            gl.glDeleteShader(shader);
+            gl.glDeleteProgram(program);
             throw new ShaderCompilationException("Compute shader compilation failed: " + infoLog);
         }
 
-        GL45.glAttachShader(program, shader);
-        GL45.glLinkProgram(program);
-        if (GL45.glGetProgrami(program, GL45.GL_LINK_STATUS) == GL45.GL_FALSE) {
-            String infoLog = GL45.glGetProgramInfoLog(program);
-            GL45.glDeleteShader(shader);
-            GL45.glDeleteProgram(program);
+        gl.glAttachShader(program, shader);
+        gl.glLinkProgram(program);
+        if (gl.glGetProgrami(program, GlBindings.GL_LINK_STATUS) == GlBindings.GL_FALSE) {
+            String infoLog = gl.glGetProgramInfoLog(program);
+            gl.glDeleteShader(shader);
+            gl.glDeleteProgram(program);
             throw new ShaderCompilationException("Compute program link failed: " + infoLog);
         }
 
-        GL45.glDeleteShader(shader);
+        gl.glDeleteShader(shader);
         return pipelines.register(program);
     }
 
@@ -445,10 +447,10 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     private static int mapShaderStage(ShaderStage stage) {
-        if (stage == ShaderStage.VERTEX) return GL45.GL_VERTEX_SHADER;
-        if (stage == ShaderStage.FRAGMENT) return GL45.GL_FRAGMENT_SHADER;
-        if (stage == ShaderStage.GEOMETRY) return GL45.GL_GEOMETRY_SHADER;
-        if (stage == ShaderStage.COMPUTE) return GL45.GL_COMPUTE_SHADER;
+        if (stage == ShaderStage.VERTEX) return GlBindings.GL_VERTEX_SHADER;
+        if (stage == ShaderStage.FRAGMENT) return GlBindings.GL_FRAGMENT_SHADER;
+        if (stage == ShaderStage.GEOMETRY) return GlBindings.GL_GEOMETRY_SHADER;
+        if (stage == ShaderStage.COMPUTE) return GlBindings.GL_COMPUTE_SHADER;
         throw new IllegalArgumentException("Unknown shader stage: " + stage.name());
     }
 
@@ -469,7 +471,7 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public void endFrame() {
-        GLFW.glfwSwapBuffers(glfwWindow);
+        gl.swapBuffers(glfwWindow);
     }
 
     @Override
@@ -483,78 +485,78 @@ public class GlRenderDevice implements RenderDevice {
         switch (command) {
             case RenderCommand.BindPipeline cmd -> {
                 int program = getGlProgramName(cmd.pipeline());
-                GL45.glUseProgram(program);
+                gl.glUseProgram(program);
             }
             case RenderCommand.BindVertexBuffer cmd -> {
                 int vao = getGlVaoName(cmd.vertexInput());
                 int vbo = getGlBufferName(cmd.buffer());
-                GL45.glBindVertexArray(vao);
+                gl.glBindVertexArray(vao);
                 int stride = getVertexInputStride(cmd.vertexInput());
-                GL45.glVertexArrayVertexBuffer(vao, 0, vbo, 0, stride);
+                gl.glVertexArrayVertexBuffer(vao, 0, vbo, 0, stride);
             }
             case RenderCommand.BindIndexBuffer cmd -> {
                 int ibo = getGlBufferName(cmd.buffer());
-                GL45.glBindBuffer(GL45.GL_ELEMENT_ARRAY_BUFFER, ibo);
+                gl.glBindBuffer(GlBindings.GL_ELEMENT_ARRAY_BUFFER, ibo);
             }
             case RenderCommand.BindUniformBuffer cmd -> {
                 int ubo = getGlBufferName(cmd.buffer());
-                GL45.glBindBufferBase(GL45.GL_UNIFORM_BUFFER, cmd.binding(), ubo);
+                gl.glBindBufferBase(GlBindings.GL_UNIFORM_BUFFER, cmd.binding(), ubo);
             }
             case RenderCommand.BindTexture cmd -> {
                 int glTex = getGlTextureName(cmd.texture());
-                GL45.glBindTextureUnit(cmd.unit(), glTex);
+                gl.glBindTextureUnit(cmd.unit(), glTex);
                 boundTextures[cmd.unit()] = cmd.texture();
                 maybeGenerateMipmaps(cmd.unit());
             }
             case RenderCommand.BindSampler cmd -> {
-                GL45.glBindSampler(cmd.unit(), getGlSamplerName(cmd.sampler()));
+                gl.glBindSampler(cmd.unit(), getGlSamplerName(cmd.sampler()));
                 boundSamplers[cmd.unit()] = cmd.sampler();
                 maybeGenerateMipmaps(cmd.unit());
             }
             case RenderCommand.BindStorageBuffer cmd -> {
                 int ssbo = getGlBufferName(cmd.buffer());
-                GL45.glBindBufferBase(GL45.GL_SHADER_STORAGE_BUFFER, cmd.binding(), ssbo);
+                gl.glBindBufferBase(GlBindings.GL_SHADER_STORAGE_BUFFER, cmd.binding(), ssbo);
             }
             case RenderCommand.Draw cmd -> {
-                GL45.glDrawArrays(GL45.GL_TRIANGLES, cmd.firstVertex(), cmd.vertexCount());
+                gl.glDrawArrays(GlBindings.GL_TRIANGLES, cmd.firstVertex(), cmd.vertexCount());
             }
             case RenderCommand.DrawIndexed cmd -> {
-                GL45.glDrawElements(GL45.GL_TRIANGLES, cmd.indexCount(), GL45.GL_UNSIGNED_INT,
+                gl.glDrawElements(GlBindings.GL_TRIANGLES, cmd.indexCount(), GlBindings.GL_UNSIGNED_INT,
                         (long) cmd.firstIndex() * Integer.BYTES);
             }
             case RenderCommand.DrawInstanced cmd -> {
-                GL45.glDrawArraysInstancedBaseInstance(GL45.GL_TRIANGLES, cmd.firstVertex(), cmd.vertexCount(), cmd.instanceCount(), cmd.firstInstance());
+                gl.glDrawArraysInstancedBaseInstance(GlBindings.GL_TRIANGLES, cmd.firstVertex(), cmd.vertexCount(), cmd.instanceCount(), cmd.firstInstance());
             }
             case RenderCommand.DrawIndexedInstanced cmd -> {
-                GL45.glDrawElementsInstancedBaseInstance(GL45.GL_TRIANGLES, cmd.indexCount(), GL45.GL_UNSIGNED_INT,
+                gl.glDrawElementsInstancedBaseInstance(GlBindings.GL_TRIANGLES, cmd.indexCount(), GlBindings.GL_UNSIGNED_INT,
                         (long) cmd.firstIndex() * Integer.BYTES, cmd.instanceCount(), cmd.firstInstance());
             }
             case RenderCommand.DrawIndirect(var buffer, long offset, int drawCount, int stride) -> {
                 int buf = buffers.get(buffer).glName();
-                GL45.glBindBuffer(GL45.GL_DRAW_INDIRECT_BUFFER, buf);
+                gl.glBindBuffer(GlBindings.GL_DRAW_INDIRECT_BUFFER, buf);
                 if (drawCount == 1) {
-                    GL45.glDrawArraysIndirect(GL45.GL_TRIANGLES, offset);
+                    gl.glDrawArraysIndirect(GlBindings.GL_TRIANGLES, offset);
                 } else {
-                    GL45.glMultiDrawArraysIndirect(GL45.GL_TRIANGLES, offset, drawCount, stride == 0 ? 16 : stride);
+                    gl.glMultiDrawArraysIndirect(GlBindings.GL_TRIANGLES, offset, drawCount, stride == 0 ? 16 : stride);
                 }
             }
             case RenderCommand.DrawIndexedIndirect(var buffer, long offset, int drawCount, int stride) -> {
                 int buf = buffers.get(buffer).glName();
-                GL45.glBindBuffer(GL45.GL_DRAW_INDIRECT_BUFFER, buf);
+                gl.glBindBuffer(GlBindings.GL_DRAW_INDIRECT_BUFFER, buf);
                 if (drawCount == 1) {
-                    GL45.glDrawElementsIndirect(GL45.GL_TRIANGLES, GL45.GL_UNSIGNED_INT, offset);
+                    gl.glDrawElementsIndirect(GlBindings.GL_TRIANGLES, GlBindings.GL_UNSIGNED_INT, offset);
                 } else {
-                    GL45.glMultiDrawElementsIndirect(GL45.GL_TRIANGLES, GL45.GL_UNSIGNED_INT, offset, drawCount, stride == 0 ? 20 : stride);
+                    gl.glMultiDrawElementsIndirect(GlBindings.GL_TRIANGLES, GlBindings.GL_UNSIGNED_INT, offset, drawCount, stride == 0 ? 20 : stride);
                 }
             }
             case RenderCommand.BindRenderTarget cmd -> {
                 int fbo = getGlFboName(cmd.renderTarget());
-                GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
+                gl.glBindFramebuffer(GlBindings.GL_FRAMEBUFFER, fbo);
                 var rt = renderTargets.get(cmd.renderTarget());
                 if (rt != null && rt.colorTextures().size() > 1) {
                     int[] drawBuffers = new int[rt.colorTextures().size()];
-                    for (int i = 0; i < drawBuffers.length; i++) drawBuffers[i] = GL45.GL_COLOR_ATTACHMENT0 + i;
-                    GL45.glDrawBuffers(drawBuffers);
+                    for (int i = 0; i < drawBuffers.length; i++) drawBuffers[i] = GlBindings.GL_COLOR_ATTACHMENT0 + i;
+                    gl.glDrawBuffers(drawBuffers);
                 }
                 currentRenderTarget = cmd.renderTarget();
             }
@@ -568,53 +570,53 @@ public class GlRenderDevice implements RenderDevice {
                         }
                     }
                 }
-                GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, 0);
+                gl.glBindFramebuffer(GlBindings.GL_FRAMEBUFFER, 0);
                 currentRenderTarget = null;
             }
             case RenderCommand.SetDepthTest cmd -> {
-                if (cmd.enabled()) GL45.glEnable(GL45.GL_DEPTH_TEST);
-                else GL45.glDisable(GL45.GL_DEPTH_TEST);
+                if (cmd.enabled()) gl.glEnable(GlBindings.GL_DEPTH_TEST);
+                else gl.glDisable(GlBindings.GL_DEPTH_TEST);
             }
             case RenderCommand.SetBlending cmd -> {
                 if (cmd.enabled()) {
-                    GL45.glEnable(GL45.GL_BLEND);
-                    GL45.glBlendFunc(GL45.GL_SRC_ALPHA, GL45.GL_ONE_MINUS_SRC_ALPHA);
+                    gl.glEnable(GlBindings.GL_BLEND);
+                    gl.glBlendFunc(GlBindings.GL_SRC_ALPHA, GlBindings.GL_ONE_MINUS_SRC_ALPHA);
                 } else {
-                    GL45.glDisable(GL45.GL_BLEND);
+                    gl.glDisable(GlBindings.GL_BLEND);
                 }
             }
             case RenderCommand.SetCullFace cmd -> {
                 if (cmd.enabled()) {
-                    GL45.glEnable(GL45.GL_CULL_FACE);
-                    GL45.glCullFace(GL45.GL_BACK);
-                    GL45.glFrontFace(GL45.GL_CCW);
+                    gl.glEnable(GlBindings.GL_CULL_FACE);
+                    gl.glCullFace(GlBindings.GL_BACK);
+                    gl.glFrontFace(GlBindings.GL_CCW);
                 } else {
-                    GL45.glDisable(GL45.GL_CULL_FACE);
+                    gl.glDisable(GlBindings.GL_CULL_FACE);
                 }
             }
             case RenderCommand.SetWireframe cmd -> {
-                GL45.glPolygonMode(GL45.GL_FRONT_AND_BACK, cmd.enabled() ? GL45.GL_LINE : GL45.GL_FILL);
+                gl.glPolygonMode(GlBindings.GL_FRONT_AND_BACK, cmd.enabled() ? GlBindings.GL_LINE : GlBindings.GL_FILL);
             }
             case RenderCommand.Clear cmd -> {
-                GL45.glClearColor(cmd.r(), cmd.g(), cmd.b(), cmd.a());
-                GL45.glClear(GL45.GL_COLOR_BUFFER_BIT | GL45.GL_DEPTH_BUFFER_BIT);
+                gl.glClearColor(cmd.r(), cmd.g(), cmd.b(), cmd.a());
+                gl.glClear(GlBindings.GL_COLOR_BUFFER_BIT | GlBindings.GL_DEPTH_BUFFER_BIT);
             }
             case RenderCommand.Viewport cmd -> {
-                GL45.glViewport(cmd.x(), cmd.y(), cmd.width(), cmd.height());
+                gl.glViewport(cmd.x(), cmd.y(), cmd.width(), cmd.height());
             }
             case RenderCommand.Scissor cmd -> {
-                GL45.glScissor(cmd.x(), cmd.y(), cmd.width(), cmd.height());
+                gl.glScissor(cmd.x(), cmd.y(), cmd.width(), cmd.height());
             }
             case RenderCommand.SetRenderState(var props) -> {
                 if (props.contains(RenderState.DEPTH_TEST)) {
-                    if (props.get(RenderState.DEPTH_TEST)) GL45.glEnable(GL45.GL_DEPTH_TEST);
-                    else GL45.glDisable(GL45.GL_DEPTH_TEST);
+                    if (props.get(RenderState.DEPTH_TEST)) gl.glEnable(GlBindings.GL_DEPTH_TEST);
+                    else gl.glDisable(GlBindings.GL_DEPTH_TEST);
                 }
                 if (props.contains(RenderState.DEPTH_WRITE)) {
-                    GL45.glDepthMask(props.get(RenderState.DEPTH_WRITE));
+                    gl.glDepthMask(props.get(RenderState.DEPTH_WRITE));
                 }
                 if (props.contains(RenderState.DEPTH_FUNC)) {
-                    GL45.glDepthFunc(mapCompareFunc(props.get(RenderState.DEPTH_FUNC)));
+                    gl.glDepthFunc(mapCompareFunc(props.get(RenderState.DEPTH_FUNC)));
                 }
                 if (props.contains(RenderState.BLEND_MODE)) {
                     applyBlendMode(props.get(RenderState.BLEND_MODE));
@@ -623,95 +625,95 @@ public class GlRenderDevice implements RenderDevice {
                     applyCullMode(props.get(RenderState.CULL_MODE));
                 }
                 if (props.contains(RenderState.FRONT_FACE)) {
-                    GL45.glFrontFace(props.get(RenderState.FRONT_FACE) == FrontFace.CCW ? GL45.GL_CCW : GL45.GL_CW);
+                    gl.glFrontFace(props.get(RenderState.FRONT_FACE) == FrontFace.CCW ? GlBindings.GL_CCW : GlBindings.GL_CW);
                 }
                 if (props.contains(RenderState.WIREFRAME)) {
-                    GL45.glPolygonMode(GL45.GL_FRONT_AND_BACK, props.get(RenderState.WIREFRAME) ? GL45.GL_LINE : GL45.GL_FILL);
+                    gl.glPolygonMode(GlBindings.GL_FRONT_AND_BACK, props.get(RenderState.WIREFRAME) ? GlBindings.GL_LINE : GlBindings.GL_FILL);
                 }
                 if (props.contains(RenderState.LINE_WIDTH)) {
-                    GL45.glLineWidth(props.get(RenderState.LINE_WIDTH));
+                    gl.glLineWidth(props.get(RenderState.LINE_WIDTH));
                 }
                 if (props.contains(RenderState.SCISSOR_TEST)) {
-                    if (props.get(RenderState.SCISSOR_TEST)) GL45.glEnable(GL45.GL_SCISSOR_TEST);
-                    else GL45.glDisable(GL45.GL_SCISSOR_TEST);
+                    if (props.get(RenderState.SCISSOR_TEST)) gl.glEnable(GlBindings.GL_SCISSOR_TEST);
+                    else gl.glDisable(GlBindings.GL_SCISSOR_TEST);
                 }
                 if (props.contains(RenderState.STENCIL_TEST)) {
-                    if (props.get(RenderState.STENCIL_TEST)) GL45.glEnable(GL45.GL_STENCIL_TEST);
-                    else GL45.glDisable(GL45.GL_STENCIL_TEST);
+                    if (props.get(RenderState.STENCIL_TEST)) gl.glEnable(GlBindings.GL_STENCIL_TEST);
+                    else gl.glDisable(GlBindings.GL_STENCIL_TEST);
                 }
                 if (props.contains(RenderState.STENCIL_FUNC)) {
                     int ref = props.contains(RenderState.STENCIL_REF) ? props.get(RenderState.STENCIL_REF) : 0;
                     int mask = props.contains(RenderState.STENCIL_MASK) ? props.get(RenderState.STENCIL_MASK) : 0xFF;
-                    GL45.glStencilFunc(mapCompareFunc(props.get(RenderState.STENCIL_FUNC)), ref, mask);
+                    gl.glStencilFunc(mapCompareFunc(props.get(RenderState.STENCIL_FUNC)), ref, mask);
                 }
                 if (props.contains(RenderState.STENCIL_FAIL)) {
                     StencilOp fail = props.get(RenderState.STENCIL_FAIL);
                     StencilOp depthFail = props.contains(RenderState.STENCIL_DEPTH_FAIL) ? props.get(RenderState.STENCIL_DEPTH_FAIL) : StencilOp.KEEP;
                     StencilOp pass = props.contains(RenderState.STENCIL_PASS) ? props.get(RenderState.STENCIL_PASS) : StencilOp.KEEP;
-                    GL45.glStencilOp(mapStencilOp(fail), mapStencilOp(depthFail), mapStencilOp(pass));
+                    gl.glStencilOp(mapStencilOp(fail), mapStencilOp(depthFail), mapStencilOp(pass));
                 }
             }
             case RenderCommand.PushConstants(var data) -> {
                 data.rewind();
-                GL45.nglNamedBufferSubData(pushConstantUbo, 0, data.remaining(), org.lwjgl.system.MemoryUtil.memAddress(data));
-                GL45.glBindBufferBase(GL45.GL_UNIFORM_BUFFER, 15, pushConstantUbo);
+                gl.glNamedBufferSubData(pushConstantUbo, 0, data);
+                gl.glBindBufferBase(GlBindings.GL_UNIFORM_BUFFER, 15, pushConstantUbo);
             }
             case RenderCommand.BindComputePipeline(var pipeline) -> {
                 int program = getGlProgramName(pipeline);
-                GL45.glUseProgram(program);
+                gl.glUseProgram(program);
             }
             case RenderCommand.Dispatch(int gx, int gy, int gz) -> {
-                GL45.glDispatchCompute(gx, gy, gz);
+                gl.glDispatchCompute(gx, gy, gz);
             }
             case RenderCommand.CopyBuffer(var src, var dst, long srcOff, long dstOff, long size) -> {
                 int srcBuf = buffers.get(src).glName();
                 int dstBuf = buffers.get(dst).glName();
-                GL45.glCopyNamedBufferSubData(srcBuf, dstBuf, srcOff, dstOff, size);
+                gl.glCopyNamedBufferSubData(srcBuf, dstBuf, srcOff, dstOff, size);
             }
             case RenderCommand.CopyTexture(var src, var dst, int sx, int sy, int dx, int dy, int w, int h, int srcMip, int dstMip) -> {
                 int srcTex = textures.get(src).glName();
                 int dstTex = textures.get(dst).glName();
-                GL45.glCopyImageSubData(srcTex, GL45.GL_TEXTURE_2D, srcMip, sx, sy, 0,
-                                        dstTex, GL45.GL_TEXTURE_2D, dstMip, dx, dy, 0, w, h, 1);
+                gl.glCopyImageSubData(srcTex, GlBindings.GL_TEXTURE_2D, srcMip, sx, sy, 0,
+                                        dstTex, GlBindings.GL_TEXTURE_2D, dstMip, dx, dy, 0, w, h, 1);
             }
             case RenderCommand.BlitTexture(var src, var dst,
                     int sx0, int sy0, int sx1, int sy1,
                     int dx0, int dy0, int dx1, int dy1, boolean linear) -> {
                 // BlitFramebuffer requires FBO binding — create temp FBOs
-                int srcFbo = GL45.glCreateFramebuffers();
-                int dstFbo = GL45.glCreateFramebuffers();
+                int srcFbo = gl.glCreateFramebuffers();
+                int dstFbo = gl.glCreateFramebuffers();
                 int srcTex = textures.get(src).glName();
                 int dstTex = textures.get(dst).glName();
-                GL45.glNamedFramebufferTexture(srcFbo, GL45.GL_COLOR_ATTACHMENT0, srcTex, 0);
-                GL45.glNamedFramebufferTexture(dstFbo, GL45.GL_COLOR_ATTACHMENT0, dstTex, 0);
-                GL45.glBlitNamedFramebuffer(srcFbo, dstFbo,
+                gl.glNamedFramebufferTexture(srcFbo, GlBindings.GL_COLOR_ATTACHMENT0, srcTex, 0);
+                gl.glNamedFramebufferTexture(dstFbo, GlBindings.GL_COLOR_ATTACHMENT0, dstTex, 0);
+                gl.glBlitNamedFramebuffer(srcFbo, dstFbo,
                     sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1,
-                    GL45.GL_COLOR_BUFFER_BIT, linear ? GL45.GL_LINEAR : GL45.GL_NEAREST);
-                GL45.glDeleteFramebuffers(srcFbo);
-                GL45.glDeleteFramebuffers(dstFbo);
+                    GlBindings.GL_COLOR_BUFFER_BIT, linear ? GlBindings.GL_LINEAR : GlBindings.GL_NEAREST);
+                gl.glDeleteFramebuffers(srcFbo);
+                gl.glDeleteFramebuffers(dstFbo);
             }
             case RenderCommand.BindImage(int unit, var texture, int mipLevel, boolean read, boolean write) -> {
                 var texInfo = textures.get(texture);
                 int glTex = texInfo.glName();
                 int internalFormat = mapTextureFormat(texInfo.desc().format());
-                int access = GL45.GL_READ_WRITE;
-                if (read && !write) access = GL45.GL_READ_ONLY;
-                else if (!read && write) access = GL45.GL_WRITE_ONLY;
+                int access = GlBindings.GL_READ_WRITE;
+                if (read && !write) access = GlBindings.GL_READ_ONLY;
+                else if (!read && write) access = GlBindings.GL_WRITE_ONLY;
                 boolean layered = texInfo.desc().type() == TextureType.TEXTURE_3D
                         || texInfo.desc().type() == TextureType.TEXTURE_2D_ARRAY
                         || texInfo.desc().type() == TextureType.TEXTURE_CUBE;
-                GL45.glBindImageTexture(unit, glTex, mipLevel, layered, 0, access, internalFormat);
+                gl.glBindImageTexture(unit, glTex, mipLevel, layered, 0, access, internalFormat);
             }
             case RenderCommand.MemoryBarrier(var scope) -> {
                 int bits;
                 if (scope == dev.engine.graphics.renderstate.BarrierScope.STORAGE_BUFFER) {
-                    bits = GL45.GL_SHADER_STORAGE_BARRIER_BIT;
+                    bits = GlBindings.GL_SHADER_STORAGE_BARRIER_BIT;
                 } else if (scope == dev.engine.graphics.renderstate.BarrierScope.TEXTURE) {
-                    bits = GL45.GL_TEXTURE_FETCH_BARRIER_BIT;
+                    bits = GlBindings.GL_TEXTURE_FETCH_BARRIER_BIT;
                 } else {
-                    bits = GL45.GL_ALL_BARRIER_BITS;
+                    bits = GlBindings.GL_ALL_BARRIER_BITS;
                 }
-                GL45.glMemoryBarrier(bits);
+                gl.glMemoryBarrier(bits);
             }
         }
     }
@@ -726,18 +728,18 @@ public class GlRenderDevice implements RenderDevice {
      * Users can register custom capabilities without modifying engine code:
      * <pre>
      *   var MY_CAP = DeviceCapability.intCap("MY_CUSTOM_LIMIT");
-     *   device.capabilities().register(MY_CAP, () -> GL45.glGetInteger(MY_GL_CONSTANT));
+     *   device.capabilities().register(MY_CAP, () -> gl.glGetInteger(MY_GL_CONSTANT));
      * </pre>
      */
     public CapabilityRegistry capabilities() { return capabilities; }
 
     private boolean hasBindlessTextures() {
-        var extensions = GL45.glGetString(GL45.GL_EXTENSIONS);
+        var extensions = gl.glGetString(GlBindings.GL_EXTENSIONS);
         if (extensions != null && extensions.contains("GL_ARB_bindless_texture")) return true;
         // Also check via glGetIntegerv GL_NUM_EXTENSIONS
-        int numExt = GL45.glGetInteger(GL45.GL_NUM_EXTENSIONS);
+        int numExt = gl.glGetInteger(GlBindings.GL_NUM_EXTENSIONS);
         for (int i = 0; i < numExt; i++) {
-            var ext = GL45.glGetStringi(GL45.GL_EXTENSIONS, i);
+            var ext = gl.glGetStringi(GlBindings.GL_EXTENSIONS, i);
             if ("GL_ARB_bindless_texture".equals(ext)) return true;
         }
         return false;
@@ -746,8 +748,8 @@ public class GlRenderDevice implements RenderDevice {
     @Override
     public long getBindlessTextureHandle(Handle<TextureResource> texture) {
         int glTex = getGlTextureName(texture);
-        long handle = org.lwjgl.opengl.ARBBindlessTexture.glGetTextureHandleARB(glTex);
-        org.lwjgl.opengl.ARBBindlessTexture.glMakeTextureHandleResidentARB(handle);
+        long handle = gl.glGetTextureHandleARB(glTex);
+        gl.glMakeTextureHandleResidentARB(handle);
         return handle;
     }
 
@@ -758,7 +760,7 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public GpuFence createFence() {
-        return new GlFence();
+        return new GlFence(gl);
     }
 
     /**
@@ -772,7 +774,7 @@ public class GlRenderDevice implements RenderDevice {
     @Override
     public byte[] readFramebuffer(int width, int height) {
         java.nio.ByteBuffer pixels = java.nio.ByteBuffer.allocateDirect(width * height * 4);
-        GL45.glReadPixels(0, 0, width, height, GL45.GL_RGBA, GL45.GL_UNSIGNED_BYTE, pixels);
+        gl.glReadPixels(0, 0, width, height, GlBindings.GL_RGBA, GlBindings.GL_UNSIGNED_BYTE, pixels);
         byte[] rgba = new byte[width * height * 4];
         // Flip Y (OpenGL reads bottom-up)
         for (int y = 0; y < height; y++) {
@@ -799,7 +801,7 @@ public class GlRenderDevice implements RenderDevice {
         SamplerDescriptor sd = s != null ? s.desc() : null;
         if (sd != null && usesMipmaps(sd)) {
             int glTex = getGlTextureName(texture);
-            GL45.glGenerateTextureMipmap(glTex);
+            gl.glGenerateTextureMipmap(glTex);
             textureMipsDirty.put(texture.index(), false);
         }
     }
@@ -829,88 +831,88 @@ public class GlRenderDevice implements RenderDevice {
             log.warn("Total {} resource handle(s) leaked at GL device shutdown", leaks);
         }
 
-        buffers.destroyAll(buf -> GL45.glDeleteBuffers(buf.glName()));
-        textures.destroyAll(tex -> GL45.glDeleteTextures(tex.glName()));
-        pipelines.destroyAll(GL45::glDeleteProgram);
-        vertexInputs.destroyAll(vi -> GL45.glDeleteVertexArrays(vi.vao()));
-        samplers.destroyAll(s -> GL45.glDeleteSamplers(s.glName()));
-        renderTargets.destroyAll(rt -> GL45.glDeleteFramebuffers(rt.fbo()));
-        GL45.glDeleteBuffers(pushConstantUbo);
+        buffers.destroyAll(buf -> gl.glDeleteBuffers(buf.glName()));
+        textures.destroyAll(tex -> gl.glDeleteTextures(tex.glName()));
+        pipelines.destroyAll(gl::glDeleteProgram);
+        vertexInputs.destroyAll(vi -> gl.glDeleteVertexArrays(vi.vao()));
+        samplers.destroyAll(s -> gl.glDeleteSamplers(s.glName()));
+        renderTargets.destroyAll(rt -> gl.glDeleteFramebuffers(rt.fbo()));
+        gl.glDeleteBuffers(pushConstantUbo);
         log.info("GlRenderDevice closed");
     }
 
     private static int mapTextureFormat(TextureFormat format) {
-        if (format == TextureFormat.RGBA8) return GL45.GL_RGBA8;
-        if (format == TextureFormat.RGB8) return GL45.GL_RGB8;
-        if (format == TextureFormat.R8) return GL45.GL_R8;
-        if (format == TextureFormat.DEPTH24) return GL45.GL_DEPTH_COMPONENT24;
-        if (format == TextureFormat.DEPTH32F) return GL45.GL_DEPTH_COMPONENT32F;
-        if (format == TextureFormat.DEPTH24_STENCIL8) return GL45.GL_DEPTH24_STENCIL8;
-        if (format == TextureFormat.DEPTH32F_STENCIL8) return GL45.GL_DEPTH32F_STENCIL8;
-        return GL45.GL_RGBA8;
+        if (format == TextureFormat.RGBA8) return GlBindings.GL_RGBA8;
+        if (format == TextureFormat.RGB8) return GlBindings.GL_RGB8;
+        if (format == TextureFormat.R8) return GlBindings.GL_R8;
+        if (format == TextureFormat.DEPTH24) return GlBindings.GL_DEPTH_COMPONENT24;
+        if (format == TextureFormat.DEPTH32F) return GlBindings.GL_DEPTH_COMPONENT32F;
+        if (format == TextureFormat.DEPTH24_STENCIL8) return GlBindings.GL_DEPTH24_STENCIL8;
+        if (format == TextureFormat.DEPTH32F_STENCIL8) return GlBindings.GL_DEPTH32F_STENCIL8;
+        return GlBindings.GL_RGBA8;
     }
 
     private static int[] mapUploadFormat(TextureFormat format) {
-        if (format == TextureFormat.RGBA8) return new int[]{GL45.GL_RGBA, GL45.GL_UNSIGNED_BYTE};
-        if (format == TextureFormat.RGB8) return new int[]{GL45.GL_RGB, GL45.GL_UNSIGNED_BYTE};
-        if (format == TextureFormat.R8) return new int[]{GL45.GL_RED, GL45.GL_UNSIGNED_BYTE};
-        return new int[]{GL45.GL_RGBA, GL45.GL_UNSIGNED_BYTE};
+        if (format == TextureFormat.RGBA8) return new int[]{GlBindings.GL_RGBA, GlBindings.GL_UNSIGNED_BYTE};
+        if (format == TextureFormat.RGB8) return new int[]{GlBindings.GL_RGB, GlBindings.GL_UNSIGNED_BYTE};
+        if (format == TextureFormat.R8) return new int[]{GlBindings.GL_RED, GlBindings.GL_UNSIGNED_BYTE};
+        return new int[]{GlBindings.GL_RGBA, GlBindings.GL_UNSIGNED_BYTE};
     }
 
     private static int mapUsage(AccessPattern pattern) {
-        if (pattern == AccessPattern.STATIC) return GL45.GL_STATIC_DRAW;
-        if (pattern == AccessPattern.DYNAMIC) return GL45.GL_DYNAMIC_DRAW;
-        if (pattern == AccessPattern.STREAM) return GL45.GL_STREAM_DRAW;
-        return GL45.GL_STATIC_DRAW;
+        if (pattern == AccessPattern.STATIC) return GlBindings.GL_STATIC_DRAW;
+        if (pattern == AccessPattern.DYNAMIC) return GlBindings.GL_DYNAMIC_DRAW;
+        if (pattern == AccessPattern.STREAM) return GlBindings.GL_STREAM_DRAW;
+        return GlBindings.GL_STATIC_DRAW;
     }
 
     private static int mapCompareFunc(CompareFunc func) {
-        if (func == CompareFunc.LESS) return GL45.GL_LESS;
-        if (func == CompareFunc.LEQUAL) return GL45.GL_LEQUAL;
-        if (func == CompareFunc.GREATER) return GL45.GL_GREATER;
-        if (func == CompareFunc.GEQUAL) return GL45.GL_GEQUAL;
-        if (func == CompareFunc.EQUAL) return GL45.GL_EQUAL;
-        if (func == CompareFunc.NOT_EQUAL) return GL45.GL_NOTEQUAL;
-        if (func == CompareFunc.ALWAYS) return GL45.GL_ALWAYS;
-        if (func == CompareFunc.NEVER) return GL45.GL_NEVER;
-        return GL45.GL_LESS;
+        if (func == CompareFunc.LESS) return GlBindings.GL_LESS;
+        if (func == CompareFunc.LEQUAL) return GlBindings.GL_LEQUAL;
+        if (func == CompareFunc.GREATER) return GlBindings.GL_GREATER;
+        if (func == CompareFunc.GEQUAL) return GlBindings.GL_GEQUAL;
+        if (func == CompareFunc.EQUAL) return GlBindings.GL_EQUAL;
+        if (func == CompareFunc.NOT_EQUAL) return GlBindings.GL_NOTEQUAL;
+        if (func == CompareFunc.ALWAYS) return GlBindings.GL_ALWAYS;
+        if (func == CompareFunc.NEVER) return GlBindings.GL_NEVER;
+        return GlBindings.GL_LESS;
     }
 
     private static int mapStencilOp(StencilOp op) {
-        if (op == StencilOp.KEEP) return GL45.GL_KEEP;
-        if (op == StencilOp.ZERO) return GL45.GL_ZERO;
-        if (op == StencilOp.REPLACE) return GL45.GL_REPLACE;
-        if (op == StencilOp.INCR) return GL45.GL_INCR;
-        if (op == StencilOp.DECR) return GL45.GL_DECR;
-        if (op == StencilOp.INVERT) return GL45.GL_INVERT;
-        if (op == StencilOp.INCR_WRAP) return GL45.GL_INCR_WRAP;
-        if (op == StencilOp.DECR_WRAP) return GL45.GL_DECR_WRAP;
-        return GL45.GL_KEEP;
+        if (op == StencilOp.KEEP) return GlBindings.GL_KEEP;
+        if (op == StencilOp.ZERO) return GlBindings.GL_ZERO;
+        if (op == StencilOp.REPLACE) return GlBindings.GL_REPLACE;
+        if (op == StencilOp.INCR) return GlBindings.GL_INCR;
+        if (op == StencilOp.DECR) return GlBindings.GL_DECR;
+        if (op == StencilOp.INVERT) return GlBindings.GL_INVERT;
+        if (op == StencilOp.INCR_WRAP) return GlBindings.GL_INCR_WRAP;
+        if (op == StencilOp.DECR_WRAP) return GlBindings.GL_DECR_WRAP;
+        return GlBindings.GL_KEEP;
     }
 
-    private static void applyBlendMode(BlendMode mode) {
+    private void applyBlendMode(BlendMode mode) {
         if (mode == BlendMode.NONE) {
-            GL45.glDisable(GL45.GL_BLEND);
+            gl.glDisable(GlBindings.GL_BLEND);
         } else {
-            GL45.glEnable(GL45.GL_BLEND);
+            gl.glEnable(GlBindings.GL_BLEND);
             if (mode == BlendMode.ALPHA) {
-                GL45.glBlendFunc(GL45.GL_SRC_ALPHA, GL45.GL_ONE_MINUS_SRC_ALPHA);
+                gl.glBlendFunc(GlBindings.GL_SRC_ALPHA, GlBindings.GL_ONE_MINUS_SRC_ALPHA);
             } else if (mode == BlendMode.ADDITIVE) {
-                GL45.glBlendFunc(GL45.GL_SRC_ALPHA, GL45.GL_ONE);
+                gl.glBlendFunc(GlBindings.GL_SRC_ALPHA, GlBindings.GL_ONE);
             } else if (mode == BlendMode.MULTIPLY) {
-                GL45.glBlendFunc(GL45.GL_DST_COLOR, GL45.GL_ZERO);
+                gl.glBlendFunc(GlBindings.GL_DST_COLOR, GlBindings.GL_ZERO);
             } else if (mode == BlendMode.PREMULTIPLIED) {
-                GL45.glBlendFunc(GL45.GL_ONE, GL45.GL_ONE_MINUS_SRC_ALPHA);
+                gl.glBlendFunc(GlBindings.GL_ONE, GlBindings.GL_ONE_MINUS_SRC_ALPHA);
             }
         }
     }
 
-    private static void applyCullMode(CullMode mode) {
+    private void applyCullMode(CullMode mode) {
         if (mode == CullMode.NONE) {
-            GL45.glDisable(GL45.GL_CULL_FACE);
+            gl.glDisable(GlBindings.GL_CULL_FACE);
         } else {
-            GL45.glEnable(GL45.GL_CULL_FACE);
-            GL45.glCullFace(mode == CullMode.FRONT ? GL45.GL_FRONT : GL45.GL_BACK);
+            gl.glEnable(GlBindings.GL_CULL_FACE);
+            gl.glCullFace(mode == CullMode.FRONT ? GlBindings.GL_FRONT : GlBindings.GL_BACK);
         }
     }
 }

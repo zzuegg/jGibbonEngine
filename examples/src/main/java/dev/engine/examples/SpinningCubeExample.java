@@ -47,7 +47,7 @@ public class SpinningCubeExample {
     public static void main(String[] args) {
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Engine - Spinning Cube", 800, 600));
-        var device = new GlRenderDevice(window);
+        var device = new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
         window.show();
 
         // Cube: 24 vertices (4 per face), each face has a solid color

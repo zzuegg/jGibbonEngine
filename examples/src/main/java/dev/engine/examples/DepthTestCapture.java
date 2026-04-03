@@ -49,7 +49,7 @@ public class DepthTestCapture {
     public static void main(String[] args) throws Exception {
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Depth Test", 800, 600));
-        var device = new GlRenderDevice(window);
+        var device = new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
 
         var layout = StructLayout.of(Vertex.class);
         var format = VertexFormat.of(

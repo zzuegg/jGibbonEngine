@@ -42,7 +42,7 @@ public class TriangleExample {
     public static void main(String[] args) {
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Engine - Triangle", 800, 600));
-        var device = new GlRenderDevice(window);
+        var device = new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
 
         window.show();
 

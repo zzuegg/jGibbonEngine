@@ -59,7 +59,7 @@ class GlSsboTest {
     static void setUp() {
         toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("GPU Test", 1, 1));
-        device = new GlRenderDevice(window);
+        device = new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
     }
 
     @AfterAll

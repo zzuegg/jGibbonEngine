@@ -67,7 +67,7 @@ class SceneRenderVerificationTest {
     static void setUp() {
         toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Verify", 128, 128));
-        device = new GlRenderDevice(window);
+        device = new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
     }
 
     @AfterAll

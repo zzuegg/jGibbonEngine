@@ -12,12 +12,12 @@ public final class OpenGlBackend {
 
     private OpenGlBackend() {}
 
-    public static BaseApplication.BackendFactory factory() {
+    public static BaseApplication.BackendFactory factory(GlBindings gl) {
         return config -> {
             var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
             var window = toolkit.createWindow(
                     new WindowDescriptor(config.windowTitle(), config.windowWidth(), config.windowHeight()));
-            var device = new GlRenderDevice(window);
+            var device = new GlRenderDevice(window, gl);
             return new BaseApplication.BackendInstance(toolkit, window, device);
         };
     }

@@ -55,7 +55,7 @@ class TriangleRenderTest {
     static void setUp() {
         toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Render Test", 64, 64));
-        device = new GlRenderDevice(window);
+        device = new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
     }
 
     @AfterAll

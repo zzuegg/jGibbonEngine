@@ -19,7 +19,6 @@ import dev.engine.core.mesh.ComponentType;
 import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.window.WindowDescriptor;
-import org.lwjgl.opengl.GL45;
 
 import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
@@ -46,6 +45,7 @@ public class GpuTestHarness implements AutoCloseable {
 
     private final GlfwWindowToolkit toolkit;
     private final GlRenderDevice device;
+    private final GlBindings gl;
     private final int width, height;
     private final int fbo, colorTex, depthTex;
 
@@ -55,21 +55,26 @@ public class GpuTestHarness implements AutoCloseable {
     private final Handle<BufferResource> identityMvpUbo;
 
     public GpuTestHarness(int width, int height) {
+        this(width, height, createDefaultBindings());
+    }
+
+    public GpuTestHarness(int width, int height, GlBindings gl) {
         this.width = width;
         this.height = height;
+        this.gl = gl;
         this.toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("GPU Test", 1, 1));
-        this.device = new GlRenderDevice(window);
+        this.device = new GlRenderDevice(window, gl);
 
         // Offscreen FBO
-        fbo = GL45.glCreateFramebuffers();
-        colorTex = GL45.glCreateTextures(GL45.GL_TEXTURE_2D);
-        GL45.glTextureStorage2D(colorTex, 1, GL45.GL_RGBA8, width, height);
-        GL45.glNamedFramebufferTexture(fbo, GL45.GL_COLOR_ATTACHMENT0, colorTex, 0);
-        depthTex = GL45.glCreateTextures(GL45.GL_TEXTURE_2D);
-        GL45.glTextureStorage2D(depthTex, 1, GL45.GL_DEPTH_COMPONENT24, width, height);
-        GL45.glNamedFramebufferTexture(fbo, GL45.GL_DEPTH_ATTACHMENT, depthTex, 0);
-        GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
+        fbo = gl.glCreateFramebuffers();
+        colorTex = gl.glCreateTextures(GlBindings.GL_TEXTURE_2D);
+        gl.glTextureStorage2D(colorTex, 1, GlBindings.GL_RGBA8, width, height);
+        gl.glNamedFramebufferTexture(fbo, GlBindings.GL_COLOR_ATTACHMENT0, colorTex, 0);
+        depthTex = gl.glCreateTextures(GlBindings.GL_TEXTURE_2D);
+        gl.glTextureStorage2D(depthTex, 1, GlBindings.GL_DEPTH_COMPONENT24, width, height);
+        gl.glNamedFramebufferTexture(fbo, GlBindings.GL_DEPTH_ATTACHMENT, depthTex, 0);
+        gl.glBindFramebuffer(GlBindings.GL_FRAMEBUFFER, fbo);
 
         // Fullscreen triangle
         var layout = StructLayout.of(Pos.class);
@@ -86,6 +91,20 @@ public class GpuTestHarness implements AutoCloseable {
         var matLayout = StructLayout.of(Mat4.class);
         identityMvpUbo = device.createBuffer(new BufferDescriptor(matLayout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
         try (var w = device.writeBuffer(identityMvpUbo)) { matLayout.write(w.segment(), 0, Mat4.IDENTITY); }
+    }
+
+    /**
+     * Creates a default {@link GlBindings} using service-loader discovery.
+     * Falls back to reflective instantiation of the LWJGL provider.
+     */
+    private static GlBindings createDefaultBindings() {
+        try {
+            var clazz = Class.forName("dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings");
+            return (GlBindings) clazz.getDeclaredConstructor().newInstance();
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("No GlBindings provider found on classpath. "
+                    + "Add the providers:lwjgl-gl module as a dependency.", e);
+        }
     }
 
     record Pos(float x, float y, float z) {}
@@ -137,7 +156,7 @@ public class GpuTestHarness implements AutoCloseable {
     /** Reads a single pixel at (x, y). Returns [R, G, B, A] as 0-255 values. */
     public int[] readPixel(int x, int y) {
         ByteBuffer pixel = ByteBuffer.allocateDirect(4);
-        GL45.glReadPixels(x, y, 1, 1, GL45.GL_RGBA, GL45.GL_UNSIGNED_BYTE, pixel);
+        gl.glReadPixels(x, y, 1, 1, GlBindings.GL_RGBA, GlBindings.GL_UNSIGNED_BYTE, pixel);
         return new int[]{pixel.get(0) & 0xFF, pixel.get(1) & 0xFF, pixel.get(2) & 0xFF, pixel.get(3) & 0xFF};
     }
 
@@ -188,10 +207,10 @@ public class GpuTestHarness implements AutoCloseable {
 
     @Override
     public void close() {
-        GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, 0);
-        GL45.glDeleteFramebuffers(fbo);
-        GL45.glDeleteTextures(colorTex);
-        GL45.glDeleteTextures(depthTex);
+        gl.glBindFramebuffer(GlBindings.GL_FRAMEBUFFER, 0);
+        gl.glDeleteFramebuffers(fbo);
+        gl.glDeleteTextures(colorTex);
+        gl.glDeleteTextures(depthTex);
         device.destroyBuffer(fullscreenVbo);
         device.destroyVertexInput(posOnlyInput);
         device.destroyBuffer(identityMvpUbo);
