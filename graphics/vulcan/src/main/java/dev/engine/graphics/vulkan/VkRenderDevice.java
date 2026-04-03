@@ -87,9 +87,11 @@ public class VkRenderDevice implements RenderDevice {
     private final ResourceRegistry<RenderTargetResource, VkRenderTargetAllocation> renderTargetRegistry = new ResourceRegistry<>("render-target");
     private final ResourceRegistry<VertexInputResource, Void> vertexInputRegistry = new ResourceRegistry<>("vertex-input");
 
-    // Pipeline blend variant cache: "pipelineIndex_blendModeName" -> variant VkPipeline handle
-    private final Map<String, Long> pipelineBlendVariants = new HashMap<>();
+    // Pipeline variant cache: keyed by "pipelineIndex_blendModeName_wireframe" -> variant VkPipeline handle
+    private final Map<String, Long> pipelineVariants = new HashMap<>();
     private Handle<PipelineResource> currentBoundPipeline = null;
+    private boolean currentWireframe = false;
+    private BlendMode currentBlendMode = BlendMode.NONE;
     private record PipelineSpec(List<dev.engine.graphics.pipeline.ShaderBinary> binaries, VertexFormat vertexFormat) {}
     private final Map<Integer, PipelineSpec> pipelineSpecs = new HashMap<>();
 
@@ -960,9 +962,9 @@ public class VkRenderDevice implements RenderDevice {
         if (pipeline != null && pipeline != VK_NULL_HANDLE) {
             vkDestroyPipeline(device, pipeline, null);
         }
-        // Clean up any blend variants for this pipeline
+        // Clean up any pipeline variants for this pipeline
         var prefix = handle.index() + "_";
-        var it = pipelineBlendVariants.entrySet().iterator();
+        var it = pipelineVariants.entrySet().iterator();
         while (it.hasNext()) {
             var entry = it.next();
             if (entry.getKey().startsWith(prefix)) {
@@ -1439,6 +1441,9 @@ public class VkRenderDevice implements RenderDevice {
                     if (pipeline != null) {
                         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                         currentBoundPipeline = bp.pipeline();
+                        // Reset variant state — base pipeline is always FILL + no blend
+                        currentWireframe = false;
+                        currentBlendMode = BlendMode.NONE;
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindVertexBuffer bvb -> {
@@ -1560,24 +1565,18 @@ public class VkRenderDevice implements RenderDevice {
                         var blendConfig = sb.enabled()
                                 ? VkPipelineFactory.BlendConfig.ALPHA
                                 : VkPipelineFactory.BlendConfig.NONE;
-                        var variantKey = currentBoundPipeline.index() + "_" + (sb.enabled() ? "ALPHA" : "NONE");
-                        long variantPipeline = pipelineBlendVariants.computeIfAbsent(variantKey, k -> {
-                            var spec = pipelineSpecs.get(currentBoundPipeline.index());
-                            if (spec == null) return pipelineRegistry.get(currentBoundPipeline);
-                            return VkPipelineFactory.create(device, renderPass,
-                                    descriptorManager.pipelineLayout(), spec.binaries(), spec.vertexFormat(), blendConfig);
-                        });
-                        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, variantPipeline);
+                        currentBlendMode = sb.enabled() ? BlendMode.ALPHA : BlendMode.NONE;
+                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.SetCullFace scf -> {
                     VK13.vkCmdSetCullMode(cmd, scf.enabled() ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
                 }
                 case dev.engine.graphics.command.RenderCommand.SetWireframe sw -> {
-                    // Wireframe (polygon mode) requires VK_EXT_extended_dynamic_state3
-                    // which is rarely available. No-op for now.
-                    if (sw.enabled()) {
-                        log.debug("SetWireframe not available as dynamic state in Vulkan");
+                    currentWireframe = sw.enabled();
+                    if (currentBoundPipeline != null) {
+                        var blendConfig = mapBlendMode(currentBlendMode);
+                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindRenderTarget brt -> {
@@ -1676,18 +1675,15 @@ public class VkRenderDevice implements RenderDevice {
                                 mapCompareFunc(props.contains(RenderState.STENCIL_FUNC) ? props.get(RenderState.STENCIL_FUNC) : CompareFunc.ALWAYS));
                     }
                     if (props.contains(RenderState.BLEND_MODE) && currentBoundPipeline != null) {
-                        var blendMode = props.get(RenderState.BLEND_MODE);
-                        var blendConfig = mapBlendMode(blendMode);
-                        var variantKey = currentBoundPipeline.index() + "_" + blendMode.name();
-                        long variantPipeline = pipelineBlendVariants.computeIfAbsent(variantKey, k -> {
-                            var spec = pipelineSpecs.get(currentBoundPipeline.index());
-                            if (spec == null) return pipelineRegistry.get(currentBoundPipeline);
-                            return VkPipelineFactory.create(device, renderPass,
-                                    descriptorManager.pipelineLayout(), spec.binaries(), spec.vertexFormat(), blendConfig);
-                        });
-                        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, variantPipeline);
+                        currentBlendMode = props.get(RenderState.BLEND_MODE);
+                        var blendConfig = mapBlendMode(currentBlendMode);
+                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
                     }
-                    // WIREFRAME, LINE_WIDTH: not yet available as dynamic state
+                    if (props.contains(RenderState.WIREFRAME) && currentBoundPipeline != null) {
+                        currentWireframe = props.get(RenderState.WIREFRAME);
+                        var blendConfig = mapBlendMode(currentBlendMode);
+                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
+                    }
                 }
                 case dev.engine.graphics.command.RenderCommand.PushConstants(var data) -> {
                     data.rewind();
@@ -1783,6 +1779,21 @@ public class VkRenderDevice implements RenderDevice {
         }
     }
 
+    /**
+     * Rebinds the current pipeline with the given blend config and wireframe state,
+     * creating a new pipeline variant if needed.
+     */
+    private void rebindPipelineVariant(VkCommandBuffer cmd, VkPipelineFactory.BlendConfig blendConfig, boolean wireframe) {
+        var variantKey = currentBoundPipeline.index() + "_" + currentBlendMode.name() + "_" + wireframe;
+        long variantPipeline = pipelineVariants.computeIfAbsent(variantKey, k -> {
+            var spec = pipelineSpecs.get(currentBoundPipeline.index());
+            if (spec == null) return pipelineRegistry.get(currentBoundPipeline);
+            return VkPipelineFactory.create(device, renderPass,
+                    descriptorManager.pipelineLayout(), spec.binaries(), spec.vertexFormat(), blendConfig, wireframe);
+        });
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, variantPipeline);
+    }
+
     private VkPipelineFactory.BlendConfig mapBlendMode(BlendMode mode) {
         if (mode == BlendMode.ALPHA) return VkPipelineFactory.BlendConfig.ALPHA;
         if (mode == BlendMode.ADDITIVE) return VkPipelineFactory.BlendConfig.ADDITIVE;
@@ -1813,11 +1824,11 @@ public class VkRenderDevice implements RenderDevice {
     public void close() {
         vkDeviceWaitIdle(device);
 
-        // Destroy blend variant pipelines
-        for (long variant : pipelineBlendVariants.values()) {
+        // Destroy pipeline variants (blend + wireframe)
+        for (long variant : pipelineVariants.values()) {
             vkDestroyPipeline(device, variant, null);
         }
-        pipelineBlendVariants.clear();
+        pipelineVariants.clear();
         pipelineSpecs.clear();
 
         // Report leaked resources

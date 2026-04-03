@@ -52,19 +52,30 @@ final class VkPipelineFactory {
      * @param pipelineLayout the shared pipeline layout (from VkDescriptorManager)
      */
     /**
-     * Creates a graphics pipeline with no blending (default).
+     * Creates a graphics pipeline with no blending and filled polygons (default).
      */
     static long create(VkDevice device, long renderPass, long pipelineLayout,
                         List<ShaderBinary> binaries, VertexFormat vertexFormat) {
-        return create(device, renderPass, pipelineLayout, binaries, vertexFormat, BlendConfig.NONE);
+        return create(device, renderPass, pipelineLayout, binaries, vertexFormat, BlendConfig.NONE, false);
     }
 
     /**
-     * Creates a graphics pipeline with the specified blend configuration.
+     * Creates a graphics pipeline with the specified blend configuration and filled polygons.
      */
     static long create(VkDevice device, long renderPass, long pipelineLayout,
                         List<ShaderBinary> binaries, VertexFormat vertexFormat,
                         BlendConfig blendConfig) {
+        return create(device, renderPass, pipelineLayout, binaries, vertexFormat, blendConfig, false);
+    }
+
+    /**
+     * Creates a graphics pipeline with the specified blend configuration and polygon mode.
+     *
+     * @param wireframe if true, uses VK_POLYGON_MODE_LINE instead of VK_POLYGON_MODE_FILL
+     */
+    static long create(VkDevice device, long renderPass, long pipelineLayout,
+                        List<ShaderBinary> binaries, VertexFormat vertexFormat,
+                        BlendConfig blendConfig, boolean wireframe) {
         try (var stack = stackPush()) {
             // Create shader modules
             long[] modules = new long[binaries.size()];
@@ -144,7 +155,7 @@ final class VkPipelineFactory {
                     .sType$Default()
                     .depthClampEnable(false)
                     .rasterizerDiscardEnable(false)
-                    .polygonMode(VK_POLYGON_MODE_FILL)
+                    .polygonMode(wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL)
                     .lineWidth(1.0f)
                     .cullMode(VK_CULL_MODE_NONE)
                     .frontFace(VK_FRONT_FACE_COUNTER_CLOCKWISE)
