@@ -320,11 +320,26 @@ public class Renderer implements AutoCloseable {
 
     public void renderFrame() {
         // Process scene transactions
-        meshRenderer.processTransactions(SceneAccess.drainTransactions(scene));
+        var transactions = SceneAccess.drainTransactions(scene);
+        if (frameCount <= 3) {
+            System.out.println("[Renderer] renderFrame: " + transactions.size() + " txns, " +
+                meshRenderer.getEntities().size() + " entities before");
+        }
+        meshRenderer.processTransactions(transactions);
+        if (frameCount <= 3) {
+            System.out.println("[Renderer] renderFrame: " + meshRenderer.getEntities().size() + " entities after");
+        }
 
         // Resolve mesh/material assignments → renderables
         for (var entity : meshRenderer.getEntities()) {
             if (meshRenderer.getRenderable(entity) != null) continue; // already resolved
+
+            if (frameCount <= 3) {
+                var md = meshRenderer.getMeshData(entity);
+                var mat = meshRenderer.getMaterialData(entity);
+                System.out.println("[Renderer] Entity " + entity + ": meshData=" + (md != null) +
+                    ", material=" + (mat != null ? mat.shaderHint() : "null"));
+            }
 
             // Try MeshData first (from scene.setMesh(entity, MeshData))
             MeshHandle resolvedMesh = null;
@@ -365,6 +380,8 @@ public class Renderer implements AutoCloseable {
                         }
                         return shaderManager.getShaderWithMaterial(hint, shaderKeys);
                     } catch (Exception e) {
+                        System.err.println("[Renderer] Shader compilation FAILED for hint='" + hint + "': " + e);
+                        e.printStackTrace();
                         return null;
                     }
                 });

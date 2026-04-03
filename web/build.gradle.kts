@@ -33,11 +33,16 @@ teavm {
     }
 }
 
-// Copy webapp resources (index.html, slang-wasm) next to generated JS
+// Copy webapp resources (index.html, slang-wasm) and assets next to generated JS
 tasks.register<Copy>("assembleWeb") {
     dependsOn("generateJavaScript")
     from("src/main/webapp")
     into(layout.buildDirectory.dir("generated/js/teavm/js"))
+
+    // Copy shader files from graphics:common so they are served via HTTP
+    from(project(":graphics:common").file("src/main/resources")) {
+        into("assets")
+    }
 }
 
 tasks.named("generateJavaScript") {

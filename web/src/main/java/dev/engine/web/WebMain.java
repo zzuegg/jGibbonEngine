@@ -1,11 +1,14 @@
 package dev.engine.web;
 
+import dev.engine.core.asset.AssetManager;
+import dev.engine.core.asset.SlangShaderLoader;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.webgpu.WgpuRenderDevice;
+import dev.engine.providers.teavm.webgpu.FetchAssetSource;
 import dev.engine.providers.teavm.webgpu.TeaVmShaderCompiler;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuBindings;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuInit;
@@ -93,6 +96,13 @@ public class WebMain {
         setStatus("Creating renderer...");
         renderer = new Renderer(device, compiler);
 
+        // Wire fetch-based asset loading: shaders and assets are served via HTTP
+        // from the assets/ directory alongside the generated JS output.
+        var assetManager = new AssetManager(Runnable::run);
+        assetManager.addSource(new FetchAssetSource("assets/"));
+        assetManager.registerLoader(new SlangShaderLoader());
+        renderer.shaderManager().setAssetManager(assetManager);
+
         int width = getCanvasWidth();
         int height = getCanvasHeight();
         renderer.setViewport(width, height);
@@ -121,9 +131,22 @@ public class WebMain {
         requestAnimationFrame(WebMain::renderFrame);
     }
 
+    private static int frameCount = 0;
+
     private static void renderFrame() {
-        // Full engine render — the WgpuRenderDevice handles canvas presentation
-        // via the WindowHandle's canvas context
-        renderer.renderFrame();
+        frameCount++;
+        if (frameCount <= 3) {
+            consoleLog("[Frame " + frameCount + "] renderFrame() called");
+            consoleLog("[Frame " + frameCount + "] activeCamera=" + (renderer.activeCamera() != null));
+            consoleLog("[Frame " + frameCount + "] backendName=" + renderer.backendName());
+        }
+        try {
+            renderer.renderFrame();
+        } catch (Exception e) {
+            consoleLog("[Frame " + frameCount + "] ERROR: " + e.getClass().getName() + ": " + e.getMessage());
+        }
+        if (frameCount <= 3) {
+            consoleLog("[Frame " + frameCount + "] renderFrame() completed");
+        }
     }
 }
