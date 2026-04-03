@@ -10,7 +10,7 @@ import dev.engine.graphics.webgpu.WgpuRenderDevice;
 import dev.engine.providers.jwebgpu.JWebGpuBindings;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.graphics.window.WindowDescriptor;
-import org.lwjgl.glfw.GLFWVulkan;
+import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -187,8 +187,9 @@ public class RenderTestHarness {
         try {
             var window = toolkit.createWindow(new WindowDescriptor("Vk Test", width, height));
             var device = new VkRenderDevice(
-                    GLFWVulkan.glfwGetRequiredInstanceExtensions(),
-                    instance -> GlfwWindowToolkit.createVulkanSurface(instance, window.nativeHandle()),
+                    new LwjglVkBindings(),
+                    GlfwWindowToolkit.getRequiredVulkanExtensions(),
+                    instance -> GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, window.nativeHandle()),
                     width, height);
             return renderWith(device, scene);
         } finally {

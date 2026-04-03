@@ -35,8 +35,9 @@ class VkRenderOutputTest {
         toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Vk Render Test", 64, 64));
         device = new VkRenderDevice(
-                org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions(),
-                instance -> GlfwWindowToolkit.createVulkanSurface(instance, window.nativeHandle()),
+                new dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings(),
+                GlfwWindowToolkit.getRequiredVulkanExtensions(),
+                instance -> GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, window.nativeHandle()),
                 64, 64);
     }
 

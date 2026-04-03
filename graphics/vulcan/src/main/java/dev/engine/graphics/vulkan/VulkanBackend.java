@@ -11,7 +11,9 @@ import dev.engine.graphics.window.WindowToolkit;
  * <pre>{@code
  * // With GLFW:
  * new MyGame().launch(config, VulkanBackend.factory(
- *     new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS)));
+ *     new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS),
+ *     surfaceCreator,
+ *     vkBindings));
  * }</pre>
  */
 public final class VulkanBackend {
@@ -23,17 +25,19 @@ public final class VulkanBackend {
      * The caller provides a surface creation function since it's toolkit-specific.
      *
      * @param toolkit        the window toolkit (e.g., GLFW with NO_API hints)
-     * @param surfaceCreator given (VkInstance, nativeWindowHandle) → VkSurfaceKHR
+     * @param surfaceCreator given (VkInstance handle, nativeWindowHandle) returns VkSurfaceKHR handle
+     * @param vk             the Vulkan bindings implementation
      */
     public static BaseApplication.BackendFactory factory(
             WindowToolkit toolkit,
-            SurfaceCreator surfaceCreator) {
+            SurfaceCreator surfaceCreator,
+            VkBindings vk) {
         return config -> {
             var window = toolkit.createWindow(
                     new WindowDescriptor(config.windowTitle(), config.windowWidth(), config.windowHeight()));
             var extensions = surfaceCreator.requiredInstanceExtensions();
             long windowHandle = window.nativeHandle();
-            var device = new VkRenderDevice(extensions,
+            var device = new VkRenderDevice(vk, extensions,
                     instance -> surfaceCreator.createSurface(instance, windowHandle),
                     window.width(), window.height());
             return new BaseApplication.BackendInstance(toolkit, window, device);
@@ -41,11 +45,11 @@ public final class VulkanBackend {
     }
 
     /**
-     * Creates a Vulkan surface from a VkInstance and a native window handle.
+     * Creates a Vulkan surface from a VkInstance handle and a native window handle.
      * Implemented by the windowing toolkit (GLFW, SDL3, etc.).
      */
     public interface SurfaceCreator {
-        org.lwjgl.PointerBuffer requiredInstanceExtensions();
-        long createSurface(org.lwjgl.vulkan.VkInstance instance, long windowHandle);
+        String[] requiredInstanceExtensions();
+        long createSurface(long instance, long windowHandle);
     }
 }

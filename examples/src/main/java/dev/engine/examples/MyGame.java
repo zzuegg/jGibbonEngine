@@ -10,7 +10,7 @@ import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.opengl.OpenGlBackend;
 import dev.engine.graphics.vulkan.VulkanBackend;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
-import org.lwjgl.glfw.GLFWVulkan;
+import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
 
 public class MyGame extends BaseApplication {
 
@@ -75,15 +75,15 @@ public class MyGame extends BaseApplication {
             case "vulkan" -> {
                 var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
                 yield VulkanBackend.factory(toolkit, new VulkanBackend.SurfaceCreator() {
-                    public org.lwjgl.PointerBuffer requiredInstanceExtensions() {
-                        return GLFWVulkan.glfwGetRequiredInstanceExtensions();
+                    public String[] requiredInstanceExtensions() {
+                        return GlfwWindowToolkit.getRequiredVulkanExtensions();
                     }
-                    public long createSurface(org.lwjgl.vulkan.VkInstance instance, long windowHandle) {
-                        return GlfwWindowToolkit.createVulkanSurface(instance, windowHandle);
+                    public long createSurface(long instance, long windowHandle) {
+                        return GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
                     }
-                });
+                }, new LwjglVkBindings());
             }
-            default -> OpenGlBackend.factory();
+            default -> OpenGlBackend.factory(new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
         };
 
         new MyGame().launch(config, factory);

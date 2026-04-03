@@ -1,10 +1,5 @@
 package dev.engine.graphics.vulkan;
 
-import org.lwjgl.vulkan.*;
-
-import static org.lwjgl.system.MemoryStack.stackPush;
-import static org.lwjgl.vulkan.VK10.*;
-
 /**
  * Manages Vulkan descriptor sets for binding UBOs, SSBOs, and textures to shaders.
  *
@@ -21,7 +16,8 @@ class VkDescriptorManager implements AutoCloseable {
     private static final int TOTAL_BINDINGS = MAX_UBO_BINDINGS + MAX_TEXTURE_BINDINGS + MAX_SSBO_BINDINGS;
     private static final int MAX_SETS_PER_FRAME = 256;
 
-    private final VkDevice device;
+    private final VkBindings vk;
+    private final long device;
     private final long descriptorSetLayout;
     private final long pipelineLayout;
     private final long[] pools; // one per frame-in-flight
@@ -33,147 +29,78 @@ class VkDescriptorManager implements AutoCloseable {
     private final long dummyImageMemory;
     private final long dummySampler;
 
-    VkDescriptorManager(VkDevice device, VkPhysicalDevice physicalDevice, int frameCount,
-                         java.util.function.BiFunction<Integer, Integer, Integer> memoryTypeFinder) {
+    VkDescriptorManager(VkBindings vk, long device, long physicalDevice, int frameCount) {
+        this.vk = vk;
         this.device = device;
         this.frameCount = frameCount;
 
-        // Create a small dummy buffer for unused UBO descriptor bindings
-        try (var stack = stackPush()) {
-            var bufInfo = VkBufferCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .size(16)
-                    .usage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
-                    .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
-            var pBuf = stack.mallocLong(1);
-            vkCreateBuffer(device, bufInfo, null, pBuf);
-            dummyBuffer = pBuf.get(0);
-
-            var memReqs = VkMemoryRequirements.calloc(stack);
-            vkGetBufferMemoryRequirements(device, dummyBuffer, memReqs);
-            int memType = memoryTypeFinder.apply(memReqs.memoryTypeBits(),
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-            var allocInfo = VkMemoryAllocateInfo.calloc(stack)
-                    .sType$Default()
-                    .allocationSize(memReqs.size())
-                    .memoryTypeIndex(memType);
-            var pMem = stack.mallocLong(1);
-            vkAllocateMemory(device, allocInfo, null, pMem);
-            dummyMemory = pMem.get(0);
-            vkBindBufferMemory(device, dummyBuffer, dummyMemory, 0);
-        }
+        // Create a small dummy buffer for unused UBO/SSBO descriptor bindings
+        var dummyBufAlloc = vk.createBuffer(device, physicalDevice, 16,
+                VkBindings.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VkBindings.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                VkBindings.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkBindings.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        dummyBuffer = dummyBufAlloc.buffer();
+        dummyMemory = dummyBufAlloc.memory();
 
         // Create a 1x1 dummy image + image view + sampler for unused texture bindings
-        try (var stack = stackPush()) {
-            var imageInfo = VkImageCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .imageType(VK_IMAGE_TYPE_2D)
-                    .format(VK_FORMAT_R8G8B8A8_UNORM)
-                    .extent(e -> e.width(1).height(1).depth(1))
-                    .mipLevels(1)
-                    .arrayLayers(1)
-                    .samples(VK_SAMPLE_COUNT_1_BIT)
-                    .tiling(VK_IMAGE_TILING_OPTIMAL)
-                    .usage(VK_IMAGE_USAGE_SAMPLED_BIT)
-                    .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
-                    .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-            var pImg = stack.mallocLong(1);
-            vkCreateImage(device, imageInfo, null, pImg);
-            dummyImage = pImg.get(0);
+        var dummyImgAlloc = vk.createImage(device, physicalDevice,
+                1, 1, 1, 1, 1,
+                VkBindings.VK_FORMAT_R8G8B8A8_UNORM,
+                VkBindings.VK_IMAGE_USAGE_SAMPLED_BIT,
+                VkBindings.VK_IMAGE_TYPE_2D,
+                VkBindings.VK_IMAGE_VIEW_TYPE_2D,
+                VkBindings.VK_IMAGE_ASPECT_COLOR_BIT,
+                0);
+        dummyImage = dummyImgAlloc.image();
+        dummyImageMemory = dummyImgAlloc.memory();
+        dummyImageView = dummyImgAlloc.imageView();
 
-            var memReqs = VkMemoryRequirements.calloc(stack);
-            vkGetImageMemoryRequirements(device, dummyImage, memReqs);
-            int memType = memoryTypeFinder.apply(memReqs.memoryTypeBits(),
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-            var allocInfo = VkMemoryAllocateInfo.calloc(stack)
-                    .sType$Default()
-                    .allocationSize(memReqs.size())
-                    .memoryTypeIndex(memType);
-            var pMem = stack.mallocLong(1);
-            vkAllocateMemory(device, allocInfo, null, pMem);
-            dummyImageMemory = pMem.get(0);
-            vkBindImageMemory(device, dummyImage, dummyImageMemory, 0);
+        dummySampler = vk.createSampler(device,
+                VkBindings.VK_FILTER_NEAREST, VkBindings.VK_FILTER_NEAREST,
+                VkBindings.VK_SAMPLER_MIPMAP_MODE_NEAREST,
+                VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                0.0f, 0.0f);
 
-            var viewInfo = VkImageViewCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .image(dummyImage)
-                    .viewType(VK_IMAGE_VIEW_TYPE_2D)
-                    .format(VK_FORMAT_R8G8B8A8_UNORM)
-                    .subresourceRange(sr -> sr.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                            .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1));
-            var pView = stack.mallocLong(1);
-            vkCreateImageView(device, viewInfo, null, pView);
-            dummyImageView = pView.get(0);
+        // Build bindings arrays
+        int[] bindings = new int[TOTAL_BINDINGS];
+        int[] types = new int[TOTAL_BINDINGS];
+        int[] stageFlags = new int[TOTAL_BINDINGS];
+        int[] counts = new int[TOTAL_BINDINGS];
+        int vertFragStages = VkBindings.VK_SHADER_STAGE_VERTEX_BIT | VkBindings.VK_SHADER_STAGE_FRAGMENT_BIT;
 
-            var samplerInfo = VkSamplerCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .magFilter(VK_FILTER_NEAREST)
-                    .minFilter(VK_FILTER_NEAREST)
-                    .mipmapMode(VK_SAMPLER_MIPMAP_MODE_NEAREST)
-                    .addressModeU(VK_SAMPLER_ADDRESS_MODE_REPEAT)
-                    .addressModeV(VK_SAMPLER_ADDRESS_MODE_REPEAT)
-                    .addressModeW(VK_SAMPLER_ADDRESS_MODE_REPEAT)
-                    .maxLod(0.0f);
-            var pSampler = stack.mallocLong(1);
-            vkCreateSampler(device, samplerInfo, null, pSampler);
-            dummySampler = pSampler.get(0);
+        for (int i = 0; i < MAX_UBO_BINDINGS; i++) {
+            bindings[i] = i;
+            types[i] = VkBindings.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            stageFlags[i] = vertFragStages;
+            counts[i] = 1;
+        }
+        for (int i = 0; i < MAX_TEXTURE_BINDINGS; i++) {
+            int idx = MAX_UBO_BINDINGS + i;
+            bindings[idx] = TEXTURE_BINDING_OFFSET + i;
+            types[idx] = VkBindings.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            stageFlags[idx] = VkBindings.VK_SHADER_STAGE_FRAGMENT_BIT;
+            counts[idx] = 1;
+        }
+        for (int i = 0; i < MAX_SSBO_BINDINGS; i++) {
+            int idx = MAX_UBO_BINDINGS + MAX_TEXTURE_BINDINGS + i;
+            bindings[idx] = SSBO_BINDING_OFFSET + i;
+            types[idx] = VkBindings.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            stageFlags[idx] = vertFragStages;
+            counts[idx] = 1;
         }
 
-        try (var stack = stackPush()) {
-            // Create a layout with UBO bindings (0..15) + combined image sampler bindings (16..23)
-            var bindings = VkDescriptorSetLayoutBinding.calloc(TOTAL_BINDINGS, stack);
-            for (int i = 0; i < MAX_UBO_BINDINGS; i++) {
-                bindings.get(i)
-                        .binding(i)
-                        .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-                        .descriptorCount(1)
-                        .stageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-            }
-            for (int i = 0; i < MAX_TEXTURE_BINDINGS; i++) {
-                bindings.get(MAX_UBO_BINDINGS + i)
-                        .binding(TEXTURE_BINDING_OFFSET + i)
-                        .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                        .descriptorCount(1)
-                        .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
-            }
-            for (int i = 0; i < MAX_SSBO_BINDINGS; i++) {
-                bindings.get(MAX_UBO_BINDINGS + MAX_TEXTURE_BINDINGS + i)
-                        .binding(SSBO_BINDING_OFFSET + i)
-                        .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-                        .descriptorCount(1)
-                        .stageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-            }
+        this.descriptorSetLayout = vk.createDescriptorSetLayout(device, bindings, types, stageFlags, counts);
 
-            var layoutInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .pBindings(bindings);
+        int pushConstantStages = VkBindings.VK_SHADER_STAGE_VERTEX_BIT
+                | VkBindings.VK_SHADER_STAGE_FRAGMENT_BIT
+                | VkBindings.VK_SHADER_STAGE_COMPUTE_BIT;
+        this.pipelineLayout = vk.createPipelineLayout(device, descriptorSetLayout, 128, pushConstantStages);
 
-            var pLayout = stack.mallocLong(1);
-            int result = vkCreateDescriptorSetLayout(device, layoutInfo, null, pLayout);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create descriptor set layout: " + result);
-            this.descriptorSetLayout = pLayout.get(0);
-
-            // Create pipeline layout with this descriptor set layout + push constants
-            var pushConstantRange = VkPushConstantRange.calloc(1, stack)
-                    .stageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT)
-                    .offset(0)
-                    .size(128);
-
-            var pipelineLayoutInfo = VkPipelineLayoutCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .pSetLayouts(stack.longs(descriptorSetLayout))
-                    .pPushConstantRanges(pushConstantRange);
-
-            var pPipelineLayout = stack.mallocLong(1);
-            result = vkCreatePipelineLayout(device, pipelineLayoutInfo, null, pPipelineLayout);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create pipeline layout: " + result);
-            this.pipelineLayout = pPipelineLayout.get(0);
-
-            // Create pools (one per frame-in-flight)
-            pools = new long[frameCount];
-            for (int i = 0; i < frameCount; i++) {
-                pools[i] = createPool();
-            }
+        // Create pools (one per frame-in-flight)
+        pools = new long[frameCount];
+        for (int i = 0; i < frameCount; i++) {
+            pools[i] = createPool();
         }
     }
 
@@ -185,57 +112,53 @@ class VkDescriptorManager implements AutoCloseable {
 
     /** Resets the pool for the given frame index. Call at frame start. */
     void resetPool(int frameIndex) {
-        vkResetDescriptorPool(device, pools[frameIndex], 0);
+        vk.resetDescriptorPool(device, pools[frameIndex]);
     }
 
     /** Allocates a descriptor set pre-filled with dummy buffer/image on all bindings. */
     long allocateSet(int frameIndex) {
-        try (var stack = stackPush()) {
-            var allocInfo = VkDescriptorSetAllocateInfo.calloc(stack)
-                    .sType$Default()
-                    .descriptorPool(pools[frameIndex])
-                    .pSetLayouts(stack.longs(descriptorSetLayout));
+        long set = vk.allocateDescriptorSet(device, pools[frameIndex], descriptorSetLayout);
 
-            var pSet = stack.mallocLong(1);
-            int result = vkAllocateDescriptorSets(device, allocInfo, pSet);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to allocate descriptor set: " + result);
-            long set = pSet.get(0);
+        // Pre-fill all bindings with dummy resources
+        int bufCount = MAX_UBO_BINDINGS + MAX_SSBO_BINDINGS;
+        int[] bufferBindings = new int[bufCount];
+        int[] bufferTypes = new int[bufCount];
+        long[] buffers = new long[bufCount];
+        long[] bufferOffsets = new long[bufCount];
+        long[] bufferRanges = new long[bufCount];
 
-            // Pre-fill all UBO bindings with the dummy buffer
-            var writes = VkWriteDescriptorSet.calloc(TOTAL_BINDINGS, stack);
-            for (int i = 0; i < MAX_UBO_BINDINGS; i++) {
-                var bufferInfo = VkDescriptorBufferInfo.calloc(1, stack)
-                        .buffer(dummyBuffer).offset(0).range(16);
-                writes.get(i).sType$Default().dstSet(set).dstBinding(i)
-                        .dstArrayElement(0).descriptorCount(1)
-                        .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-                        .pBufferInfo(bufferInfo);
-            }
-            // Pre-fill all texture bindings with the dummy image+sampler
-            for (int i = 0; i < MAX_TEXTURE_BINDINGS; i++) {
-                var imageInfo = VkDescriptorImageInfo.calloc(1, stack)
-                        .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                        .imageView(dummyImageView)
-                        .sampler(dummySampler);
-                writes.get(MAX_UBO_BINDINGS + i).sType$Default().dstSet(set)
-                        .dstBinding(TEXTURE_BINDING_OFFSET + i)
-                        .dstArrayElement(0).descriptorCount(1)
-                        .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                        .pImageInfo(imageInfo);
-            }
-            // Pre-fill all SSBO bindings with the dummy buffer
-            for (int i = 0; i < MAX_SSBO_BINDINGS; i++) {
-                var bufferInfo = VkDescriptorBufferInfo.calloc(1, stack)
-                        .buffer(dummyBuffer).offset(0).range(16);
-                writes.get(MAX_UBO_BINDINGS + MAX_TEXTURE_BINDINGS + i).sType$Default().dstSet(set)
-                        .dstBinding(SSBO_BINDING_OFFSET + i)
-                        .dstArrayElement(0).descriptorCount(1)
-                        .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-                        .pBufferInfo(bufferInfo);
-            }
-            vkUpdateDescriptorSets(device, writes, null);
-            return set;
+        for (int i = 0; i < MAX_UBO_BINDINGS; i++) {
+            bufferBindings[i] = i;
+            bufferTypes[i] = VkBindings.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            buffers[i] = dummyBuffer;
+            bufferOffsets[i] = 0;
+            bufferRanges[i] = 16;
         }
+        for (int i = 0; i < MAX_SSBO_BINDINGS; i++) {
+            int idx = MAX_UBO_BINDINGS + i;
+            bufferBindings[idx] = SSBO_BINDING_OFFSET + i;
+            bufferTypes[idx] = VkBindings.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            buffers[idx] = dummyBuffer;
+            bufferOffsets[idx] = 0;
+            bufferRanges[idx] = 16;
+        }
+
+        int[] imageBindings = new int[MAX_TEXTURE_BINDINGS];
+        long[] imageViews = new long[MAX_TEXTURE_BINDINGS];
+        long[] imageSamplers = new long[MAX_TEXTURE_BINDINGS];
+        int[] imageLayouts = new int[MAX_TEXTURE_BINDINGS];
+        for (int i = 0; i < MAX_TEXTURE_BINDINGS; i++) {
+            imageBindings[i] = TEXTURE_BINDING_OFFSET + i;
+            imageViews[i] = dummyImageView;
+            imageSamplers[i] = dummySampler;
+            imageLayouts[i] = VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        }
+
+        vk.updateDescriptorSets(device, set,
+                bufferBindings, bufferTypes, buffers, bufferOffsets, bufferRanges,
+                imageBindings, imageViews, imageSamplers, imageLayouts);
+
+        return set;
     }
 
     /** Returns the texture binding offset (added to unit index to get descriptor binding). */
@@ -246,81 +169,49 @@ class VkDescriptorManager implements AutoCloseable {
 
     /** Updates a uniform buffer binding in a descriptor set. */
     void updateUniformBuffer(long descriptorSet, int binding, long buffer, long size) {
-        try (var stack = stackPush()) {
-            var bufferInfo = VkDescriptorBufferInfo.calloc(1, stack)
-                    .buffer(buffer)
-                    .offset(0)
-                    .range(size);
-
-            var write = VkWriteDescriptorSet.calloc(1, stack)
-                    .sType$Default()
-                    .dstSet(descriptorSet)
-                    .dstBinding(binding)
-                    .dstArrayElement(0)
-                    .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-                    .pBufferInfo(bufferInfo);
-
-            vkUpdateDescriptorSets(device, write, null);
-        }
+        vk.updateDescriptorSets(device, descriptorSet,
+                new int[]{binding},
+                new int[]{VkBindings.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+                new long[]{buffer}, new long[]{0}, new long[]{size},
+                null, null, null, null);
     }
 
     /** Updates a storage buffer binding in a descriptor set. */
     void updateStorageBuffer(long descriptorSet, int binding, long buffer, long size) {
-        try (var stack = stackPush()) {
-            var bufferInfo = VkDescriptorBufferInfo.calloc(1, stack)
-                    .buffer(buffer)
-                    .offset(0)
-                    .range(size);
-
-            var write = VkWriteDescriptorSet.calloc(1, stack)
-                    .sType$Default()
-                    .dstSet(descriptorSet)
-                    .dstBinding(binding)
-                    .dstArrayElement(0)
-                    .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-                    .pBufferInfo(bufferInfo);
-
-            vkUpdateDescriptorSets(device, write, null);
-        }
+        vk.updateDescriptorSets(device, descriptorSet,
+                new int[]{binding},
+                new int[]{VkBindings.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER},
+                new long[]{buffer}, new long[]{0}, new long[]{size},
+                null, null, null, null);
     }
 
     private long createPool() {
-        try (var stack = stackPush()) {
-            var poolSizes = VkDescriptorPoolSize.calloc(3, stack);
-            poolSizes.get(0)
-                    .type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-                    .descriptorCount(MAX_UBO_BINDINGS * MAX_SETS_PER_FRAME);
-            poolSizes.get(1)
-                    .type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                    .descriptorCount(MAX_TEXTURE_BINDINGS * MAX_SETS_PER_FRAME);
-            poolSizes.get(2)
-                    .type(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-                    .descriptorCount(MAX_SSBO_BINDINGS * MAX_SETS_PER_FRAME);
-
-            var poolInfo = VkDescriptorPoolCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .pPoolSizes(poolSizes)
-                    .maxSets(MAX_SETS_PER_FRAME);
-
-            var pPool = stack.mallocLong(1);
-            int result = vkCreateDescriptorPool(device, poolInfo, null, pPool);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create descriptor pool: " + result);
-            return pPool.get(0);
-        }
+        return vk.createDescriptorPool(device,
+                new int[]{
+                        VkBindings.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                        VkBindings.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                        VkBindings.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+                },
+                new int[]{
+                        MAX_UBO_BINDINGS * MAX_SETS_PER_FRAME,
+                        MAX_TEXTURE_BINDINGS * MAX_SETS_PER_FRAME,
+                        MAX_SSBO_BINDINGS * MAX_SETS_PER_FRAME
+                },
+                MAX_SETS_PER_FRAME);
     }
 
     @Override
     public void close() {
         for (long pool : pools) {
-            vkDestroyDescriptorPool(device, pool, null);
+            vk.destroyDescriptorPool(device, pool);
         }
-        vkDestroyPipelineLayout(device, pipelineLayout, null);
-        vkDestroyDescriptorSetLayout(device, descriptorSetLayout, null);
-        vkDestroySampler(device, dummySampler, null);
-        vkDestroyImageView(device, dummyImageView, null);
-        vkDestroyImage(device, dummyImage, null);
-        vkFreeMemory(device, dummyImageMemory, null);
-        vkFreeMemory(device, dummyMemory, null);
-        vkDestroyBuffer(device, dummyBuffer, null);
+        vk.destroyPipelineLayout(device, pipelineLayout);
+        vk.destroyDescriptorSetLayout(device, descriptorSetLayout);
+        vk.destroySampler(device, dummySampler);
+        vk.destroyImageView(device, dummyImageView);
+        vk.destroyImage(device, dummyImage);
+        vk.freeMemory(device, dummyImageMemory);
+        vk.freeMemory(device, dummyMemory);
+        vk.destroyBuffer(device, dummyBuffer);
     }
 }

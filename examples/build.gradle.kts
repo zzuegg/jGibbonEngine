@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":graphics:opengl"))
     implementation(project(":providers:lwjgl-gl"))
     implementation(project(":graphics:vulcan"))
+    implementation(project(":providers:lwjgl-vk"))
     implementation(project(":graphics:webgpu"))
     implementation(project(":providers:jwebgpu"))
     implementation(project(":bindings:slang"))

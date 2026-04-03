@@ -116,6 +116,30 @@ public class GlfwWindowToolkit implements WindowToolkit {
         }
     }
 
+    /**
+     * Creates a Vulkan surface from a raw VkInstance handle (long) and a GLFW window handle.
+     * This overload does not require the LWJGL VkInstance wrapper — it creates one internally.
+     */
+    public static long createVulkanSurfaceFromHandle(long instanceHandle, long windowHandle) {
+        // Reconstruct a minimal VkInstance from the raw handle for GLFW's benefit
+        var instance = new org.lwjgl.vulkan.VkInstance(instanceHandle,
+                org.lwjgl.vulkan.VkInstanceCreateInfo.calloc().sType$Default());
+        return createVulkanSurface(instance, windowHandle);
+    }
+
+    /**
+     * Returns the required Vulkan instance extensions as a String array.
+     */
+    public static String[] getRequiredVulkanExtensions() {
+        var buf = org.lwjgl.glfw.GLFWVulkan.glfwGetRequiredInstanceExtensions();
+        if (buf == null) return new String[0];
+        String[] result = new String[buf.remaining()];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = org.lwjgl.system.MemoryUtil.memUTF8(buf.get(buf.position() + i));
+        }
+        return result;
+    }
+
     public static class GlfwWindowHandle implements WindowHandle {
         private long handle;
         private final WindowDescriptor descriptor;

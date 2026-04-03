@@ -12,42 +12,28 @@ import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureType;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.renderstate.*;
-import org.lwjgl.PointerBuffer;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.vulkan.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
-import java.nio.IntBuffer;
-import java.nio.LongBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.lwjgl.system.MemoryStack.stackPush;
-import static org.lwjgl.system.MemoryUtil.*;
-import static org.lwjgl.vulkan.EXTDebugUtils.*;
-import static org.lwjgl.vulkan.KHRSurface.*;
-import static org.lwjgl.vulkan.KHRSwapchain.*;
-import static org.lwjgl.vulkan.VK10.*;
-
 public class VkRenderDevice implements RenderDevice {
 
     private static final Logger log = LoggerFactory.getLogger(VkRenderDevice.class);
 
-    private final VkInstance instance;
-    private final VkPhysicalDevice physicalDevice;
-    private final VkDevice device;
-    private final VkQueue graphicsQueue;
+    private final VkBindings vk;
+    private final long instance;
+    private final long physicalDevice;
+    private final long device;
+    private final long graphicsQueue;
     private final long commandPool;
     private final int graphicsQueueFamily;
-    private final VkPhysicalDeviceProperties deviceProperties;
-    private final VkPhysicalDeviceMemoryProperties memoryProperties;
 
     private final long surface;
     private final VkSwapchain swapchain;
@@ -60,7 +46,7 @@ public class VkRenderDevice implements RenderDevice {
     private final VkDescriptorManager descriptorManager;
     private int currentFrame = 0;
     private int currentImageIndex = -1;
-    private long currentDescriptorSet = VK_NULL_HANDLE;
+    private long currentDescriptorSet = VkBindings.VK_NULL_HANDLE;
     private boolean descriptorDirty = false;
     private final long[] pendingUboBuffers = new long[16];
     private final long[] pendingUboSizes = new long[16];
@@ -110,265 +96,96 @@ public class VkRenderDevice implements RenderDevice {
     /**
      * Creates a Vulkan render device.
      *
+     * @param vk                 the Vulkan bindings implementation
      * @param requiredExtensions instance extensions needed for surface support
-     *                           (e.g., from {@code glfwGetRequiredInstanceExtensions})
-     * @param surfaceFactory     given the VkInstance, creates and returns a VkSurfaceKHR handle
+     * @param surfaceFactory     given the VkInstance handle, creates and returns a VkSurfaceKHR handle
      */
-    public VkRenderDevice(PointerBuffer requiredExtensions,
-                           java.util.function.Function<VkInstance, Long> surfaceFactory,
+    public VkRenderDevice(VkBindings vk, String[] requiredExtensions,
+                           java.util.function.LongUnaryOperator surfaceFactory,
                            int initialWidth, int initialHeight) {
-        try (var stack = stackPush()) {
-            // --- Create VkInstance ---
-            var appInfo = VkApplicationInfo.calloc(stack)
-                    .sType$Default()
-                    .pApplicationName(stack.UTF8("Engine"))
-                    .applicationVersion(VK_MAKE_VERSION(0, 1, 0))
-                    .pEngineName(stack.UTF8("Engine"))
-                    .engineVersion(VK_MAKE_VERSION(0, 1, 0))
-                    .apiVersion(VK13.VK_API_VERSION_1_3);
+        this.vk = vk;
 
-            // Required surface extensions (provided by windowing toolkit)
-
-            // Check for validation layer support
-            boolean validationAvailable = false;
-            IntBuffer layerCount = stack.ints(0);
-            vkEnumerateInstanceLayerProperties(layerCount, null);
-            var availableLayers = VkLayerProperties.calloc(layerCount.get(0), stack);
-            vkEnumerateInstanceLayerProperties(layerCount, availableLayers);
-            for (int i = 0; i < availableLayers.capacity(); i++) {
-                if ("VK_LAYER_KHRONOS_validation".equals(availableLayers.get(i).layerNameString())) {
-                    validationAvailable = true;
-                    break;
-                }
-            }
-
-            PointerBuffer enabledLayers = null;
-            if (validationAvailable) {
-                enabledLayers = stack.pointers(stack.UTF8("VK_LAYER_KHRONOS_validation"));
-                log.info("Vulkan validation layers enabled");
-            }
-
-            // Add debug utils extension if validation is available
-            PointerBuffer allExtensions;
-            if (validationAvailable && requiredExtensions != null) {
-                allExtensions = stack.mallocPointer(requiredExtensions.remaining() + 1);
-                for (int i = 0; i < requiredExtensions.remaining(); i++) {
-                    allExtensions.put(requiredExtensions.get(requiredExtensions.position() + i));
-                }
-                allExtensions.put(stack.UTF8(VK_EXT_DEBUG_UTILS_EXTENSION_NAME));
-                allExtensions.flip();
-            } else {
-                allExtensions = requiredExtensions;
-            }
-
-            var createInfo = VkInstanceCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .pApplicationInfo(appInfo)
-                    .ppEnabledExtensionNames(allExtensions)
-                    .ppEnabledLayerNames(enabledLayers);
-
-            PointerBuffer pInstance = stack.mallocPointer(1);
-            int result = vkCreateInstance(createInfo, null, pInstance);
-            if (result != VK_SUCCESS) {
-                throw new RuntimeException("Failed to create VkInstance: " + result);
-            }
-            this.instance = new VkInstance(pInstance.get(0), createInfo);
-
-            // Setup debug messenger for validation messages
-            if (validationAvailable) {
-                try {
-                    var debugInfo = VkDebugUtilsMessengerCreateInfoEXT.calloc(stack)
-                            .sType$Default()
-                            .messageSeverity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-                            .messageType(VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
-                            .pfnUserCallback((severity, type, pCallbackData, pUserData) -> {
-                                var data = VkDebugUtilsMessengerCallbackDataEXT.create(pCallbackData);
-                                var msg = data.pMessageString();
-                                if ((severity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0) {
-                                    log.error("[Vulkan Validation] {}", msg);
-                                } else {
-                                    log.warn("[Vulkan Validation] {}", msg);
-                                }
-                                return VK_FALSE;
-                            });
-                    var pMessenger = stack.mallocLong(1);
-                    // VK_EXT_debug_utils must be enabled - add to instance extensions
-                    // For now just log, don't fail if extension not available
-                    vkCreateDebugUtilsMessengerEXT(instance, debugInfo, null, pMessenger);
-                } catch (Exception e) {
-                    log.debug("Debug messenger setup failed (expected if VK_EXT_debug_utils not enabled): {}", e.getMessage());
-                }
-            }
-
-            this.surface = surfaceFactory.apply(instance);
-
-            // --- Pick physical device ---
-            IntBuffer deviceCount = stack.ints(0);
-            vkEnumeratePhysicalDevices(instance, deviceCount, null);
-            if (deviceCount.get(0) == 0) {
-                throw new RuntimeException("No Vulkan-capable GPUs found");
-            }
-            PointerBuffer pDevices = stack.mallocPointer(deviceCount.get(0));
-            vkEnumeratePhysicalDevices(instance, deviceCount, pDevices);
-
-            VkPhysicalDevice chosen = null;
-            int chosenQueueFamily = -1;
-
-            for (int i = 0; i < deviceCount.get(0); i++) {
-                var candidate = new VkPhysicalDevice(pDevices.get(i), instance);
-
-                IntBuffer queueFamilyCount = stack.ints(0);
-                vkGetPhysicalDeviceQueueFamilyProperties(candidate, queueFamilyCount, null);
-                var queueFamilies = VkQueueFamilyProperties.calloc(queueFamilyCount.get(0), stack);
-                vkGetPhysicalDeviceQueueFamilyProperties(candidate, queueFamilyCount, queueFamilies);
-
-                for (int q = 0; q < queueFamilyCount.get(0); q++) {
-                    if ((queueFamilies.get(q).queueFlags() & VK_QUEUE_GRAPHICS_BIT) != 0) {
-                        // Also check presentation support
-                        IntBuffer presentSupport = stack.ints(0);
-                        vkGetPhysicalDeviceSurfaceSupportKHR(candidate, q, surface, presentSupport);
-                        if (presentSupport.get(0) == VK_TRUE) {
-                            chosen = candidate;
-                            chosenQueueFamily = q;
-                            break;
-                        }
+        // --- Create VkInstance ---
+        this.instance = vk.createInstance(true, requiredExtensions,
+                (severity, msg) -> {
+                    if ((severity & 0x00000100) != 0) { // ERROR
+                        log.error("[Vulkan Validation] {}", msg);
+                    } else {
+                        log.warn("[Vulkan Validation] {}", msg);
                     }
-                }
-                if (chosen != null) break;
-            }
+                });
 
-            if (chosen == null) {
-                throw new RuntimeException("No GPU with graphics queue found");
-            }
-            this.physicalDevice = chosen;
-            this.graphicsQueueFamily = chosenQueueFamily;
+        this.surface = surfaceFactory.applyAsLong(instance);
 
-            // Query and log device properties
-            this.deviceProperties = VkPhysicalDeviceProperties.calloc();
-            vkGetPhysicalDeviceProperties(physicalDevice, deviceProperties);
-
-            int apiVersion = deviceProperties.apiVersion();
-            log.info("Vulkan device: {} (Vulkan {}.{}.{})",
-                    deviceProperties.deviceNameString(),
-                    VK_VERSION_MAJOR(apiVersion),
-                    VK_VERSION_MINOR(apiVersion),
-                    VK_VERSION_PATCH(apiVersion));
-
-            // Query memory properties
-            this.memoryProperties = VkPhysicalDeviceMemoryProperties.calloc();
-            vkGetPhysicalDeviceMemoryProperties(physicalDevice, memoryProperties);
-
-            // --- Create logical device ---
-            float[] priorities = {1.0f};
-            var queueCreateInfo = VkDeviceQueueCreateInfo.calloc(1, stack)
-                    .sType$Default()
-                    .queueFamilyIndex(graphicsQueueFamily)
-                    .pQueuePriorities(stack.floats(priorities));
-
-            // Enable VK_KHR_swapchain
-            var deviceExtensions = stack.pointers(stack.UTF8(KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME));
-
-            var deviceCreateInfo = VkDeviceCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .pQueueCreateInfos(queueCreateInfo)
-                    .ppEnabledExtensionNames(deviceExtensions);
-
-            PointerBuffer pDevice = stack.mallocPointer(1);
-            result = vkCreateDevice(physicalDevice, deviceCreateInfo, null, pDevice);
-            if (result != VK_SUCCESS) {
-                throw new RuntimeException("Failed to create logical device: " + result);
-            }
-            this.device = new VkDevice(pDevice.get(0), physicalDevice, deviceCreateInfo);
-
-            // --- Get graphics queue ---
-            PointerBuffer pQueue = stack.mallocPointer(1);
-            vkGetDeviceQueue(device, graphicsQueueFamily, 0, pQueue);
-            this.graphicsQueue = new VkQueue(pQueue.get(0), device);
-
-            // --- Create command pool ---
-            var poolCreateInfo = VkCommandPoolCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .flags(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT)
-                    .queueFamilyIndex(graphicsQueueFamily);
-
-            LongBuffer pCommandPool = stack.mallocLong(1);
-            result = vkCreateCommandPool(device, poolCreateInfo, null, pCommandPool);
-            if (result != VK_SUCCESS) {
-                throw new RuntimeException("Failed to create command pool: " + result);
-            }
-            this.commandPool = pCommandPool.get(0);
-
-            // --- Create swapchain + render pass + framebuffers ---
-            this.swapchain = new VkSwapchain(device, physicalDevice, surface, graphicsQueueFamily);
-            swapchain.create(initialWidth, initialHeight);
-
-            this.depthFormat = VkRenderPassFactory.findDepthFormat(physicalDevice);
-            this.renderPass = VkRenderPassFactory.createColorDepth(device, swapchain.imageFormat(), depthFormat);
-
-            this.framebuffers = new VkFramebufferSet(device, physicalDevice);
-            framebuffers.create(swapchain, renderPass, depthFormat);
-
-            // --- Create per-frame resources ---
-            this.frames = new VkFrameContext[MAX_FRAMES_IN_FLIGHT];
-            for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-                frames[i] = new VkFrameContext(device, commandPool);
-            }
-
-            this.descriptorManager = new VkDescriptorManager(device, physicalDevice, MAX_FRAMES_IN_FLIGHT, this::findMemoryType);
-
-            log.info("Vulkan render device initialized (swapchain: {}x{}, {} images)",
-                    swapchain.width(), swapchain.height(), swapchain.imageCount());
+        // --- Pick physical device ---
+        long[] physicalDevices = vk.enumeratePhysicalDevices(instance);
+        if (physicalDevices.length == 0) {
+            throw new RuntimeException("No Vulkan-capable GPUs found");
         }
+
+        long chosen = 0;
+        int chosenQueueFamily = -1;
+        for (long pd : physicalDevices) {
+            int qf = vk.findGraphicsQueueFamily(instance, pd, surface);
+            if (qf >= 0) {
+                chosen = pd;
+                chosenQueueFamily = qf;
+                break;
+            }
+        }
+        if (chosen == 0) {
+            throw new RuntimeException("No GPU with graphics queue found");
+        }
+        this.physicalDevice = chosen;
+        this.graphicsQueueFamily = chosenQueueFamily;
+
+        // Log device info
+        String deviceName = vk.getDeviceName(instance, physicalDevice);
+        int[] apiVer = vk.getApiVersion(instance, physicalDevice);
+        log.info("Vulkan device: {} (Vulkan {}.{}.{})", deviceName, apiVer[0], apiVer[1], apiVer[2]);
+
+        // --- Create logical device ---
+        this.device = vk.createDevice(instance, physicalDevice, graphicsQueueFamily,
+                new String[]{"VK_KHR_swapchain"});
+
+        // --- Get graphics queue ---
+        this.graphicsQueue = vk.getDeviceQueue(device, physicalDevice, graphicsQueueFamily);
+
+        // --- Create command pool ---
+        this.commandPool = vk.createCommandPool(device, graphicsQueueFamily,
+                VkBindings.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+        // --- Create swapchain + render pass + framebuffers ---
+        this.swapchain = new VkSwapchain(vk, device, physicalDevice, surface);
+        swapchain.create(initialWidth, initialHeight);
+
+        this.depthFormat = VkRenderPassFactory.findDepthFormat(vk, instance, physicalDevice);
+        this.renderPass = VkRenderPassFactory.createColorDepth(vk, device, swapchain.imageFormat(), depthFormat);
+
+        this.framebuffers = new VkFramebufferSet(vk, device, physicalDevice);
+        framebuffers.create(swapchain, renderPass, depthFormat);
+
+        // --- Create per-frame resources ---
+        this.frames = new VkFrameContext[MAX_FRAMES_IN_FLIGHT];
+        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            frames[i] = new VkFrameContext(vk, device, commandPool);
+        }
+
+        this.descriptorManager = new VkDescriptorManager(vk, device, physicalDevice, MAX_FRAMES_IN_FLIGHT);
+
+        log.info("Vulkan render device initialized (swapchain: {}x{}, {} images)",
+                swapchain.width(), swapchain.height(), swapchain.imageCount());
     }
 
     // --- Buffer operations ---
 
     @Override
     public Handle<BufferResource> createBuffer(BufferDescriptor descriptor) {
-        try (var stack = stackPush()) {
-            int usageFlags = mapBufferUsage(descriptor.usage());
-            int memoryFlags = mapAccessPattern(descriptor.accessPattern());
+        int usageFlags = mapBufferUsage(descriptor.usage());
+        int memoryFlags = mapAccessPattern(descriptor.accessPattern());
 
-            var bufferInfo = VkBufferCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .size(descriptor.size())
-                    .usage(usageFlags)
-                    .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
-
-            LongBuffer pBuffer = stack.mallocLong(1);
-            int result = vkCreateBuffer(device, bufferInfo, null, pBuffer);
-            if (result != VK_SUCCESS) {
-                throw new RuntimeException("Failed to create buffer: " + result);
-            }
-            long buffer = pBuffer.get(0);
-
-            var memRequirements = VkMemoryRequirements.calloc(stack);
-            vkGetBufferMemoryRequirements(device, buffer, memRequirements);
-
-            int memTypeIndex = findMemoryType(memRequirements.memoryTypeBits(), memoryFlags);
-
-            var allocInfo = VkMemoryAllocateInfo.calloc(stack)
-                    .sType$Default()
-                    .allocationSize(memRequirements.size())
-                    .memoryTypeIndex(memTypeIndex);
-
-            LongBuffer pMemory = stack.mallocLong(1);
-            result = vkAllocateMemory(device, allocInfo, null, pMemory);
-            if (result != VK_SUCCESS) {
-                vkDestroyBuffer(device, buffer, null);
-                throw new RuntimeException("Failed to allocate buffer memory: " + result);
-            }
-            long memory = pMemory.get(0);
-
-            result = vkBindBufferMemory(device, buffer, memory, 0);
-            if (result != VK_SUCCESS) {
-                vkFreeMemory(device, memory, null);
-                vkDestroyBuffer(device, buffer, null);
-                throw new RuntimeException("Failed to bind buffer memory: " + result);
-            }
-
-            return bufferRegistry.register(new BufferAllocation(buffer, memory, descriptor.size()));
-        }
+        var alloc = vk.createBuffer(device, physicalDevice, descriptor.size(), usageFlags, memoryFlags);
+        return bufferRegistry.register(new BufferAllocation(alloc.buffer(), alloc.memory(), descriptor.size()));
     }
 
     @Override
@@ -376,8 +193,8 @@ public class VkRenderDevice implements RenderDevice {
         if (!bufferRegistry.isValid(handle)) return;
         var alloc = bufferRegistry.remove(handle);
         if (alloc != null) {
-            vkFreeMemory(device, alloc.memory(), null);
-            vkDestroyBuffer(device, alloc.buffer(), null);
+            vk.freeMemory(device, alloc.memory());
+            vk.destroyBuffer(device, alloc.buffer());
         }
     }
 
@@ -398,29 +215,21 @@ public class VkRenderDevice implements RenderDevice {
         var alloc = bufferRegistry.get(handle);
         if (alloc == null) throw new IllegalArgumentException("Invalid buffer handle");
 
-        try (var stack = stackPush()) {
-            PointerBuffer pData = stack.mallocPointer(1);
-            int result = vkMapMemory(device, alloc.memory(), offset, length, 0, pData);
-            if (result != VK_SUCCESS) {
-                throw new RuntimeException("Failed to map buffer memory: " + result);
+        long dataPtr = vk.mapMemory(device, alloc.memory(), offset, length);
+        MemorySegment segment = MemorySegment.ofAddress(dataPtr).reinterpret(length);
+        long memory = alloc.memory();
+
+        return new BufferWriter() {
+            @Override
+            public MemorySegment segment() {
+                return segment;
             }
-            long dataPtr = pData.get(0);
-            MemorySegment segment = MemorySegment.ofAddress(dataPtr).reinterpret(length);
-            long memory = alloc.memory();
-            VkDevice dev = this.device;
 
-            return new BufferWriter() {
-                @Override
-                public MemorySegment segment() {
-                    return segment;
-                }
-
-                @Override
-                public void close() {
-                    vkUnmapMemory(dev, memory);
-                }
-            };
-        }
+            @Override
+            public void close() {
+                vk.unmapMemory(device, memory);
+            }
+        };
     }
 
     // --- Texture operations ---
@@ -430,78 +239,35 @@ public class VkRenderDevice implements RenderDevice {
         int vkFormat = mapTextureFormat(descriptor.format());
         int mipLevels = computeMipLevels(descriptor);
         boolean isDepth = isDepthFormat(descriptor.format());
-        int aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-        int usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        int aspectMask = isDepth ? VkBindings.VK_IMAGE_ASPECT_DEPTH_BIT : VkBindings.VK_IMAGE_ASPECT_COLOR_BIT;
+        int usage = VkBindings.VK_IMAGE_USAGE_SAMPLED_BIT | VkBindings.VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         if (mipLevels > 1) {
-            usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // needed for mip generation
+            usage |= VkBindings.VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         }
 
-        try (var stack = stackPush()) {
-            // Map texture type to Vulkan image/view types
-            int imageType = descriptor.type() == TextureType.TEXTURE_3D ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
-            int viewType = switch (descriptor.type().name()) {
-                case "TEXTURE_3D"       -> VK_IMAGE_VIEW_TYPE_3D;
-                case "TEXTURE_2D_ARRAY" -> VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-                case "TEXTURE_CUBE"     -> VK_IMAGE_VIEW_TYPE_CUBE;
-                default                 -> VK_IMAGE_VIEW_TYPE_2D;
-            };
-            int extentDepth = descriptor.type() == TextureType.TEXTURE_3D ? descriptor.depth() : 1;
-            int arrayLayers = (descriptor.type() == TextureType.TEXTURE_2D_ARRAY || descriptor.type() == TextureType.TEXTURE_CUBE)
-                    ? descriptor.layers() : 1;
-            int createFlags = descriptor.type() == TextureType.TEXTURE_CUBE ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
+        // Map texture type to Vulkan image/view types
+        int imageType = descriptor.type() == TextureType.TEXTURE_3D ? VkBindings.VK_IMAGE_TYPE_3D : VkBindings.VK_IMAGE_TYPE_2D;
+        int viewType = switch (descriptor.type().name()) {
+            case "TEXTURE_3D"       -> VkBindings.VK_IMAGE_VIEW_TYPE_3D;
+            case "TEXTURE_2D_ARRAY" -> VkBindings.VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+            case "TEXTURE_CUBE"     -> VkBindings.VK_IMAGE_VIEW_TYPE_CUBE;
+            default                 -> VkBindings.VK_IMAGE_VIEW_TYPE_2D;
+        };
+        int extentDepth = descriptor.type() == TextureType.TEXTURE_3D ? descriptor.depth() : 1;
+        int arrayLayers = (descriptor.type() == TextureType.TEXTURE_2D_ARRAY || descriptor.type() == TextureType.TEXTURE_CUBE)
+                ? descriptor.layers() : 1;
+        int createFlags = descriptor.type() == TextureType.TEXTURE_CUBE ? VkBindings.VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
 
-            // Create VkImage
-            var imageInfo = VkImageCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .flags(createFlags)
-                    .imageType(imageType)
-                    .format(vkFormat)
-                    .extent(e -> e.width(descriptor.width()).height(descriptor.height()).depth(extentDepth))
-                    .mipLevels(mipLevels)
-                    .arrayLayers(arrayLayers)
-                    .samples(VK_SAMPLE_COUNT_1_BIT)
-                    .tiling(VK_IMAGE_TILING_OPTIMAL)
-                    .usage(usage)
-                    .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
-                    .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-            var pImage = stack.mallocLong(1);
-            int result = vkCreateImage(device, imageInfo, null, pImage);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create image: " + result);
-            long image = pImage.get(0);
+        var imgAlloc = vk.createImage(device, physicalDevice,
+                descriptor.width(), descriptor.height(), extentDepth, arrayLayers,
+                mipLevels, vkFormat, usage, imageType, viewType, aspectMask, createFlags);
 
-            // Allocate DEVICE_LOCAL memory
-            var memReqs = VkMemoryRequirements.calloc(stack);
-            vkGetImageMemoryRequirements(device, image, memReqs);
-            int memType = findMemoryType(memReqs.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-            var allocInfo = VkMemoryAllocateInfo.calloc(stack)
-                    .sType$Default()
-                    .allocationSize(memReqs.size())
-                    .memoryTypeIndex(memType);
-            var pMemory = stack.mallocLong(1);
-            result = vkAllocateMemory(device, allocInfo, null, pMemory);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to allocate image memory: " + result);
-            long memory = pMemory.get(0);
-            vkBindImageMemory(device, image, memory, 0);
+        // Transition layout: UNDEFINED -> SHADER_READ_ONLY_OPTIMAL
+        transitionImageLayout(imgAlloc.image(), VkBindings.VK_IMAGE_LAYOUT_UNDEFINED,
+                VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, aspectMask, mipLevels);
 
-            // Create VkImageView
-            var viewInfo = VkImageViewCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .image(image)
-                    .viewType(viewType)
-                    .format(vkFormat)
-                    .subresourceRange(sr -> sr.aspectMask(aspectMask)
-                            .baseMipLevel(0).levelCount(mipLevels).baseArrayLayer(0).layerCount(arrayLayers));
-            var pView = stack.mallocLong(1);
-            result = vkCreateImageView(device, viewInfo, null, pView);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create image view: " + result);
-            long imageView = pView.get(0);
-
-            // Transition layout: UNDEFINED -> SHADER_READ_ONLY_OPTIMAL
-            transitionImageLayout(image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    aspectMask, mipLevels);
-
-            return textureRegistry.register(new VkTextureAllocation(image, memory, imageView, descriptor));
-        }
+        return textureRegistry.register(new VkTextureAllocation(
+                imgAlloc.image(), imgAlloc.memory(), imgAlloc.imageView(), descriptor));
     }
 
     @Override
@@ -512,85 +278,55 @@ public class VkRenderDevice implements RenderDevice {
         long imageSize = pixels.remaining();
         int mipLevels = computeMipLevels(alloc.desc());
         boolean isDepth = isDepthFormat(alloc.desc().format());
-        int aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+        int aspectMask = isDepth ? VkBindings.VK_IMAGE_ASPECT_DEPTH_BIT : VkBindings.VK_IMAGE_ASPECT_COLOR_BIT;
 
-        try (var stack = stackPush()) {
-            // Create staging buffer
-            var bufInfo = VkBufferCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .size(imageSize)
-                    .usage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
-                    .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
-            var pBuf = stack.mallocLong(1);
-            vkCreateBuffer(device, bufInfo, null, pBuf);
-            long stagingBuffer = pBuf.get(0);
+        // Create staging buffer
+        var staging = vk.createBuffer(device, physicalDevice, imageSize,
+                VkBindings.VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                VkBindings.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkBindings.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-            var memReqs = VkMemoryRequirements.calloc(stack);
-            vkGetBufferMemoryRequirements(device, stagingBuffer, memReqs);
-            int memType = findMemoryType(memReqs.memoryTypeBits(),
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-            var allocInfo = VkMemoryAllocateInfo.calloc(stack)
-                    .sType$Default()
-                    .allocationSize(memReqs.size())
-                    .memoryTypeIndex(memType);
-            var pMem = stack.mallocLong(1);
-            vkAllocateMemory(device, allocInfo, null, pMem);
-            long stagingMemory = pMem.get(0);
-            vkBindBufferMemory(device, stagingBuffer, stagingMemory, 0);
+        // Map and copy pixel data
+        long dataPtr = vk.mapMemory(device, staging.memory(), 0, imageSize);
+        MemorySegment srcSeg = MemorySegment.ofBuffer(pixels);
+        MemorySegment dstSeg = MemorySegment.ofAddress(dataPtr).reinterpret(imageSize);
+        dstSeg.copyFrom(srcSeg);
+        vk.unmapMemory(device, staging.memory());
 
-            // Map and copy pixel data
-            var pData = stack.mallocPointer(1);
-            vkMapMemory(device, stagingMemory, 0, imageSize, 0, pData);
-            memCopy(memAddress(pixels), pData.get(0), imageSize);
-            vkUnmapMemory(device, stagingMemory);
+        // Execute copy via one-shot command buffer
+        executeOneShot(cmd -> {
+            // Transition: SHADER_READ_ONLY -> TRANSFER_DST
+            vk.cmdImageBarrier(cmd, alloc.image(),
+                    VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VkBindings.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VkBindings.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    0, VkBindings.VK_ACCESS_TRANSFER_WRITE_BIT,
+                    aspectMask, 0, mipLevels);
 
-            // Execute copy via one-shot command buffer
-            executeOneShot(cmd -> {
-                try (var inner = stackPush()) {
-                    // Transition: SHADER_READ_ONLY -> TRANSFER_DST
-                    var barrier = VkImageMemoryBarrier.calloc(1, inner)
-                            .sType$Default()
-                            .oldLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                            .newLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-                            .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                            .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                            .image(alloc.image())
-                            .subresourceRange(sr -> sr.aspectMask(aspectMask)
-                                    .baseMipLevel(0).levelCount(mipLevels).baseArrayLayer(0).layerCount(1))
-                            .srcAccessMask(0)
-                            .dstAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT);
-                    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                            VK_PIPELINE_STAGE_TRANSFER_BIT, 0, null, null, barrier);
+            // Copy buffer to image (mip level 0)
+            vk.cmdCopyBufferToImage(cmd, staging.buffer(), alloc.image(),
+                    VkBindings.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    alloc.desc().width(), alloc.desc().height(), aspectMask, 0);
 
-                    // Copy buffer to image (mip level 0)
-                    var region = VkBufferImageCopy.calloc(1, inner)
-                            .bufferOffset(0).bufferRowLength(0).bufferImageHeight(0)
-                            .imageSubresource(s -> s.aspectMask(aspectMask)
-                                    .mipLevel(0).baseArrayLayer(0).layerCount(1))
-                            .imageOffset(o -> o.x(0).y(0).z(0))
-                            .imageExtent(e -> e.width(alloc.desc().width()).height(alloc.desc().height()).depth(1));
-                    vkCmdCopyBufferToImage(cmd, stagingBuffer, alloc.image(),
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
+            // Transition back: TRANSFER_DST -> SHADER_READ_ONLY
+            vk.cmdImageBarrier(cmd, alloc.image(),
+                    VkBindings.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    VkBindings.VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VkBindings.VK_ACCESS_SHADER_READ_BIT,
+                    aspectMask, 0, mipLevels);
+        });
 
-                    // Transition back: TRANSFER_DST -> SHADER_READ_ONLY
-                    barrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
-                            .newLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                            .srcAccessMask(VK_ACCESS_TRANSFER_WRITE_BIT)
-                            .dstAccessMask(VK_ACCESS_SHADER_READ_BIT);
-                    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, null, null, barrier);
-                }
-            });
-
-            // Mark mips dirty so they are generated lazily when a mipmap sampler is bound
-            if (computeMipLevels(alloc.desc()) > 1) {
-                textureMipsDirty.put(texture.index(), true);
-            }
-
-            // Cleanup staging resources
-            vkFreeMemory(device, stagingMemory, null);
-            vkDestroyBuffer(device, stagingBuffer, null);
+        // Mark mips dirty so they are generated lazily when a mipmap sampler is bound
+        if (mipLevels > 1) {
+            textureMipsDirty.put(texture.index(), true);
         }
+
+        // Cleanup staging resources
+        vk.freeMemory(device, staging.memory());
+        vk.destroyBuffer(device, staging.buffer());
     }
 
     @Override
@@ -598,9 +334,9 @@ public class VkRenderDevice implements RenderDevice {
         if (!textureRegistry.isValid(handle)) return;
         var alloc = textureRegistry.remove(handle);
         if (alloc != null) {
-            vkDestroyImageView(device, alloc.imageView(), null);
-            vkDestroyImage(device, alloc.image(), null);
-            vkFreeMemory(device, alloc.memory(), null);
+            vk.destroyImageView(device, alloc.imageView());
+            vk.destroyImage(device, alloc.image());
+            vk.freeMemory(device, alloc.memory());
         }
     }
 
@@ -618,159 +354,74 @@ public class VkRenderDevice implements RenderDevice {
 
     @Override
     public Handle<RenderTargetResource> createRenderTarget(RenderTargetDescriptor descriptor) {
-        try (var stack = stackPush()) {
-            var colorAttachments = new ArrayList<VkTextureAllocation>();
-            var colorTextureHandles = new ArrayList<Handle<TextureResource>>();
+        var colorAttachments = new ArrayList<VkTextureAllocation>();
+        var colorTextureHandles = new ArrayList<Handle<TextureResource>>();
 
-            // Create color attachments
-            for (var colorFormat : descriptor.colorAttachments()) {
-                int vkFormat = mapTextureFormat(colorFormat);
-                int usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        // Create color attachments
+        for (var colorFormat : descriptor.colorAttachments()) {
+            int vkFormat = mapTextureFormat(colorFormat);
+            int usage = VkBindings.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VkBindings.VK_IMAGE_USAGE_SAMPLED_BIT;
 
-                // Create VkImage
-                var imageInfo = VkImageCreateInfo.calloc(stack)
-                        .sType$Default()
-                        .imageType(VK_IMAGE_TYPE_2D)
-                        .format(vkFormat)
-                        .extent(e -> e.width(descriptor.width()).height(descriptor.height()).depth(1))
-                        .mipLevels(1)
-                        .arrayLayers(1)
-                        .samples(VK_SAMPLE_COUNT_1_BIT)
-                        .tiling(VK_IMAGE_TILING_OPTIMAL)
-                        .usage(usage)
-                        .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
-                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-                var pImage = stack.mallocLong(1);
-                int result = vkCreateImage(device, imageInfo, null, pImage);
-                if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT color image: " + result);
-                long image = pImage.get(0);
+            var imgAlloc = vk.createImage(device, physicalDevice,
+                    descriptor.width(), descriptor.height(), 1, 1, 1,
+                    vkFormat, usage,
+                    VkBindings.VK_IMAGE_TYPE_2D, VkBindings.VK_IMAGE_VIEW_TYPE_2D,
+                    VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, 0);
 
-                // Allocate DEVICE_LOCAL memory
-                var memReqs = VkMemoryRequirements.calloc(stack);
-                vkGetImageMemoryRequirements(device, image, memReqs);
-                int memType = findMemoryType(memReqs.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-                var allocInfo = VkMemoryAllocateInfo.calloc(stack)
-                        .sType$Default()
-                        .allocationSize(memReqs.size())
-                        .memoryTypeIndex(memType);
-                var pMemory = stack.mallocLong(1);
-                result = vkAllocateMemory(device, allocInfo, null, pMemory);
-                if (result != VK_SUCCESS) throw new RuntimeException("Failed to allocate RT color memory: " + result);
-                long memory = pMemory.get(0);
-                vkBindImageMemory(device, image, memory, 0);
+            // Transition to SHADER_READ_ONLY_OPTIMAL
+            transitionImageLayout(imgAlloc.image(), VkBindings.VK_IMAGE_LAYOUT_UNDEFINED,
+                    VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, 1);
 
-                // Create VkImageView
-                var viewInfo = VkImageViewCreateInfo.calloc(stack)
-                        .sType$Default()
-                        .image(image)
-                        .viewType(VK_IMAGE_VIEW_TYPE_2D)
-                        .format(vkFormat)
-                        .subresourceRange(sr -> sr.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                                .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1));
-                var pView = stack.mallocLong(1);
-                result = vkCreateImageView(device, viewInfo, null, pView);
-                if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT color image view: " + result);
-                long imageView = pView.get(0);
+            var texDesc = new TextureDescriptor(descriptor.width(), descriptor.height(), colorFormat);
+            var texAlloc = new VkTextureAllocation(imgAlloc.image(), imgAlloc.memory(), imgAlloc.imageView(), texDesc);
+            colorAttachments.add(texAlloc);
 
-                // Transition to SHADER_READ_ONLY_OPTIMAL
-                transitionImageLayout(image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        VK_IMAGE_ASPECT_COLOR_BIT, 1);
-
-                var texDesc = new TextureDescriptor(descriptor.width(), descriptor.height(), colorFormat);
-                var texAlloc = new VkTextureAllocation(image, memory, imageView, texDesc);
-                colorAttachments.add(texAlloc);
-
-                // Register as a texture so it can be bound with BindTexture
-                var texHandle = textureRegistry.register(texAlloc);
-                colorTextureHandles.add(texHandle);
-            }
-
-            // Create depth attachment if requested
-            VkTextureAllocation depthAttachment = null;
-            if (descriptor.depthFormat() != null) {
-                int vkDepthFormat = mapTextureFormat(descriptor.depthFormat());
-                int depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-                var imageInfo = VkImageCreateInfo.calloc(stack)
-                        .sType$Default()
-                        .imageType(VK_IMAGE_TYPE_2D)
-                        .format(vkDepthFormat)
-                        .extent(e -> e.width(descriptor.width()).height(descriptor.height()).depth(1))
-                        .mipLevels(1)
-                        .arrayLayers(1)
-                        .samples(VK_SAMPLE_COUNT_1_BIT)
-                        .tiling(VK_IMAGE_TILING_OPTIMAL)
-                        .usage(depthUsage)
-                        .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
-                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
-                var pImage = stack.mallocLong(1);
-                int result = vkCreateImage(device, imageInfo, null, pImage);
-                if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT depth image: " + result);
-                long depthImage = pImage.get(0);
-
-                var memReqs = VkMemoryRequirements.calloc(stack);
-                vkGetImageMemoryRequirements(device, depthImage, memReqs);
-                int memType = findMemoryType(memReqs.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-                var allocInfo = VkMemoryAllocateInfo.calloc(stack)
-                        .sType$Default()
-                        .allocationSize(memReqs.size())
-                        .memoryTypeIndex(memType);
-                var pMemory = stack.mallocLong(1);
-                result = vkAllocateMemory(device, allocInfo, null, pMemory);
-                if (result != VK_SUCCESS) throw new RuntimeException("Failed to allocate RT depth memory: " + result);
-                long depthMemory = pMemory.get(0);
-                vkBindImageMemory(device, depthImage, depthMemory, 0);
-
-                var viewInfo = VkImageViewCreateInfo.calloc(stack)
-                        .sType$Default()
-                        .image(depthImage)
-                        .viewType(VK_IMAGE_VIEW_TYPE_2D)
-                        .format(vkDepthFormat)
-                        .subresourceRange(sr -> sr.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT)
-                                .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1));
-                var pView = stack.mallocLong(1);
-                result = vkCreateImageView(device, viewInfo, null, pView);
-                if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT depth image view: " + result);
-                long depthView = pView.get(0);
-
-                var depthDesc = new TextureDescriptor(descriptor.width(), descriptor.height(), descriptor.depthFormat());
-                depthAttachment = new VkTextureAllocation(depthImage, depthMemory, depthView, depthDesc);
-            }
-
-            // Create render pass
-            long rtRenderPass = createOffscreenRenderPass(descriptor, colorAttachments, depthAttachment);
-
-            // Create framebuffer
-            int attachmentCount = colorAttachments.size() + (depthAttachment != null ? 1 : 0);
-            var attachmentViews = stack.mallocLong(attachmentCount);
-            for (int i = 0; i < colorAttachments.size(); i++) {
-                attachmentViews.put(i, colorAttachments.get(i).imageView());
-            }
-            if (depthAttachment != null) {
-                attachmentViews.put(colorAttachments.size(), depthAttachment.imageView());
-            }
-
-            var fbInfo = VkFramebufferCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .renderPass(rtRenderPass)
-                    .pAttachments(attachmentViews)
-                    .width(descriptor.width())
-                    .height(descriptor.height())
-                    .layers(1);
-            var pFramebuffer = stack.mallocLong(1);
-            int result = vkCreateFramebuffer(device, fbInfo, null, pFramebuffer);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT framebuffer: " + result);
-            long framebuffer = pFramebuffer.get(0);
-
-            var handle = renderTargetRegistry.register(new VkRenderTargetAllocation(
-                    rtRenderPass, framebuffer, descriptor.width(), descriptor.height(),
-                    List.copyOf(colorAttachments), depthAttachment, List.copyOf(colorTextureHandles)));
-
-            log.info("Created Vulkan render target {}x{} with {} color attachment(s){}",
-                    descriptor.width(), descriptor.height(), colorAttachments.size(),
-                    depthAttachment != null ? " + depth" : "");
-            return handle;
+            var texHandle = textureRegistry.register(texAlloc);
+            colorTextureHandles.add(texHandle);
         }
+
+        // Create depth attachment if requested
+        VkTextureAllocation depthAttachment = null;
+        if (descriptor.depthFormat() != null) {
+            int vkDepthFormat = mapTextureFormat(descriptor.depthFormat());
+            int depthUsage = VkBindings.VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+            var depthImgAlloc = vk.createImage(device, physicalDevice,
+                    descriptor.width(), descriptor.height(), 1, 1, 1,
+                    vkDepthFormat, depthUsage,
+                    VkBindings.VK_IMAGE_TYPE_2D, VkBindings.VK_IMAGE_VIEW_TYPE_2D,
+                    VkBindings.VK_IMAGE_ASPECT_DEPTH_BIT, 0);
+
+            var depthDesc = new TextureDescriptor(descriptor.width(), descriptor.height(), descriptor.depthFormat());
+            depthAttachment = new VkTextureAllocation(depthImgAlloc.image(), depthImgAlloc.memory(),
+                    depthImgAlloc.imageView(), depthDesc);
+        }
+
+        // Create render pass
+        long rtRenderPass = createOffscreenRenderPass(descriptor, colorAttachments, depthAttachment);
+
+        // Create framebuffer
+        int attachmentCount = colorAttachments.size() + (depthAttachment != null ? 1 : 0);
+        long[] attachmentViews = new long[attachmentCount];
+        for (int i = 0; i < colorAttachments.size(); i++) {
+            attachmentViews[i] = colorAttachments.get(i).imageView();
+        }
+        if (depthAttachment != null) {
+            attachmentViews[colorAttachments.size()] = depthAttachment.imageView();
+        }
+
+        long framebuffer = vk.createFramebuffer(device, rtRenderPass, attachmentViews,
+                descriptor.width(), descriptor.height());
+
+        var handle = renderTargetRegistry.register(new VkRenderTargetAllocation(
+                rtRenderPass, framebuffer, descriptor.width(), descriptor.height(),
+                List.copyOf(colorAttachments), depthAttachment, List.copyOf(colorTextureHandles)));
+
+        log.info("Created Vulkan render target {}x{} with {} color attachment(s){}",
+                descriptor.width(), descriptor.height(), colorAttachments.size(),
+                depthAttachment != null ? " + depth" : "");
+        return handle;
     }
 
     @Override
@@ -787,25 +438,23 @@ public class VkRenderDevice implements RenderDevice {
         if (!renderTargetRegistry.isValid(handle)) return;
         var rtAlloc = renderTargetRegistry.remove(handle);
         if (rtAlloc != null) {
-            vkDestroyFramebuffer(device, rtAlloc.framebuffer(), null);
-            vkDestroyRenderPass(device, rtAlloc.renderPass(), null);
+            vk.destroyFramebuffer(device, rtAlloc.framebuffer());
+            vk.destroyRenderPass(device, rtAlloc.renderPass());
 
-            // Destroy color attachments and their registered texture handles
             for (int i = 0; i < rtAlloc.colorAttachments().size(); i++) {
                 var colorAlloc = rtAlloc.colorAttachments().get(i);
                 var texHandle = rtAlloc.colorTextureHandles().get(i);
                 textureRegistry.remove(texHandle);
-                vkDestroyImageView(device, colorAlloc.imageView(), null);
-                vkDestroyImage(device, colorAlloc.image(), null);
-                vkFreeMemory(device, colorAlloc.memory(), null);
+                vk.destroyImageView(device, colorAlloc.imageView());
+                vk.destroyImage(device, colorAlloc.image());
+                vk.freeMemory(device, colorAlloc.memory());
             }
 
-            // Destroy depth attachment
             if (rtAlloc.depthAttachment() != null) {
                 var depthAlloc = rtAlloc.depthAttachment();
-                vkDestroyImageView(device, depthAlloc.imageView(), null);
-                vkDestroyImage(device, depthAlloc.image(), null);
-                vkFreeMemory(device, depthAlloc.memory(), null);
+                vk.destroyImageView(device, depthAlloc.imageView());
+                vk.destroyImage(device, depthAlloc.image());
+                vk.freeMemory(device, depthAlloc.memory());
             }
         }
     }
@@ -813,89 +462,39 @@ public class VkRenderDevice implements RenderDevice {
     private long createOffscreenRenderPass(RenderTargetDescriptor descriptor,
                                            List<VkTextureAllocation> colorAttachments,
                                            VkTextureAllocation depthAttachment) {
-        try (var stack = stackPush()) {
-            int totalAttachments = colorAttachments.size() + (depthAttachment != null ? 1 : 0);
-            var attachments = VkAttachmentDescription.calloc(totalAttachments, stack);
-
-            // Color attachments: clear, store, final layout = SHADER_READ_ONLY (for sampling)
-            for (int i = 0; i < colorAttachments.size(); i++) {
-                int vkFormat = mapTextureFormat(descriptor.colorAttachments().get(i));
-                attachments.get(i)
-                        .format(vkFormat)
-                        .samples(VK_SAMPLE_COUNT_1_BIT)
-                        .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
-                        .storeOp(VK_ATTACHMENT_STORE_OP_STORE)
-                        .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
-                        .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
-                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
-                        .finalLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-            }
-
-            // Depth attachment
-            VkAttachmentReference depthRef = null;
-            if (depthAttachment != null) {
-                int vkDepthFmt = mapTextureFormat(descriptor.depthFormat());
-                attachments.get(colorAttachments.size())
-                        .format(vkDepthFmt)
-                        .samples(VK_SAMPLE_COUNT_1_BIT)
-                        .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
-                        .storeOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
-                        .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
-                        .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
-                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
-                        .finalLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-                depthRef = VkAttachmentReference.calloc(stack)
-                        .attachment(colorAttachments.size())
-                        .layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-            }
-
-            // Color attachment references for the subpass
-            var colorRefs = VkAttachmentReference.calloc(colorAttachments.size(), stack);
-            for (int i = 0; i < colorAttachments.size(); i++) {
-                colorRefs.get(i)
-                        .attachment(i)
-                        .layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-            }
-
-            var subpass = VkSubpassDescription.calloc(1, stack)
-                    .pipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS)
-                    .colorAttachmentCount(colorAttachments.size())
-                    .pColorAttachments(colorRefs)
-                    .pDepthStencilAttachment(depthRef);
-
-            // Two dependencies: external -> subpass, subpass -> external (for shader read)
-            var dependencies = VkSubpassDependency.calloc(2, stack);
-            dependencies.get(0)
-                    .srcSubpass(VK_SUBPASS_EXTERNAL)
-                    .dstSubpass(0)
-                    .srcStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
-                    .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-                            | (depthAttachment != null ? VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT : 0))
-                    .srcAccessMask(VK_ACCESS_SHADER_READ_BIT)
-                    .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                            | (depthAttachment != null ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : 0))
-                    .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
-            dependencies.get(1)
-                    .srcSubpass(0)
-                    .dstSubpass(VK_SUBPASS_EXTERNAL)
-                    .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                    .dstStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
-                    .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-                    .dstAccessMask(VK_ACCESS_SHADER_READ_BIT)
-                    .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
-
-            var renderPassInfo = VkRenderPassCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .pAttachments(attachments)
-                    .pSubpasses(subpass)
-                    .pDependencies(dependencies);
-
-            var pRenderPass = stack.mallocLong(1);
-            int result = vkCreateRenderPass(device, renderPassInfo, null, pRenderPass);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create offscreen render pass: " + result);
-            return pRenderPass.get(0);
+        var colorDescs = new VkBindings.AttachmentDesc[colorAttachments.size()];
+        for (int i = 0; i < colorAttachments.size(); i++) {
+            int vkFormat = mapTextureFormat(descriptor.colorAttachments().get(i));
+            colorDescs[i] = new VkBindings.AttachmentDesc(
+                    vkFormat, true, true, VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
+
+        VkBindings.AttachmentDesc depthDesc = null;
+        if (depthAttachment != null) {
+            int vkDepthFmt = mapTextureFormat(descriptor.depthFormat());
+            depthDesc = new VkBindings.AttachmentDesc(
+                    vkDepthFmt, true, false, VkBindings.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+        }
+
+        var deps = new VkBindings.SubpassDependencyDesc[2];
+        deps[0] = new VkBindings.SubpassDependencyDesc(
+                VkBindings.VK_SUBPASS_EXTERNAL, 0,
+                VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VkBindings.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                        | (depthAttachment != null ? VkBindings.VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT : 0),
+                VkBindings.VK_ACCESS_SHADER_READ_BIT,
+                VkBindings.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                        | (depthAttachment != null ? VkBindings.VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : 0),
+                VkBindings.VK_DEPENDENCY_BY_REGION_BIT);
+        deps[1] = new VkBindings.SubpassDependencyDesc(
+                0, VkBindings.VK_SUBPASS_EXTERNAL,
+                VkBindings.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VkBindings.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VkBindings.VK_ACCESS_SHADER_READ_BIT,
+                VkBindings.VK_DEPENDENCY_BY_REGION_BIT);
+
+        return vk.createRenderPass(device, colorDescs, depthDesc, deps);
     }
 
     // --- Vertex input operations (stubs) ---
@@ -916,35 +515,17 @@ public class VkRenderDevice implements RenderDevice {
 
     @Override
     public Handle<SamplerResource> createSampler(SamplerDescriptor descriptor) {
-        try (var stack = stackPush()) {
-            int magFilter = mapFilter(descriptor.magFilter());
-            int minFilter = mapFilter(descriptor.minFilter());
-            int mipmapMode = mapMipmapMode(descriptor.minFilter());
-            float maxLod = isMipmapFilter(descriptor.minFilter()) ? 1000.0f : 0.0f;
+        int magFilter = mapFilter(descriptor.magFilter());
+        int minFilter = mapFilter(descriptor.minFilter());
+        int mipmapMode = mapMipmapMode(descriptor.minFilter());
+        float maxLod = isMipmapFilter(descriptor.minFilter()) ? 1000.0f : 0.0f;
 
-            var samplerInfo = VkSamplerCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .magFilter(magFilter)
-                    .minFilter(minFilter)
-                    .mipmapMode(mipmapMode)
-                    .addressModeU(mapWrapMode(descriptor.wrapS()))
-                    .addressModeV(mapWrapMode(descriptor.wrapT()))
-                    .addressModeW(VK_SAMPLER_ADDRESS_MODE_REPEAT)
-                    .minLod(0.0f)
-                    .maxLod(maxLod)
-                    .mipLodBias(0.0f)
-                    .anisotropyEnable(false)
-                    .maxAnisotropy(1.0f)
-                    .compareEnable(false)
-                    .borderColor(VK_BORDER_COLOR_INT_OPAQUE_BLACK)
-                    .unnormalizedCoordinates(false);
+        long sampler = vk.createSampler(device, magFilter, minFilter, mipmapMode,
+                mapWrapMode(descriptor.wrapS()), mapWrapMode(descriptor.wrapT()),
+                VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                0.0f, maxLod);
 
-            var pSampler = stack.mallocLong(1);
-            int result = vkCreateSampler(device, samplerInfo, null, pSampler);
-            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create sampler: " + result);
-
-            return samplerRegistry.register(new VkSamplerAllocation(pSampler.get(0), descriptor));
-        }
+        return samplerRegistry.register(new VkSamplerAllocation(sampler, descriptor));
     }
 
     @Override
@@ -952,7 +533,7 @@ public class VkRenderDevice implements RenderDevice {
         if (!samplerRegistry.isValid(handle)) return;
         var alloc = samplerRegistry.remove(handle);
         if (alloc != null) {
-            vkDestroySampler(device, alloc.sampler(), null);
+            vk.destroySampler(device, alloc.sampler());
         }
     }
 
@@ -960,22 +541,22 @@ public class VkRenderDevice implements RenderDevice {
     public Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor) {
         if (descriptor.hasSpirv()) {
             log.debug("createPipeline: using pipelineLayout=0x{}", Long.toHexString(descriptorManager.pipelineLayout()));
-            long pipeline = VkPipelineFactory.create(device, renderPass,
+            long pipeline = VkPipelineFactory.create(vk, device, renderPass,
                     descriptorManager.pipelineLayout(), descriptor.binaries(), descriptor.vertexFormat());
             var handle = pipelineRegistry.register(pipeline);
             pipelineSpecs.put(handle.index(), new PipelineSpec(descriptor.binaries(), descriptor.vertexFormat()));
             return handle;
         }
         log.warn("Vulkan backend received GLSL source pipeline descriptor — ignoring");
-        return pipelineRegistry.register(VK_NULL_HANDLE);
+        return pipelineRegistry.register(VkBindings.VK_NULL_HANDLE);
     }
 
     @Override
     public void destroyPipeline(Handle<PipelineResource> handle) {
         if (!pipelineRegistry.isValid(handle)) return;
         var pipeline = pipelineRegistry.remove(handle);
-        if (pipeline != null && pipeline != VK_NULL_HANDLE) {
-            vkDestroyPipeline(device, pipeline, null);
+        if (pipeline != null && pipeline != VkBindings.VK_NULL_HANDLE) {
+            vk.destroyPipeline(device, pipeline);
         }
         // Clean up any pipeline variants for this pipeline
         var prefix = handle.index() + "_";
@@ -983,7 +564,7 @@ public class VkRenderDevice implements RenderDevice {
         while (it.hasNext()) {
             var entry = it.next();
             if (entry.getKey().startsWith(prefix)) {
-                vkDestroyPipeline(device, entry.getValue(), null);
+                vk.destroyPipeline(device, entry.getValue());
                 it.remove();
             }
         }
@@ -996,44 +577,10 @@ public class VkRenderDevice implements RenderDevice {
         if (!descriptor.hasSpirv()) {
             throw new UnsupportedOperationException("Vulkan compute requires SPIRV binary");
         }
-        try (var stack = stackPush()) {
-            byte[] spirvBytes = descriptor.binary().spirv();
-            var spirvBuf = memAlloc(spirvBytes.length);
-            spirvBuf.put(spirvBytes).flip();
-
-            var moduleInfo = VkShaderModuleCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .pCode(spirvBuf);
-
-            var pModule = stack.mallocLong(1);
-            int result = vkCreateShaderModule(device, moduleInfo, null, pModule);
-            memFree(spirvBuf);
-            if (result != VK_SUCCESS) {
-                throw new RuntimeException("Failed to create compute shader module: " + result);
-            }
-            long shaderModule = pModule.get(0);
-
-            var stageInfo = VkPipelineShaderStageCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .stage(VK_SHADER_STAGE_COMPUTE_BIT)
-                    .module(shaderModule)
-                    .pName(stack.UTF8("main"));
-
-            var pipelineInfo = VkComputePipelineCreateInfo.calloc(1, stack)
-                    .sType$Default();
-            pipelineInfo.get(0)
-                    .stage(stageInfo)
-                    .layout(descriptorManager.pipelineLayout());
-
-            var pPipeline = stack.mallocLong(1);
-            result = vkCreateComputePipelines(device, VK_NULL_HANDLE, pipelineInfo, null, pPipeline);
-            vkDestroyShaderModule(device, shaderModule, null);
-            if (result != VK_SUCCESS) {
-                throw new RuntimeException("Failed to create compute pipeline: " + result);
-            }
-
-            return pipelineRegistry.register(pPipeline.get(0));
-        }
+        long shaderModule = vk.createShaderModule(device, descriptor.binary().spirv());
+        long pipeline = vk.createComputePipeline(device, descriptorManager.pipelineLayout(), shaderModule);
+        vk.destroyShaderModule(device, shaderModule);
+        return pipelineRegistry.register(pipeline);
     }
 
     @Override
@@ -1066,12 +613,12 @@ public class VkRenderDevice implements RenderDevice {
         // Wait for this frame's previous work to finish
         frame.waitAndReset();
         descriptorManager.resetPool(currentFrame);
-        java.util.Arrays.fill(pendingUboBuffers, VK_NULL_HANDLE);
+        java.util.Arrays.fill(pendingUboBuffers, VkBindings.VK_NULL_HANDLE);
         java.util.Arrays.fill(pendingUboSizes, 0);
-        java.util.Arrays.fill(pendingSsboBuffers, VK_NULL_HANDLE);
+        java.util.Arrays.fill(pendingSsboBuffers, VkBindings.VK_NULL_HANDLE);
         java.util.Arrays.fill(pendingSsboSizes, 0);
-        java.util.Arrays.fill(pendingTextureViews, VK_NULL_HANDLE);
-        java.util.Arrays.fill(pendingTextureSamplers, VK_NULL_HANDLE);
+        java.util.Arrays.fill(pendingTextureViews, VkBindings.VK_NULL_HANDLE);
+        java.util.Arrays.fill(pendingTextureSamplers, VkBindings.VK_NULL_HANDLE);
         descriptorDirty = false;
 
         // Acquire next swapchain image
@@ -1086,20 +633,11 @@ public class VkRenderDevice implements RenderDevice {
         frame.beginCommandBuffer();
 
         // Begin render pass
-        try (var stack = stackPush()) {
-            var clearValues = VkClearValue.calloc(2, stack);
-            clearValues.get(0).color().float32(0, 0.05f).float32(1, 0.05f).float32(2, 0.08f).float32(3, 1.0f);
-            clearValues.get(1).depthStencil().depth(1.0f).stencil(0);
-
-            var renderPassInfo = VkRenderPassBeginInfo.calloc(stack)
-                    .sType$Default()
-                    .renderPass(renderPass)
-                    .framebuffer(framebuffers.framebuffer(currentImageIndex))
-                    .renderArea(ra -> ra.offset(o -> o.x(0).y(0)).extent(e -> e.width(swapchain.width()).height(swapchain.height())))
-                    .pClearValues(clearValues);
-
-            vkCmdBeginRenderPass(frame.commandBuffer, renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-        }
+        vk.cmdBeginRenderPass(frame.commandBuffer, renderPass,
+                framebuffers.framebuffer(currentImageIndex),
+                0, 0, swapchain.width(), swapchain.height(),
+                new float[]{0.05f, 0.05f, 0.08f, 1.0f},
+                1.0f, 0);
     }
 
     @Override
@@ -1107,12 +645,12 @@ public class VkRenderDevice implements RenderDevice {
         var frame = frames[currentFrame];
 
         // End render pass + submit
-        vkCmdEndRenderPass(frame.commandBuffer);
+        vk.cmdEndRenderPass(frame.commandBuffer);
         frame.submitTo(graphicsQueue);
 
         // Present
         int presentResult = swapchain.present(graphicsQueue, frame.renderFinishedSemaphore, currentImageIndex);
-        if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR) {
+        if (presentResult == VkBindings.VK_ERROR_OUT_OF_DATE_KHR || presentResult == VkBindings.VK_SUBOPTIMAL_KHR) {
             recreateSwapchain();
         }
 
@@ -1125,111 +663,64 @@ public class VkRenderDevice implements RenderDevice {
      * Returns RGBA8 pixel data as int[] {R, G, B, A} for 0-255 values.
      */
     public int[] readPixel(int x, int y) {
-        vkDeviceWaitIdle(device);
+        vk.deviceWaitIdle(device);
 
-        try (var stack = stackPush()) {
-            // Create staging buffer
-            long pixelSize = 4; // RGBA8
-            var bufInfo = VkBufferCreateInfo.calloc(stack)
-                    .sType$Default()
-                    .size(pixelSize)
-                    .usage(VK_BUFFER_USAGE_TRANSFER_DST_BIT)
-                    .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
-            var pBuf = stack.mallocLong(1);
-            vkCreateBuffer(device, bufInfo, null, pBuf);
-            long stagingBuffer = pBuf.get(0);
+        // Create staging buffer
+        long pixelSize = 4; // RGBA8
+        var staging = vk.createBuffer(device, physicalDevice, pixelSize,
+                VkBindings.VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                VkBindings.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkBindings.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-            var memReqs = VkMemoryRequirements.calloc(stack);
-            vkGetBufferMemoryRequirements(device, stagingBuffer, memReqs);
-            int memType = findMemoryType(memReqs.memoryTypeBits(),
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-            var allocInfo = VkMemoryAllocateInfo.calloc(stack)
-                    .sType$Default()
-                    .allocationSize(memReqs.size())
-                    .memoryTypeIndex(memType);
-            var pMem = stack.mallocLong(1);
-            vkAllocateMemory(device, allocInfo, null, pMem);
-            long stagingMemory = pMem.get(0);
-            vkBindBufferMemory(device, stagingBuffer, stagingMemory, 0);
+        long image = swapchain.image(currentImageIndex >= 0 ? currentImageIndex : 0);
 
-            // Get the last rendered swapchain image
-            long image = swapchain.image(currentImageIndex >= 0 ? currentImageIndex : 0);
+        long cmd = vk.allocateCommandBuffer(device, commandPool);
+        vk.beginCommandBuffer(cmd, VkBindings.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-            // Allocate a one-shot command buffer
-            var cmdAllocInfo = VkCommandBufferAllocateInfo.calloc(stack)
-                    .sType$Default()
-                    .commandPool(commandPool)
-                    .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
-                    .commandBufferCount(1);
-            var pCmd = stack.mallocPointer(1);
-            vkAllocateCommandBuffers(device, cmdAllocInfo, pCmd);
-            var cmd = new VkCommandBuffer(pCmd.get(0), device);
+        // Transition image: PRESENT_SRC -> TRANSFER_SRC
+        vk.cmdImageBarrier(cmd, image,
+                VkBindings.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VkBindings.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VkBindings.VK_ACCESS_MEMORY_READ_BIT,
+                VkBindings.VK_ACCESS_TRANSFER_READ_BIT,
+                VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
 
-            var beginInfo = VkCommandBufferBeginInfo.calloc(stack)
-                    .sType$Default()
-                    .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-            vkBeginCommandBuffer(cmd, beginInfo);
+        // Copy pixel
+        vk.cmdCopyImageToBuffer(cmd, image, VkBindings.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                staging.buffer(), x, y, 1, 1, VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, 0);
 
-            // Transition image: PRESENT_SRC → TRANSFER_SRC
-            var barrier = VkImageMemoryBarrier.calloc(1, stack)
-                    .sType$Default()
-                    .oldLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                    .newLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-                    .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                    .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                    .image(image)
-                    .subresourceRange(sr -> sr.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                            .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1))
-                    .srcAccessMask(VK_ACCESS_MEMORY_READ_BIT)
-                    .dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
-            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                    0, null, null, barrier);
+        // Transition back: TRANSFER_SRC -> PRESENT_SRC
+        vk.cmdImageBarrier(cmd, image,
+                VkBindings.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VkBindings.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VkBindings.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                VkBindings.VK_ACCESS_TRANSFER_READ_BIT,
+                VkBindings.VK_ACCESS_MEMORY_READ_BIT,
+                VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
 
-            // Copy pixel
-            var region = VkBufferImageCopy.calloc(1, stack)
-                    .bufferOffset(0).bufferRowLength(0).bufferImageHeight(0)
-                    .imageSubresource(s -> s.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                            .mipLevel(0).baseArrayLayer(0).layerCount(1))
-                    .imageOffset(o -> o.x(x).y(y).z(0))
-                    .imageExtent(e -> e.width(1).height(1).depth(1));
-            vkCmdCopyImageToBuffer(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, region);
+        vk.endCommandBuffer(cmd);
 
-            // Transition back: TRANSFER_SRC → PRESENT_SRC
-            barrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-                    .newLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                    .srcAccessMask(VK_ACCESS_TRANSFER_READ_BIT)
-                    .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT);
-            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                    0, null, null, barrier);
+        vk.queueSubmitSimple(graphicsQueue, cmd, VkBindings.VK_NULL_HANDLE);
+        vk.queueWaitIdle(graphicsQueue);
 
-            vkEndCommandBuffer(cmd);
+        // Read back pixel
+        long dataPtr = vk.mapMemory(device, staging.memory(), 0, pixelSize);
+        var seg = MemorySegment.ofAddress(dataPtr).reinterpret(pixelSize);
 
-            // Submit and wait
-            var submitInfo = VkSubmitInfo.calloc(stack)
-                    .sType$Default()
-                    .pCommandBuffers(stack.pointers(cmd));
-            vkQueueSubmit(graphicsQueue, submitInfo, VK_NULL_HANDLE);
-            vkQueueWaitIdle(graphicsQueue);
+        // Swapchain format is B8G8R8A8 — BGRA order
+        int b = Byte.toUnsignedInt(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0));
+        int g = Byte.toUnsignedInt(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 1));
+        int r = Byte.toUnsignedInt(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 2));
+        int a = Byte.toUnsignedInt(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 3));
 
-            // Read back pixel
-            var pData = stack.mallocPointer(1);
-            vkMapMemory(device, stagingMemory, 0, pixelSize, 0, pData);
-            var seg = java.lang.foreign.MemorySegment.ofAddress(pData.get(0)).reinterpret(pixelSize);
+        vk.unmapMemory(device, staging.memory());
+        vk.freeCommandBuffer(device, commandPool, cmd);
+        vk.freeMemory(device, staging.memory());
+        vk.destroyBuffer(device, staging.buffer());
 
-            // Swapchain format is B8G8R8A8_SRGB — BGRA order
-            int b = Byte.toUnsignedInt(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 0));
-            int g = Byte.toUnsignedInt(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 1));
-            int r = Byte.toUnsignedInt(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 2));
-            int a = Byte.toUnsignedInt(seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, 3));
-
-            vkUnmapMemory(device, stagingMemory);
-
-            // Cleanup
-            vkFreeMemory(device, stagingMemory, null);
-            vkDestroyBuffer(device, stagingBuffer, null);
-
-            return new int[]{r, g, b, a};
-        }
+        return new int[]{r, g, b, a};
     }
 
     /**
@@ -1238,99 +729,65 @@ public class VkRenderDevice implements RenderDevice {
      */
     @Override
     public byte[] readFramebuffer(int width, int height) {
-        vkDeviceWaitIdle(device);
+        vk.deviceWaitIdle(device);
         int w = swapchain.width();
         int h = swapchain.height();
 
-        try (var stack = stackPush()) {
-            long pixelSize = (long) w * h * 4;
-            var bufInfo = VkBufferCreateInfo.calloc(stack)
-                    .sType$Default().size(pixelSize)
-                    .usage(VK_BUFFER_USAGE_TRANSFER_DST_BIT).sharingMode(VK_SHARING_MODE_EXCLUSIVE);
-            var pBuf = stack.mallocLong(1);
-            vkCreateBuffer(device, bufInfo, null, pBuf);
-            long stagingBuffer = pBuf.get(0);
+        long pixelSize = (long) w * h * 4;
+        var staging = vk.createBuffer(device, physicalDevice, pixelSize,
+                VkBindings.VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                VkBindings.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkBindings.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-            var memReqs = VkMemoryRequirements.calloc(stack);
-            vkGetBufferMemoryRequirements(device, stagingBuffer, memReqs);
-            int memType = findMemoryType(memReqs.memoryTypeBits(),
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-            var allocInfo = VkMemoryAllocateInfo.calloc(stack)
-                    .sType$Default().allocationSize(memReqs.size()).memoryTypeIndex(memType);
-            var pMem = stack.mallocLong(1);
-            vkAllocateMemory(device, allocInfo, null, pMem);
-            long stagingMemory = pMem.get(0);
-            vkBindBufferMemory(device, stagingBuffer, stagingMemory, 0);
+        long image = swapchain.image(currentImageIndex >= 0 ? currentImageIndex : 0);
 
-            long image = swapchain.image(currentImageIndex >= 0 ? currentImageIndex : 0);
+        long cmd = vk.allocateCommandBuffer(device, commandPool);
+        vk.beginCommandBuffer(cmd, VkBindings.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-            var cmdAllocInfo = VkCommandBufferAllocateInfo.calloc(stack)
-                    .sType$Default().commandPool(commandPool)
-                    .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY).commandBufferCount(1);
-            var pCmd = stack.mallocPointer(1);
-            vkAllocateCommandBuffers(device, cmdAllocInfo, pCmd);
-            var cmd = new VkCommandBuffer(pCmd.get(0), device);
+        vk.cmdImageBarrier(cmd, image,
+                VkBindings.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VkBindings.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VkBindings.VK_ACCESS_MEMORY_READ_BIT,
+                VkBindings.VK_ACCESS_TRANSFER_READ_BIT,
+                VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
 
-            var beginInfo = VkCommandBufferBeginInfo.calloc(stack)
-                    .sType$Default().flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-            vkBeginCommandBuffer(cmd, beginInfo);
+        vk.cmdCopyImageToBuffer(cmd, image, VkBindings.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                staging.buffer(), 0, 0, w, h, VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, 0);
 
-            var barrier = VkImageMemoryBarrier.calloc(1, stack)
-                    .sType$Default()
-                    .oldLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                    .newLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-                    .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                    .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                    .image(image)
-                    .subresourceRange(sr -> sr.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                            .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1))
-                    .srcAccessMask(VK_ACCESS_MEMORY_READ_BIT)
-                    .dstAccessMask(VK_ACCESS_TRANSFER_READ_BIT);
-            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                    0, null, null, barrier);
+        vk.cmdImageBarrier(cmd, image,
+                VkBindings.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VkBindings.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VkBindings.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                VkBindings.VK_ACCESS_TRANSFER_READ_BIT,
+                VkBindings.VK_ACCESS_MEMORY_READ_BIT,
+                VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1);
 
-            var region = VkBufferImageCopy.calloc(1, stack)
-                    .bufferOffset(0).bufferRowLength(0).bufferImageHeight(0)
-                    .imageSubresource(s -> s.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                            .mipLevel(0).baseArrayLayer(0).layerCount(1))
-                    .imageOffset(o -> o.x(0).y(0).z(0))
-                    .imageExtent(e -> e.width(w).height(h).depth(1));
-            vkCmdCopyImageToBuffer(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, stagingBuffer, region);
+        vk.endCommandBuffer(cmd);
 
-            barrier.oldLayout(VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
-                    .newLayout(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
-                    .srcAccessMask(VK_ACCESS_TRANSFER_READ_BIT)
-                    .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT);
-            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                    0, null, null, barrier);
+        vk.queueSubmitSimple(graphicsQueue, cmd, VkBindings.VK_NULL_HANDLE);
+        vk.queueWaitIdle(graphicsQueue);
 
-            vkEndCommandBuffer(cmd);
+        long dataPtr = vk.mapMemory(device, staging.memory(), 0, pixelSize);
+        var seg = MemorySegment.ofAddress(dataPtr).reinterpret(pixelSize);
 
-            var submitInfo = VkSubmitInfo.calloc(stack).sType$Default().pCommandBuffers(stack.pointers(cmd));
-            vkQueueSubmit(graphicsQueue, submitInfo, VK_NULL_HANDLE);
-            vkQueueWaitIdle(graphicsQueue);
-
-            var pData = stack.mallocPointer(1);
-            vkMapMemory(device, stagingMemory, 0, pixelSize, 0, pData);
-            var seg = java.lang.foreign.MemorySegment.ofAddress(pData.get(0)).reinterpret(pixelSize);
-
-            // Convert BGRA (swapchain format) to RGBA, no Y-flip needed
-            // (Vulkan's Y-axis is already flipped by the negative viewport height)
-            byte[] rgba = new byte[(int) pixelSize];
-            for (int i = 0; i < w * h; i++) {
-                int off = i * 4;
-                rgba[off]     = seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, off + 2); // R from B position
-                rgba[off + 1] = seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, off + 1); // G
-                rgba[off + 2] = seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, off);     // B from R position
-                rgba[off + 3] = seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, off + 3); // A
-            }
-
-            vkUnmapMemory(device, stagingMemory);
-            vkFreeMemory(device, stagingMemory, null);
-            vkDestroyBuffer(device, stagingBuffer, null);
-
-            return rgba;
+        // Convert BGRA (swapchain format) to RGBA, no Y-flip needed
+        byte[] rgba = new byte[(int) pixelSize];
+        for (int i = 0; i < w * h; i++) {
+            int off = i * 4;
+            rgba[off]     = seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, off + 2); // R from B position
+            rgba[off + 1] = seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, off + 1); // G
+            rgba[off + 2] = seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, off);     // B from R position
+            rgba[off + 3] = seg.get(java.lang.foreign.ValueLayout.JAVA_BYTE, off + 3); // A
         }
+
+        vk.unmapMemory(device, staging.memory());
+        vk.freeCommandBuffer(device, commandPool, cmd);
+        vk.freeMemory(device, staging.memory());
+        vk.destroyBuffer(device, staging.buffer());
+
+        return rgba;
     }
 
     /** Swapchain width. */
@@ -1338,7 +795,7 @@ public class VkRenderDevice implements RenderDevice {
     /** Swapchain height. */
     public int swapchainHeight() { return swapchain.height(); }
 
-    private void flushDescriptorSet(VkCommandBuffer cmd) {
+    private void flushDescriptorSet(long cmd) {
         if (!descriptorDirty) {
             return;
         }
@@ -1347,98 +804,82 @@ public class VkRenderDevice implements RenderDevice {
         long set = descriptorManager.allocateSet(currentFrame);
         currentDescriptorSet = set;
 
-        // Count UBO + texture writes
-        try (var stack = stackPush()) {
-            int count = 0;
-            for (int i = 0; i < pendingUboBuffers.length; i++) {
-                if (pendingUboBuffers[i] != VK_NULL_HANDLE) count++;
-            }
-            for (int i = 0; i < pendingTextureViews.length; i++) {
-                if (pendingTextureViews[i] != VK_NULL_HANDLE) count++;
-            }
-            for (int i = 0; i < pendingSsboBuffers.length; i++) {
-                if (pendingSsboBuffers[i] != VK_NULL_HANDLE) count++;
-            }
+        // Count buffer + image writes
+        int bufCount = 0;
+        for (int i = 0; i < pendingUboBuffers.length; i++) {
+            if (pendingUboBuffers[i] != VkBindings.VK_NULL_HANDLE) bufCount++;
+        }
+        for (int i = 0; i < pendingSsboBuffers.length; i++) {
+            if (pendingSsboBuffers[i] != VkBindings.VK_NULL_HANDLE) bufCount++;
+        }
 
-            var writes = VkWriteDescriptorSet.calloc(count, stack);
+        int imgCount = 0;
+        for (int i = 0; i < pendingTextureViews.length; i++) {
+            if (pendingTextureViews[i] != VkBindings.VK_NULL_HANDLE
+                    && pendingTextureSamplers[i] != VkBindings.VK_NULL_HANDLE) {
+                imgCount++;
+            }
+        }
+
+        if (bufCount + imgCount > 0) {
+            int[] bufferBindings = new int[bufCount];
+            int[] bufferTypes = new int[bufCount];
+            long[] buffers = new long[bufCount];
+            long[] bufferOffsets = new long[bufCount];
+            long[] bufferRanges = new long[bufCount];
             int idx = 0;
 
-            // UBO writes
             for (int i = 0; i < pendingUboBuffers.length; i++) {
-                if (pendingUboBuffers[i] != VK_NULL_HANDLE) {
-                    var bufInfo = VkDescriptorBufferInfo.calloc(1, stack)
-                            .buffer(pendingUboBuffers[i])
-                            .offset(0)
-                            .range(pendingUboSizes[i]);
-                    writes.get(idx)
-                            .sType$Default()
-                            .dstSet(set)
-                            .dstBinding(i)
-                            .dstArrayElement(0)
-                            .descriptorCount(1)
-                            .descriptorType(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
-                            .pBufferInfo(bufInfo);
+                if (pendingUboBuffers[i] != VkBindings.VK_NULL_HANDLE) {
+                    bufferBindings[idx] = i;
+                    bufferTypes[idx] = VkBindings.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                    buffers[idx] = pendingUboBuffers[i];
+                    bufferOffsets[idx] = 0;
+                    bufferRanges[idx] = pendingUboSizes[i];
                     idx++;
                 }
             }
 
-            // Texture+sampler writes (combined image sampler)
-            int texOffset = descriptorManager.textureBindingOffset();
-            for (int i = 0; i < pendingTextureViews.length; i++) {
-                if (pendingTextureViews[i] != VK_NULL_HANDLE) {
-                    long sampler = pendingTextureSamplers[i];
-                    // If no sampler was bound for this unit, skip (need both)
-                    if (sampler == VK_NULL_HANDLE) continue;
-
-                    var imageInfo = VkDescriptorImageInfo.calloc(1, stack)
-                            .imageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-                            .imageView(pendingTextureViews[i])
-                            .sampler(sampler);
-                    writes.get(idx)
-                            .sType$Default()
-                            .dstSet(set)
-                            .dstBinding(texOffset + i)
-                            .dstArrayElement(0)
-                            .descriptorCount(1)
-                            .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
-                            .pImageInfo(imageInfo);
-                    idx++;
-                }
-            }
-
-            // SSBO writes
             int ssboOffset = descriptorManager.ssboBindingOffset();
             for (int i = 0; i < pendingSsboBuffers.length; i++) {
-                if (pendingSsboBuffers[i] != VK_NULL_HANDLE) {
-                    var bufInfo = VkDescriptorBufferInfo.calloc(1, stack)
-                            .buffer(pendingSsboBuffers[i])
-                            .offset(0)
-                            .range(pendingSsboSizes[i]);
-                    writes.get(idx)
-                            .sType$Default()
-                            .dstSet(set)
-                            .dstBinding(ssboOffset + i)
-                            .dstArrayElement(0)
-                            .descriptorCount(1)
-                            .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-                            .pBufferInfo(bufInfo);
+                if (pendingSsboBuffers[i] != VkBindings.VK_NULL_HANDLE) {
+                    bufferBindings[idx] = ssboOffset + i;
+                    bufferTypes[idx] = VkBindings.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                    buffers[idx] = pendingSsboBuffers[i];
+                    bufferOffsets[idx] = 0;
+                    bufferRanges[idx] = pendingSsboSizes[i];
                     idx++;
                 }
             }
 
-            // If we skipped some writes due to missing samplers, limit the buffer
-            if (idx > 0) {
-                writes.limit(idx);
-                vkUpdateDescriptorSets(device, writes, null);
+            int[] imageBindings = imgCount > 0 ? new int[imgCount] : null;
+            long[] imageViews = imgCount > 0 ? new long[imgCount] : null;
+            long[] imageSamplers = imgCount > 0 ? new long[imgCount] : null;
+            int[] imageLayouts = imgCount > 0 ? new int[imgCount] : null;
+            int imgIdx = 0;
+            int texOffset = descriptorManager.textureBindingOffset();
+            for (int i = 0; i < pendingTextureViews.length; i++) {
+                if (pendingTextureViews[i] != VkBindings.VK_NULL_HANDLE
+                        && pendingTextureSamplers[i] != VkBindings.VK_NULL_HANDLE) {
+                    imageBindings[imgIdx] = texOffset + i;
+                    imageViews[imgIdx] = pendingTextureViews[i];
+                    imageSamplers[imgIdx] = pendingTextureSamplers[i];
+                    imageLayouts[imgIdx] = VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                    imgIdx++;
+                }
             }
 
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    descriptorManager.pipelineLayout(), 0, stack.longs(set), null);
+            vk.updateDescriptorSets(device, set,
+                    bufferBindings, bufferTypes, buffers, bufferOffsets, bufferRanges,
+                    imageBindings, imageViews, imageSamplers, imageLayouts);
         }
+
+        vk.cmdBindDescriptorSets(cmd, VkBindings.VK_PIPELINE_BIND_POINT_GRAPHICS,
+                descriptorManager.pipelineLayout(), 0, set);
     }
 
     private void recreateSwapchain() {
-        vkDeviceWaitIdle(device);
+        vk.deviceWaitIdle(device);
         framebuffers.close();
         swapchain.create(swapchain.width(), swapchain.height());
         framebuffers.create(swapchain, renderPass, depthFormat);
@@ -1447,16 +888,15 @@ public class VkRenderDevice implements RenderDevice {
     @Override
     public void submit(dev.engine.graphics.command.CommandList commands) {
         if (currentImageIndex < 0) return; // no valid frame
-        var cmd = frames[currentFrame].commandBuffer;
+        long cmd = frames[currentFrame].commandBuffer;
 
         for (var command : commands.commands()) {
             switch (command) {
                 case dev.engine.graphics.command.RenderCommand.BindPipeline bp -> {
                     var pipeline = pipelineRegistry.get(bp.pipeline());
                     if (pipeline != null) {
-                        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+                        vk.cmdBindPipeline(cmd, VkBindings.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                         currentBoundPipeline = bp.pipeline();
-                        // Reset variant state — base pipeline is always FILL + no blend
                         currentWireframe = false;
                         currentBlendMode = BlendMode.NONE;
                     }
@@ -1464,71 +904,54 @@ public class VkRenderDevice implements RenderDevice {
                 case dev.engine.graphics.command.RenderCommand.BindVertexBuffer bvb -> {
                     var alloc = bufferRegistry.get(bvb.buffer());
                     if (alloc != null) {
-                        try (var stack = stackPush()) {
-                            vkCmdBindVertexBuffers(cmd, 0, stack.longs(alloc.buffer()), stack.longs(0));
-                        }
+                        vk.cmdBindVertexBuffers(cmd, alloc.buffer());
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindIndexBuffer bib -> {
                     var alloc = bufferRegistry.get(bib.buffer());
                     if (alloc != null) {
-                        vkCmdBindIndexBuffer(cmd, alloc.buffer(), 0, VK_INDEX_TYPE_UINT32);
+                        vk.cmdBindIndexBuffer(cmd, alloc.buffer(), VkBindings.VK_INDEX_TYPE_UINT32);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.Draw draw -> {
                     flushDescriptorSet(cmd);
                     log.debug("vkCmdDraw(vertexCount={}, firstVertex={})", draw.vertexCount(), draw.firstVertex());
-                    vkCmdDraw(cmd, draw.vertexCount(), 1, draw.firstVertex(), 0);
+                    vk.cmdDraw(cmd, draw.vertexCount(), 1, draw.firstVertex(), 0);
                 }
                 case dev.engine.graphics.command.RenderCommand.DrawIndexed di -> {
                     flushDescriptorSet(cmd);
                     log.debug("vkCmdDrawIndexed(indexCount={}, firstIndex={})", di.indexCount(), di.firstIndex());
-                    vkCmdDrawIndexed(cmd, di.indexCount(), 1, di.firstIndex(), 0, 0);
+                    vk.cmdDrawIndexed(cmd, di.indexCount(), 1, di.firstIndex(), 0, 0);
                 }
                 case dev.engine.graphics.command.RenderCommand.DrawInstanced di -> {
                     flushDescriptorSet(cmd);
-                    vkCmdDraw(cmd, di.vertexCount(), di.instanceCount(), di.firstVertex(), di.firstInstance());
+                    vk.cmdDraw(cmd, di.vertexCount(), di.instanceCount(), di.firstVertex(), di.firstInstance());
                 }
                 case dev.engine.graphics.command.RenderCommand.DrawIndexedInstanced di -> {
                     flushDescriptorSet(cmd);
-                    vkCmdDrawIndexed(cmd, di.indexCount(), di.instanceCount(), di.firstIndex(), 0, di.firstInstance());
+                    vk.cmdDrawIndexed(cmd, di.indexCount(), di.instanceCount(), di.firstIndex(), 0, di.firstInstance());
                 }
                 case dev.engine.graphics.command.RenderCommand.DrawIndirect(var buffer, long offset, int drawCount, int stride) -> {
                     flushDescriptorSet(cmd);
                     var alloc = bufferRegistry.get(buffer);
                     if (alloc != null) {
-                        vkCmdDrawIndirect(cmd, alloc.buffer(), offset, drawCount, stride == 0 ? 16 : stride);
+                        vk.cmdDrawIndirect(cmd, alloc.buffer(), offset, drawCount, stride == 0 ? 16 : stride);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.DrawIndexedIndirect(var buffer, long offset, int drawCount, int stride) -> {
                     flushDescriptorSet(cmd);
                     var alloc = bufferRegistry.get(buffer);
                     if (alloc != null) {
-                        vkCmdDrawIndexedIndirect(cmd, alloc.buffer(), offset, drawCount, stride == 0 ? 20 : stride);
+                        vk.cmdDrawIndexedIndirect(cmd, alloc.buffer(), offset, drawCount, stride == 0 ? 20 : stride);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.Viewport vp -> {
-                    try (var stack = stackPush()) {
-                        // Negative height flips Y axis to match OpenGL convention
-                        var viewport = VkViewport.calloc(1, stack)
-                                .x(vp.x()).y(vp.height())
-                                .width(vp.width()).height(-vp.height())
-                                .minDepth(0f).maxDepth(1f);
-                        vkCmdSetViewport(cmd, 0, viewport);
-
-                        var scissor = VkRect2D.calloc(1, stack)
-                                .offset(o -> o.x(vp.x()).y(vp.y()))
-                                .extent(e -> e.width(vp.width()).height(vp.height()));
-                        vkCmdSetScissor(cmd, 0, scissor);
-                    }
+                    // Negative height flips Y axis to match OpenGL convention
+                    vk.cmdSetViewport(cmd, vp.x(), vp.height(), vp.width(), -vp.height(), 0f, 1f);
+                    vk.cmdSetScissor(cmd, vp.x(), vp.y(), vp.width(), vp.height());
                 }
                 case dev.engine.graphics.command.RenderCommand.Scissor sc -> {
-                    try (var stack = stackPush()) {
-                        var scissor = VkRect2D.calloc(1, stack)
-                                .offset(o -> o.x(sc.x()).y(sc.y()))
-                                .extent(e -> e.width(sc.width()).height(sc.height()));
-                        vkCmdSetScissor(cmd, 0, scissor);
-                    }
+                    vk.cmdSetScissor(cmd, sc.x(), sc.y(), sc.width(), sc.height());
                 }
                 case dev.engine.graphics.command.RenderCommand.Clear c -> {
                     // Clear is handled by render pass load op — ignore here
@@ -1575,8 +998,8 @@ public class VkRenderDevice implements RenderDevice {
                     log.debug("BindImage not yet implemented for Vulkan (needs storage image descriptors)");
                 }
                 case dev.engine.graphics.command.RenderCommand.SetDepthTest sdt -> {
-                    VK13.vkCmdSetDepthTestEnable(cmd, sdt.enabled());
-                    VK13.vkCmdSetDepthWriteEnable(cmd, sdt.enabled());
+                    vk.cmdSetDepthTestEnable(cmd, sdt.enabled());
+                    vk.cmdSetDepthWriteEnable(cmd, sdt.enabled());
                 }
                 case dev.engine.graphics.command.RenderCommand.SetBlending sb -> {
                     if (currentBoundPipeline != null) {
@@ -1588,7 +1011,7 @@ public class VkRenderDevice implements RenderDevice {
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.SetCullFace scf -> {
-                    VK13.vkCmdSetCullMode(cmd, scf.enabled() ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
+                    vk.cmdSetCullMode(cmd, scf.enabled() ? VkBindings.VK_CULL_MODE_BACK_BIT : VkBindings.VK_CULL_MODE_NONE);
                 }
                 case dev.engine.graphics.command.RenderCommand.SetWireframe sw -> {
                     currentWireframe = sw.enabled();
@@ -1600,95 +1023,67 @@ public class VkRenderDevice implements RenderDevice {
                 case dev.engine.graphics.command.RenderCommand.BindRenderTarget brt -> {
                     var rtAlloc = renderTargetRegistry.get(brt.renderTarget());
                     if (rtAlloc != null) {
-                        // End current render pass
-                        vkCmdEndRenderPass(cmd);
+                        vk.cmdEndRenderPass(cmd);
 
-                        try (var rtStack = stackPush()) {
-                            int clearCount = rtAlloc.colorAttachments().size()
-                                    + (rtAlloc.depthAttachment() != null ? 1 : 0);
-                            var clearValues = VkClearValue.calloc(clearCount, rtStack);
-                            for (int i = 0; i < rtAlloc.colorAttachments().size(); i++) {
-                                clearValues.get(i).color()
-                                        .float32(0, 0f).float32(1, 0f).float32(2, 0f).float32(3, 1f);
-                            }
-                            if (rtAlloc.depthAttachment() != null) {
-                                clearValues.get(rtAlloc.colorAttachments().size())
-                                        .depthStencil().depth(1.0f).stencil(0);
-                            }
-
-                            var rpBegin = VkRenderPassBeginInfo.calloc(rtStack)
-                                    .sType$Default()
-                                    .renderPass(rtAlloc.renderPass())
-                                    .framebuffer(rtAlloc.framebuffer())
-                                    .renderArea(a -> a
-                                            .offset(o -> o.set(0, 0))
-                                            .extent(e -> e.set(rtAlloc.width(), rtAlloc.height())))
-                                    .pClearValues(clearValues);
-                            vkCmdBeginRenderPass(cmd, rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+                        int colorCount = rtAlloc.colorAttachments().size();
+                        float[] clearColors = new float[colorCount * 4];
+                        for (int i = 0; i < colorCount; i++) {
+                            clearColors[i * 4 + 3] = 1f; // alpha = 1
                         }
+                        float clearDepth = rtAlloc.depthAttachment() != null ? 1.0f : -1.0f;
+
+                        vk.cmdBeginRenderPass(cmd, rtAlloc.renderPass(), rtAlloc.framebuffer(),
+                                0, 0, rtAlloc.width(), rtAlloc.height(),
+                                clearColors, clearDepth, 0);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindDefaultRenderTarget bdrt -> {
-                    // End the current (off-screen) render pass and re-begin the swapchain one
-                    vkCmdEndRenderPass(cmd);
-
-                    try (var dfStack = stackPush()) {
-                        var clearValues = VkClearValue.calloc(2, dfStack);
-                        clearValues.get(0).color()
-                                .float32(0, 0.05f).float32(1, 0.05f).float32(2, 0.08f).float32(3, 1.0f);
-                        clearValues.get(1).depthStencil().depth(1.0f).stencil(0);
-
-                        var rpBegin = VkRenderPassBeginInfo.calloc(dfStack)
-                                .sType$Default()
-                                .renderPass(renderPass)
-                                .framebuffer(framebuffers.framebuffer(currentImageIndex))
-                                .renderArea(a -> a
-                                        .offset(o -> o.set(0, 0))
-                                        .extent(e -> e.set(swapchain.width(), swapchain.height())))
-                                .pClearValues(clearValues);
-                        vkCmdBeginRenderPass(cmd, rpBegin, VK_SUBPASS_CONTENTS_INLINE);
-                    }
+                    vk.cmdEndRenderPass(cmd);
+                    vk.cmdBeginRenderPass(cmd, renderPass,
+                            framebuffers.framebuffer(currentImageIndex),
+                            0, 0, swapchain.width(), swapchain.height(),
+                            new float[]{0.05f, 0.05f, 0.08f, 1.0f},
+                            1.0f, 0);
                 }
                 case dev.engine.graphics.command.RenderCommand.SetRenderState state -> {
                     var props = state.properties();
                     if (props.contains(RenderState.DEPTH_TEST)) {
-                        VK13.vkCmdSetDepthTestEnable(cmd, props.get(RenderState.DEPTH_TEST));
+                        vk.cmdSetDepthTestEnable(cmd, props.get(RenderState.DEPTH_TEST));
                     }
                     if (props.contains(RenderState.DEPTH_WRITE)) {
-                        VK13.vkCmdSetDepthWriteEnable(cmd, props.get(RenderState.DEPTH_WRITE));
+                        vk.cmdSetDepthWriteEnable(cmd, props.get(RenderState.DEPTH_WRITE));
                     }
                     if (props.contains(RenderState.DEPTH_FUNC)) {
-                        VK13.vkCmdSetDepthCompareOp(cmd, mapCompareFunc(props.get(RenderState.DEPTH_FUNC)));
+                        vk.cmdSetDepthCompareOp(cmd, mapCompareFunc(props.get(RenderState.DEPTH_FUNC)));
                     }
                     if (props.contains(RenderState.CULL_MODE)) {
                         CullMode mode = props.get(RenderState.CULL_MODE);
                         int vkMode = switch (mode.name()) {
-                            case "BACK"  -> VK_CULL_MODE_BACK_BIT;
-                            case "FRONT" -> VK_CULL_MODE_FRONT_BIT;
-                            default      -> VK_CULL_MODE_NONE;
+                            case "BACK"  -> VkBindings.VK_CULL_MODE_BACK_BIT;
+                            case "FRONT" -> VkBindings.VK_CULL_MODE_FRONT_BIT;
+                            default      -> VkBindings.VK_CULL_MODE_NONE;
                         };
-                        VK13.vkCmdSetCullMode(cmd, vkMode);
+                        vk.cmdSetCullMode(cmd, vkMode);
                     }
                     if (props.contains(RenderState.FRONT_FACE)) {
                         FrontFace ff = props.get(RenderState.FRONT_FACE);
-                        VK13.vkCmdSetFrontFace(cmd,
-                                "CCW".equals(ff.name()) ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE);
+                        vk.cmdSetFrontFace(cmd,
+                                "CCW".equals(ff.name()) ? VkBindings.VK_FRONT_FACE_COUNTER_CLOCKWISE : VkBindings.VK_FRONT_FACE_CLOCKWISE);
                     }
                     if (props.contains(RenderState.STENCIL_TEST)) {
-                        VK13.vkCmdSetStencilTestEnable(cmd, props.get(RenderState.STENCIL_TEST));
+                        vk.cmdSetStencilTestEnable(cmd, props.get(RenderState.STENCIL_TEST));
                     }
                     if (props.contains(RenderState.STENCIL_FUNC)) {
                         int ref = props.contains(RenderState.STENCIL_REF) ? props.get(RenderState.STENCIL_REF) : 0;
                         int mask = props.contains(RenderState.STENCIL_MASK) ? props.get(RenderState.STENCIL_MASK) : 0xFF;
-                        int func = mapCompareFunc(props.get(RenderState.STENCIL_FUNC));
-                        VK13.vkCmdSetStencilCompareMask(cmd, VK_STENCIL_FACE_FRONT_AND_BACK, mask);
-                        VK13.vkCmdSetStencilReference(cmd, VK_STENCIL_FACE_FRONT_AND_BACK, ref);
+                        vk.cmdSetStencilCompareMask(cmd, VkBindings.VK_STENCIL_FACE_FRONT_AND_BACK, mask);
+                        vk.cmdSetStencilReference(cmd, VkBindings.VK_STENCIL_FACE_FRONT_AND_BACK, ref);
                     }
                     if (props.contains(RenderState.STENCIL_FAIL)) {
                         StencilOp fail = props.get(RenderState.STENCIL_FAIL);
                         StencilOp depthFail = props.contains(RenderState.STENCIL_DEPTH_FAIL) ? props.get(RenderState.STENCIL_DEPTH_FAIL) : StencilOp.KEEP;
                         StencilOp pass = props.contains(RenderState.STENCIL_PASS) ? props.get(RenderState.STENCIL_PASS) : StencilOp.KEEP;
-                        VK13.vkCmdSetStencilOp(cmd, VK_STENCIL_FACE_FRONT_AND_BACK,
+                        vk.cmdSetStencilOp(cmd, VkBindings.VK_STENCIL_FACE_FRONT_AND_BACK,
                                 mapStencilOp(fail), mapStencilOp(pass), mapStencilOp(depthFail),
                                 mapCompareFunc(props.contains(RenderState.STENCIL_FUNC) ? props.get(RenderState.STENCIL_FUNC) : CompareFunc.ALWAYS));
                     }
@@ -1705,93 +1100,60 @@ public class VkRenderDevice implements RenderDevice {
                 }
                 case dev.engine.graphics.command.RenderCommand.PushConstants(var data) -> {
                     data.rewind();
-                    vkCmdPushConstants(cmd, descriptorManager.pipelineLayout(),
-                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                    vk.cmdPushConstants(cmd, descriptorManager.pipelineLayout(),
+                            VkBindings.VK_SHADER_STAGE_VERTEX_BIT | VkBindings.VK_SHADER_STAGE_FRAGMENT_BIT,
                             0, data);
                 }
                 case dev.engine.graphics.command.RenderCommand.BindComputePipeline(var pipeline) -> {
                     var vkPipeline = pipelineRegistry.get(pipeline);
                     if (vkPipeline != null) {
-                        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vkPipeline);
+                        vk.cmdBindPipeline(cmd, VkBindings.VK_PIPELINE_BIND_POINT_COMPUTE, vkPipeline);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.Dispatch(int gx, int gy, int gz) -> {
-                    // Note: Vulkan compute dispatches cannot happen inside a render pass.
-                    // The caller is responsible for issuing compute work outside of render passes.
                     if (descriptorDirty) {
                         flushDescriptorSet(cmd);
                     }
-                    // Also bind descriptor set to compute bind point
-                    if (currentDescriptorSet != VK_NULL_HANDLE) {
-                        try (var stack = stackPush()) {
-                            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    descriptorManager.pipelineLayout(), 0,
-                                    stack.longs(currentDescriptorSet), null);
-                        }
+                    if (currentDescriptorSet != VkBindings.VK_NULL_HANDLE) {
+                        vk.cmdBindDescriptorSets(cmd, VkBindings.VK_PIPELINE_BIND_POINT_COMPUTE,
+                                descriptorManager.pipelineLayout(), 0, currentDescriptorSet);
                     }
-                    vkCmdDispatch(cmd, gx, gy, gz);
+                    vk.cmdDispatch(cmd, gx, gy, gz);
                 }
                 case dev.engine.graphics.command.RenderCommand.CopyBuffer(var src, var dst, long srcOff, long dstOff, long size) -> {
                     var srcAlloc = bufferRegistry.get(src);
                     var dstAlloc = bufferRegistry.get(dst);
                     if (srcAlloc != null && dstAlloc != null) {
-                        try (var stack = stackPush()) {
-                            var region = VkBufferCopy.calloc(1, stack)
-                                .srcOffset(srcOff)
-                                .dstOffset(dstOff)
-                                .size(size);
-                            vkCmdCopyBuffer(cmd, srcAlloc.buffer(), dstAlloc.buffer(), region);
-                        }
+                        vk.cmdCopyBuffer(cmd, srcAlloc.buffer(), dstAlloc.buffer(), srcOff, dstOff, size);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.CopyTexture(var src, var dst, int sx, int sy, int dx, int dy, int w, int h, int srcMip, int dstMip) -> {
-                    var srcAlloc = textureRegistry.get(src);
-                    var dstAlloc = textureRegistry.get(dst);
-                    if (srcAlloc != null && dstAlloc != null) {
-                        // Transition src to TRANSFER_SRC, dst to TRANSFER_DST
-                        // vkCmdCopyImage
-                        // Transition both back to SHADER_READ_ONLY
-                        // This requires ending/re-beginning the render pass if inside one
-                        log.debug("CopyTexture: requires render pass pause — not yet implemented inside render pass");
-                    }
+                    log.debug("CopyTexture: requires render pass pause — not yet implemented inside render pass");
                 }
                 case dev.engine.graphics.command.RenderCommand.BlitTexture(var src, var dst,
                         int sx0, int sy0, int sx1, int sy1,
                         int dx0, int dy0, int dx1, int dy1, boolean linear) -> {
-                    var srcAlloc = textureRegistry.get(src);
-                    var dstAlloc = textureRegistry.get(dst);
-                    if (srcAlloc != null && dstAlloc != null) {
-                        log.debug("BlitTexture: requires render pass pause — not yet implemented inside render pass");
-                    }
+                    log.debug("BlitTexture: requires render pass pause — not yet implemented inside render pass");
                 }
                 case dev.engine.graphics.command.RenderCommand.MemoryBarrier(var scope) -> {
-                    try (var stack = stackPush()) {
-                        int srcStage, dstStage, srcAccess, dstAccess;
-                        if (scope == dev.engine.graphics.renderstate.BarrierScope.STORAGE_BUFFER) {
-                            srcStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-                            dstStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-                            srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
-                            dstAccess = VK_ACCESS_SHADER_READ_BIT;
-                        } else if (scope == dev.engine.graphics.renderstate.BarrierScope.TEXTURE) {
-                            srcStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-                            dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-                            srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
-                            dstAccess = VK_ACCESS_SHADER_READ_BIT;
-                        } else {
-                            srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-                            dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-                            srcAccess = VK_ACCESS_MEMORY_WRITE_BIT;
-                            dstAccess = VK_ACCESS_MEMORY_READ_BIT;
-                        }
-
-                        var memBarrier = VkMemoryBarrier.calloc(1, stack)
-                                .sType$Default()
-                                .srcAccessMask(srcAccess)
-                                .dstAccessMask(dstAccess);
-
-                        vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0,
-                                memBarrier, null, null);
+                    int srcStage, dstStage, srcAccess, dstAccess;
+                    if (scope == dev.engine.graphics.renderstate.BarrierScope.STORAGE_BUFFER) {
+                        srcStage = VkBindings.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+                        dstStage = VkBindings.VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                        srcAccess = VkBindings.VK_ACCESS_SHADER_WRITE_BIT;
+                        dstAccess = VkBindings.VK_ACCESS_SHADER_READ_BIT;
+                    } else if (scope == dev.engine.graphics.renderstate.BarrierScope.TEXTURE) {
+                        srcStage = VkBindings.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+                        dstStage = VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                        srcAccess = VkBindings.VK_ACCESS_SHADER_WRITE_BIT;
+                        dstAccess = VkBindings.VK_ACCESS_SHADER_READ_BIT;
+                    } else {
+                        srcStage = VkBindings.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+                        dstStage = VkBindings.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+                        srcAccess = VkBindings.VK_ACCESS_MEMORY_WRITE_BIT;
+                        dstAccess = VkBindings.VK_ACCESS_MEMORY_READ_BIT;
                     }
+                    vk.cmdPipelineBarrier(cmd, srcStage, dstStage, srcAccess, dstAccess);
                 }
             }
         }
@@ -1801,15 +1163,15 @@ public class VkRenderDevice implements RenderDevice {
      * Rebinds the current pipeline with the given blend config and wireframe state,
      * creating a new pipeline variant if needed.
      */
-    private void rebindPipelineVariant(VkCommandBuffer cmd, VkPipelineFactory.BlendConfig blendConfig, boolean wireframe) {
+    private void rebindPipelineVariant(long cmd, VkPipelineFactory.BlendConfig blendConfig, boolean wireframe) {
         var variantKey = currentBoundPipeline.index() + "_" + currentBlendMode.name() + "_" + wireframe;
         long variantPipeline = pipelineVariants.computeIfAbsent(variantKey, k -> {
             var spec = pipelineSpecs.get(currentBoundPipeline.index());
             if (spec == null) return pipelineRegistry.get(currentBoundPipeline);
-            return VkPipelineFactory.create(device, renderPass,
+            return VkPipelineFactory.create(vk, device, renderPass,
                     descriptorManager.pipelineLayout(), spec.binaries(), spec.vertexFormat(), blendConfig, wireframe);
         });
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, variantPipeline);
+        vk.cmdBindPipeline(cmd, VkBindings.VK_PIPELINE_BIND_POINT_GRAPHICS, variantPipeline);
     }
 
     private VkPipelineFactory.BlendConfig mapBlendMode(BlendMode mode) {
@@ -1825,13 +1187,12 @@ public class VkRenderDevice implements RenderDevice {
     @Override
     @SuppressWarnings("unchecked")
     public <T> T queryCapability(DeviceCapability<T> capability) {
-        var limits = deviceProperties.limits();
         return switch (capability.name()) {
-            case "MAX_TEXTURE_SIZE" -> (T) Integer.valueOf(limits.maxImageDimension2D());
-            case "MAX_FRAMEBUFFER_WIDTH" -> (T) Integer.valueOf(limits.maxFramebufferWidth());
-            case "MAX_FRAMEBUFFER_HEIGHT" -> (T) Integer.valueOf(limits.maxFramebufferHeight());
+            case "MAX_TEXTURE_SIZE" -> (T) Integer.valueOf(vk.getMaxImageDimension2D(instance, physicalDevice));
+            case "MAX_FRAMEBUFFER_WIDTH" -> (T) Integer.valueOf(vk.getMaxFramebufferWidth(instance, physicalDevice));
+            case "MAX_FRAMEBUFFER_HEIGHT" -> (T) Integer.valueOf(vk.getMaxFramebufferHeight(instance, physicalDevice));
             case "BACKEND_NAME" -> (T) "Vulkan";
-            case "DEVICE_NAME" -> (T) deviceProperties.deviceNameString();
+            case "DEVICE_NAME" -> (T) vk.getDeviceName(instance, physicalDevice);
             default -> null;
         };
     }
@@ -1840,11 +1201,11 @@ public class VkRenderDevice implements RenderDevice {
 
     @Override
     public void close() {
-        vkDeviceWaitIdle(device);
+        vk.deviceWaitIdle(device);
 
         // Destroy pipeline variants (blend + wireframe)
         for (long variant : pipelineVariants.values()) {
-            vkDestroyPipeline(device, variant, null);
+            vk.destroyPipeline(device, variant);
         }
         pipelineVariants.clear();
         pipelineSpecs.clear();
@@ -1862,51 +1223,48 @@ public class VkRenderDevice implements RenderDevice {
 
         // Destroy remaining render targets (before textures, since RT owns some textures)
         renderTargetRegistry.destroyAll(rtAlloc -> {
-            vkDestroyFramebuffer(device, rtAlloc.framebuffer(), null);
-            vkDestroyRenderPass(device, rtAlloc.renderPass(), null);
+            vk.destroyFramebuffer(device, rtAlloc.framebuffer());
+            vk.destroyRenderPass(device, rtAlloc.renderPass());
             for (var texHandle : rtAlloc.colorTextureHandles()) {
                 textureRegistry.remove(texHandle);
             }
             for (var colorAlloc : rtAlloc.colorAttachments()) {
-                vkDestroyImageView(device, colorAlloc.imageView(), null);
-                vkDestroyImage(device, colorAlloc.image(), null);
-                vkFreeMemory(device, colorAlloc.memory(), null);
+                vk.destroyImageView(device, colorAlloc.imageView());
+                vk.destroyImage(device, colorAlloc.image());
+                vk.freeMemory(device, colorAlloc.memory());
             }
             if (rtAlloc.depthAttachment() != null) {
-                vkDestroyImageView(device, rtAlloc.depthAttachment().imageView(), null);
-                vkDestroyImage(device, rtAlloc.depthAttachment().image(), null);
-                vkFreeMemory(device, rtAlloc.depthAttachment().memory(), null);
+                vk.destroyImageView(device, rtAlloc.depthAttachment().imageView());
+                vk.destroyImage(device, rtAlloc.depthAttachment().image());
+                vk.freeMemory(device, rtAlloc.depthAttachment().memory());
             }
         });
 
         // Destroy remaining textures
         textureRegistry.destroyAll(alloc -> {
-            vkDestroyImageView(device, alloc.imageView(), null);
-            vkDestroyImage(device, alloc.image(), null);
-            vkFreeMemory(device, alloc.memory(), null);
+            vk.destroyImageView(device, alloc.imageView());
+            vk.destroyImage(device, alloc.image());
+            vk.freeMemory(device, alloc.memory());
         });
 
         // Destroy remaining samplers
-        samplerRegistry.destroyAll(alloc -> vkDestroySampler(device, alloc.sampler(), null));
+        samplerRegistry.destroyAll(alloc -> vk.destroySampler(device, alloc.sampler()));
 
         // Destroy remaining buffers
         bufferRegistry.destroyAll(alloc -> {
-            vkFreeMemory(device, alloc.memory(), null);
-            vkDestroyBuffer(device, alloc.buffer(), null);
+            vk.freeMemory(device, alloc.memory());
+            vk.destroyBuffer(device, alloc.buffer());
         });
 
         for (var frame : frames) frame.close();
         descriptorManager.close();
         framebuffers.close();
-        vkDestroyRenderPass(device, renderPass, null);
+        vk.destroyRenderPass(device, renderPass);
         swapchain.close();
-        vkDestroyCommandPool(device, commandPool, null);
-        vkDestroyDevice(device, null);
-        vkDestroySurfaceKHR(instance, surface, null);
-        vkDestroyInstance(instance, null);
-
-        deviceProperties.free();
-        memoryProperties.free();
+        vk.destroyCommandPool(device, commandPool);
+        vk.destroyDevice(device);
+        vk.destroySurface(instance, surface);
+        vk.destroyInstance(instance);
 
         log.info("Vulkan render device destroyed");
     }
@@ -1915,109 +1273,80 @@ public class VkRenderDevice implements RenderDevice {
 
     private int mapBufferUsage(BufferUsage usage) {
         return switch (usage.name()) {
-            case "VERTEX" -> VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-            case "INDEX" -> VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-            case "UNIFORM" -> VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-            case "STORAGE" -> VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-            default -> VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            case "VERTEX" -> VkBindings.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            case "INDEX" -> VkBindings.VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+            case "UNIFORM" -> VkBindings.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+            case "STORAGE" -> VkBindings.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+            default -> VkBindings.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
         };
     }
 
     private int mapAccessPattern(AccessPattern pattern) {
         return switch (pattern.name()) {
-            case "STATIC" -> VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-            case "DYNAMIC", "STREAM" -> VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-            default -> VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+            case "STATIC" -> VkBindings.VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VkBindings.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+            case "DYNAMIC", "STREAM" -> VkBindings.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkBindings.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+            default -> VkBindings.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkBindings.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
         };
     }
 
-    private void executeOneShot(java.util.function.Consumer<VkCommandBuffer> recorder) {
-        try (var stack = stackPush()) {
-            var allocInfo = VkCommandBufferAllocateInfo.calloc(stack)
-                    .sType$Default()
-                    .commandPool(commandPool)
-                    .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
-                    .commandBufferCount(1);
-            var pCmd = stack.mallocPointer(1);
-            vkAllocateCommandBuffers(device, allocInfo, pCmd);
-            var cmd = new VkCommandBuffer(pCmd.get(0), device);
+    private void executeOneShot(java.util.function.LongConsumer recorder) {
+        long cmd = vk.allocateCommandBuffer(device, commandPool);
+        vk.beginCommandBuffer(cmd, VkBindings.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+        recorder.accept(cmd);
+        vk.endCommandBuffer(cmd);
 
-            var beginInfo = VkCommandBufferBeginInfo.calloc(stack)
-                    .sType$Default()
-                    .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-            vkBeginCommandBuffer(cmd, beginInfo);
-            recorder.accept(cmd);
-            vkEndCommandBuffer(cmd);
-
-            var submitInfo = VkSubmitInfo.calloc(stack)
-                    .sType$Default()
-                    .pCommandBuffers(pCmd);
-            vkQueueSubmit(graphicsQueue, submitInfo, VK_NULL_HANDLE);
-            vkQueueWaitIdle(graphicsQueue);
-            vkFreeCommandBuffers(device, commandPool, pCmd);
-        }
+        vk.queueSubmitSimple(graphicsQueue, cmd, VkBindings.VK_NULL_HANDLE);
+        vk.queueWaitIdle(graphicsQueue);
+        vk.freeCommandBuffer(device, commandPool, cmd);
     }
 
     private void transitionImageLayout(long image, int oldLayout, int newLayout, int aspectMask, int mipLevels) {
         executeOneShot(cmd -> {
-            try (var stack = stackPush()) {
-                int srcAccess, dstAccess, srcStage, dstStage;
-                if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-                    srcAccess = 0;
-                    dstAccess = VK_ACCESS_SHADER_READ_BIT;
-                    srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-                    dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-                } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-                    srcAccess = 0;
-                    dstAccess = VK_ACCESS_TRANSFER_WRITE_BIT;
-                    srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-                    dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-                } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-                    srcAccess = VK_ACCESS_TRANSFER_WRITE_BIT;
-                    dstAccess = VK_ACCESS_SHADER_READ_BIT;
-                    srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-                    dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-                } else {
-                    srcAccess = 0;
-                    dstAccess = 0;
-                    srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-                    dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-                }
-
-                var barrier = VkImageMemoryBarrier.calloc(1, stack)
-                        .sType$Default()
-                        .oldLayout(oldLayout)
-                        .newLayout(newLayout)
-                        .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                        .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                        .image(image)
-                        .subresourceRange(sr -> sr.aspectMask(aspectMask)
-                                .baseMipLevel(0).levelCount(mipLevels).baseArrayLayer(0).layerCount(1))
-                        .srcAccessMask(srcAccess)
-                        .dstAccessMask(dstAccess);
-                vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, null, null, barrier);
+            int srcAccess, dstAccess, srcStage, dstStage;
+            if (oldLayout == VkBindings.VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+                srcAccess = 0;
+                dstAccess = VkBindings.VK_ACCESS_SHADER_READ_BIT;
+                srcStage = VkBindings.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                dstStage = VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            } else if (oldLayout == VkBindings.VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VkBindings.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+                srcAccess = 0;
+                dstAccess = VkBindings.VK_ACCESS_TRANSFER_WRITE_BIT;
+                srcStage = VkBindings.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                dstStage = VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT;
+            } else if (oldLayout == VkBindings.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+                srcAccess = VkBindings.VK_ACCESS_TRANSFER_WRITE_BIT;
+                dstAccess = VkBindings.VK_ACCESS_SHADER_READ_BIT;
+                srcStage = VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT;
+                dstStage = VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            } else {
+                srcAccess = 0;
+                dstAccess = 0;
+                srcStage = VkBindings.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+                dstStage = VkBindings.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
             }
+            vk.cmdImageBarrier(cmd, image, oldLayout, newLayout, srcStage, dstStage,
+                    srcAccess, dstAccess, aspectMask, 0, mipLevels);
         });
     }
 
     private int mapTextureFormat(dev.engine.graphics.texture.TextureFormat format) {
         return switch (format.name()) {
-            case "RGBA8" -> VK_FORMAT_R8G8B8A8_UNORM;
-            case "RGB8" -> VK_FORMAT_R8G8B8_UNORM;
-            case "R8" -> VK_FORMAT_R8_UNORM;
-            case "DEPTH24" -> VK_FORMAT_D24_UNORM_S8_UINT;
-            case "DEPTH32F" -> VK_FORMAT_D32_SFLOAT;
-            case "RGBA16F" -> VK_FORMAT_R16G16B16A16_SFLOAT;
-            case "RGBA32F" -> VK_FORMAT_R32G32B32A32_SFLOAT;
-            case "RG16F" -> VK_FORMAT_R16G16_SFLOAT;
-            case "RG32F" -> VK_FORMAT_R32G32_SFLOAT;
-            case "R16F" -> VK_FORMAT_R16_SFLOAT;
-            case "R32F" -> VK_FORMAT_R32_SFLOAT;
-            case "R32UI" -> VK_FORMAT_R32_UINT;
-            case "R32I" -> VK_FORMAT_R32_SINT;
-            case "DEPTH24_STENCIL8" -> VK_FORMAT_D24_UNORM_S8_UINT;
-            case "DEPTH32F_STENCIL8" -> VK_FORMAT_D32_SFLOAT_S8_UINT;
-            default -> VK_FORMAT_R8G8B8A8_UNORM;
+            case "RGBA8" -> VkBindings.VK_FORMAT_R8G8B8A8_UNORM;
+            case "RGB8" -> VkBindings.VK_FORMAT_R8G8B8_UNORM;
+            case "R8" -> VkBindings.VK_FORMAT_R8_UNORM;
+            case "DEPTH24" -> VkBindings.VK_FORMAT_D24_UNORM_S8_UINT;
+            case "DEPTH32F" -> VkBindings.VK_FORMAT_D32_SFLOAT;
+            case "RGBA16F" -> VkBindings.VK_FORMAT_R16G16B16A16_SFLOAT;
+            case "RGBA32F" -> VkBindings.VK_FORMAT_R32G32B32A32_SFLOAT;
+            case "RG16F" -> VkBindings.VK_FORMAT_R16G16_SFLOAT;
+            case "RG32F" -> VkBindings.VK_FORMAT_R32G32_SFLOAT;
+            case "R16F" -> VkBindings.VK_FORMAT_R16_SFLOAT;
+            case "R32F" -> VkBindings.VK_FORMAT_R32_SFLOAT;
+            case "R32UI" -> VkBindings.VK_FORMAT_R32_UINT;
+            case "R32I" -> VkBindings.VK_FORMAT_R32_SINT;
+            case "DEPTH24_STENCIL8" -> VkBindings.VK_FORMAT_D24_UNORM_S8_UINT;
+            case "DEPTH32F_STENCIL8" -> VkBindings.VK_FORMAT_D32_SFLOAT_S8_UINT;
+            default -> VkBindings.VK_FORMAT_R8G8B8A8_UNORM;
         };
     }
 
@@ -2030,29 +1359,29 @@ public class VkRenderDevice implements RenderDevice {
 
     private static int mapCompareFunc(CompareFunc func) {
         return switch (func.name()) {
-            case "LESS"      -> VK_COMPARE_OP_LESS;
-            case "LEQUAL"    -> VK_COMPARE_OP_LESS_OR_EQUAL;
-            case "GREATER"   -> VK_COMPARE_OP_GREATER;
-            case "GEQUAL"    -> VK_COMPARE_OP_GREATER_OR_EQUAL;
-            case "EQUAL"     -> VK_COMPARE_OP_EQUAL;
-            case "NOT_EQUAL" -> VK_COMPARE_OP_NOT_EQUAL;
-            case "ALWAYS"    -> VK_COMPARE_OP_ALWAYS;
-            case "NEVER"     -> VK_COMPARE_OP_NEVER;
-            default          -> VK_COMPARE_OP_LESS;
+            case "LESS"      -> VkBindings.VK_COMPARE_OP_LESS;
+            case "LEQUAL"    -> VkBindings.VK_COMPARE_OP_LESS_OR_EQUAL;
+            case "GREATER"   -> VkBindings.VK_COMPARE_OP_GREATER;
+            case "GEQUAL"    -> VkBindings.VK_COMPARE_OP_GREATER_OR_EQUAL;
+            case "EQUAL"     -> VkBindings.VK_COMPARE_OP_EQUAL;
+            case "NOT_EQUAL" -> VkBindings.VK_COMPARE_OP_NOT_EQUAL;
+            case "ALWAYS"    -> VkBindings.VK_COMPARE_OP_ALWAYS;
+            case "NEVER"     -> VkBindings.VK_COMPARE_OP_NEVER;
+            default          -> VkBindings.VK_COMPARE_OP_LESS;
         };
     }
 
     private static int mapStencilOp(StencilOp op) {
         return switch (op.name()) {
-            case "KEEP"      -> VK_STENCIL_OP_KEEP;
-            case "ZERO"      -> VK_STENCIL_OP_ZERO;
-            case "REPLACE"   -> VK_STENCIL_OP_REPLACE;
-            case "INCR"      -> VK_STENCIL_OP_INCREMENT_AND_CLAMP;
-            case "DECR"      -> VK_STENCIL_OP_DECREMENT_AND_CLAMP;
-            case "INVERT"    -> VK_STENCIL_OP_INVERT;
-            case "INCR_WRAP" -> VK_STENCIL_OP_INCREMENT_AND_WRAP;
-            case "DECR_WRAP" -> VK_STENCIL_OP_DECREMENT_AND_WRAP;
-            default          -> VK_STENCIL_OP_KEEP;
+            case "KEEP"      -> VkBindings.VK_STENCIL_OP_KEEP;
+            case "ZERO"      -> VkBindings.VK_STENCIL_OP_ZERO;
+            case "REPLACE"   -> VkBindings.VK_STENCIL_OP_REPLACE;
+            case "INCR"      -> VkBindings.VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+            case "DECR"      -> VkBindings.VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+            case "INVERT"    -> VkBindings.VK_STENCIL_OP_INVERT;
+            case "INCR_WRAP" -> VkBindings.VK_STENCIL_OP_INCREMENT_AND_WRAP;
+            case "DECR_WRAP" -> VkBindings.VK_STENCIL_OP_DECREMENT_AND_WRAP;
+            default          -> VkBindings.VK_STENCIL_OP_KEEP;
         };
     }
 
@@ -2066,15 +1395,15 @@ public class VkRenderDevice implements RenderDevice {
 
     private int mapFilter(dev.engine.graphics.sampler.FilterMode mode) {
         return switch (mode.name()) {
-            case "LINEAR", "LINEAR_MIPMAP_LINEAR" -> VK_FILTER_LINEAR;
-            default -> VK_FILTER_NEAREST;
+            case "LINEAR", "LINEAR_MIPMAP_LINEAR" -> VkBindings.VK_FILTER_LINEAR;
+            default -> VkBindings.VK_FILTER_NEAREST;
         };
     }
 
     private int mapMipmapMode(dev.engine.graphics.sampler.FilterMode mode) {
         return switch (mode.name()) {
-            case "LINEAR_MIPMAP_LINEAR" -> VK_SAMPLER_MIPMAP_MODE_LINEAR;
-            default -> VK_SAMPLER_MIPMAP_MODE_NEAREST;
+            case "LINEAR_MIPMAP_LINEAR" -> VkBindings.VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            default -> VkBindings.VK_SAMPLER_MIPMAP_MODE_NEAREST;
         };
     }
 
@@ -2087,9 +1416,9 @@ public class VkRenderDevice implements RenderDevice {
 
     private int mapWrapMode(dev.engine.graphics.sampler.WrapMode mode) {
         return switch (mode.name()) {
-            case "CLAMP_TO_EDGE" -> VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-            case "MIRRORED_REPEAT" -> VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
-            default -> VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            case "CLAMP_TO_EDGE" -> VkBindings.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            case "MIRRORED_REPEAT" -> VkBindings.VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+            default -> VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT;
         };
     }
 
@@ -2130,60 +1459,50 @@ public class VkRenderDevice implements RenderDevice {
 
             for (int i = 1; i < mipLevels; i++) {
                 // Transition level i-1 from SHADER_READ_ONLY to TRANSFER_SRC
-                insertImageBarrier(cmd, alloc.image(),
-                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                        VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        i - 1, 1);
+                vk.cmdImageBarrier(cmd, alloc.image(),
+                        VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VkBindings.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                        VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        VkBindings.VK_ACCESS_SHADER_READ_BIT,
+                        VkBindings.VK_ACCESS_TRANSFER_READ_BIT,
+                        VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, i - 1, 1);
 
                 // Transition level i from UNDEFINED to TRANSFER_DST
-                insertImageBarrier(cmd, alloc.image(),
-                        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        0, VK_ACCESS_TRANSFER_WRITE_BIT,
-                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        i, 1);
+                vk.cmdImageBarrier(cmd, alloc.image(),
+                        VkBindings.VK_IMAGE_LAYOUT_UNDEFINED,
+                        VkBindings.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VkBindings.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                        VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        0, VkBindings.VK_ACCESS_TRANSFER_WRITE_BIT,
+                        VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, i, 1);
 
                 int nextWidth = Math.max(1, mipWidth / 2);
                 int nextHeight = Math.max(1, mipHeight / 2);
 
-                try (var stack = stackPush()) {
-                    var blit = VkImageBlit.calloc(1, stack);
-                    blit.srcSubresource()
-                            .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                            .mipLevel(i - 1)
-                            .baseArrayLayer(0)
-                            .layerCount(1);
-                    blit.srcOffsets(0).set(0, 0, 0);
-                    blit.srcOffsets(1).set(mipWidth, mipHeight, 1);
-
-                    blit.dstSubresource()
-                            .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                            .mipLevel(i)
-                            .baseArrayLayer(0)
-                            .layerCount(1);
-                    blit.dstOffsets(0).set(0, 0, 0);
-                    blit.dstOffsets(1).set(nextWidth, nextHeight, 1);
-
-                    vkCmdBlitImage(cmd, alloc.image(),
-                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                            alloc.image(),
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            blit, VK_FILTER_LINEAR);
-                }
+                vk.cmdBlitImage(cmd, alloc.image(), alloc.image(),
+                        mipWidth, mipHeight, nextWidth, nextHeight,
+                        i - 1, i, VkBindings.VK_FILTER_LINEAR);
 
                 // Transition level i-1 back to SHADER_READ_ONLY
-                insertImageBarrier(cmd, alloc.image(),
-                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                        i - 1, 1);
+                vk.cmdImageBarrier(cmd, alloc.image(),
+                        VkBindings.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                        VkBindings.VK_ACCESS_TRANSFER_READ_BIT,
+                        VkBindings.VK_ACCESS_SHADER_READ_BIT,
+                        VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, i - 1, 1);
 
                 // Transition level i to SHADER_READ_ONLY
-                insertImageBarrier(cmd, alloc.image(),
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                        i, 1);
+                vk.cmdImageBarrier(cmd, alloc.image(),
+                        VkBindings.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                        VkBindings.VK_ACCESS_TRANSFER_WRITE_BIT,
+                        VkBindings.VK_ACCESS_SHADER_READ_BIT,
+                        VkBindings.VK_IMAGE_ASPECT_COLOR_BIT, i, 1);
 
                 mipWidth = nextWidth;
                 mipHeight = nextHeight;
@@ -2192,47 +1511,4 @@ public class VkRenderDevice implements RenderDevice {
 
         textureMipsDirty.put(textureHandle.index(), false);
     }
-
-    private void insertImageBarrier(VkCommandBuffer cmd, long image,
-                                    int oldLayout, int newLayout,
-                                    int srcAccess, int dstAccess,
-                                    int srcStage, int dstStage,
-                                    int baseMipLevel, int levelCount) {
-        try (var stack = stackPush()) {
-            var barrier = VkImageMemoryBarrier.calloc(1, stack)
-                    .sType$Default()
-                    .oldLayout(oldLayout)
-                    .newLayout(newLayout)
-                    .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                    .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                    .image(image)
-                    .subresourceRange(sr -> sr.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
-                            .baseMipLevel(baseMipLevel).levelCount(levelCount)
-                            .baseArrayLayer(0).layerCount(1))
-                    .srcAccessMask(srcAccess)
-                    .dstAccessMask(dstAccess);
-            vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, null, null, barrier);
-        }
-    }
-
-    private int findMemoryType(int typeFilter, int properties) {
-        for (int i = 0; i < memoryProperties.memoryTypeCount(); i++) {
-            if ((typeFilter & (1 << i)) != 0 &&
-                    (memoryProperties.memoryTypes(i).propertyFlags() & properties) == properties) {
-                return i;
-            }
-        }
-        // Fallback: try without DEVICE_LOCAL if we asked for it
-        int fallbackProps = properties & ~VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-        if (fallbackProps != properties) {
-            for (int i = 0; i < memoryProperties.memoryTypeCount(); i++) {
-                if ((typeFilter & (1 << i)) != 0 &&
-                        (memoryProperties.memoryTypes(i).propertyFlags() & fallbackProps) == fallbackProps) {
-                    return i;
-                }
-            }
-        }
-        throw new RuntimeException("Failed to find suitable memory type");
-    }
-
 }
