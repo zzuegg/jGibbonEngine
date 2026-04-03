@@ -57,3 +57,48 @@ Each per-frame pool allocates:
 - Max 256 descriptor sets per frame
 
 If exceeded, `vkAllocateDescriptorSets` will fail. Increase `MAX_SETS_PER_FRAME` in `VkDescriptorManager` if needed.
+
+## Dynamic State (Vulkan 1.3)
+
+### API Version Requirement
+
+The Vulkan backend requests API version 1.3 (`VK_API_VERSION_1_3`) in the instance creation. This is required for using core dynamic state functions from `VK13`:
+
+- `vkCmdSetDepthTestEnable` / `vkCmdSetDepthWriteEnable`
+- `vkCmdSetCullMode`
+- `vkCmdSetFrontFace`
+
+These functions are promoted from `VK_EXT_extended_dynamic_state` and are mandatory in Vulkan 1.3 conformant devices. No explicit feature enable is needed when the device supports 1.3.
+
+### Pipeline Dynamic State List
+
+`VkPipelineFactory` declares these as dynamic states in the pipeline:
+
+- `VK_DYNAMIC_STATE_VIEWPORT` / `VK_DYNAMIC_STATE_SCISSOR` (standard)
+- `VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE` / `VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE`
+- `VK_DYNAMIC_STATE_CULL_MODE` / `VK_DYNAMIC_STATE_FRONT_FACE`
+
+The pipeline's rasterizer and depth-stencil initial values are overridden at draw time by these dynamic state commands.
+
+### What is NOT dynamically configurable
+
+- **Blending**: `vkCmdSetColorBlendEnableEXT` requires `VK_EXT_extended_dynamic_state3`, which has poor driver support. Blending is baked into the pipeline (currently disabled).
+- **Wireframe / polygon mode**: `vkCmdSetPolygonModeEXT` also requires `VK_EXT_extended_dynamic_state3`. This is a no-op in the Vulkan backend.
+
+These limitations mean that toggling blending or wireframe at runtime requires pipeline permutations (not yet implemented).
+
+## Compute Pipelines
+
+### Render Pass Constraint
+
+Vulkan compute dispatches (`vkCmdDispatch`) **cannot** be recorded inside an active render pass. This is a hard Vulkan specification constraint (VUID-vkCmdDispatch-renderpass). The caller must ensure compute work is issued outside of `vkCmdBeginRenderPass` / `vkCmdEndRenderPass` pairs.
+
+Currently the engine does not automatically end/begin render passes around compute dispatches. Users must structure their command lists so that compute work happens before the render pass begins or after it ends.
+
+### Descriptor Set Binding
+
+When dispatching compute work, the descriptor set must be bound to `VK_PIPELINE_BIND_POINT_COMPUTE` in addition to `VK_PIPELINE_BIND_POINT_GRAPHICS`. The `flushDescriptorSet()` method binds to GRAPHICS; the Dispatch command handler additionally binds the same set to COMPUTE before dispatching.
+
+### Pipeline Layout Sharing
+
+Compute pipelines share the same `VkPipelineLayout` as graphics pipelines (from `VkDescriptorManager.pipelineLayout()`). This means compute shaders can access UBOs, SSBOs, and textures using the same binding numbers as graphics shaders.

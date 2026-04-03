@@ -968,6 +968,54 @@ public class VkRenderDevice implements RenderDevice {
     }
 
     @Override
+    public Handle<PipelineResource> createComputePipeline(
+            dev.engine.graphics.pipeline.ComputePipelineDescriptor descriptor) {
+        if (!descriptor.hasSpirv()) {
+            throw new UnsupportedOperationException("Vulkan compute requires SPIRV binary");
+        }
+        try (var stack = stackPush()) {
+            byte[] spirvBytes = descriptor.binary().spirv();
+            var spirvBuf = memAlloc(spirvBytes.length);
+            spirvBuf.put(spirvBytes).flip();
+
+            var moduleInfo = VkShaderModuleCreateInfo.calloc(stack)
+                    .sType$Default()
+                    .pCode(spirvBuf);
+
+            var pModule = stack.mallocLong(1);
+            int result = vkCreateShaderModule(device, moduleInfo, null, pModule);
+            memFree(spirvBuf);
+            if (result != VK_SUCCESS) {
+                throw new RuntimeException("Failed to create compute shader module: " + result);
+            }
+            long shaderModule = pModule.get(0);
+
+            var stageInfo = VkPipelineShaderStageCreateInfo.calloc(stack)
+                    .sType$Default()
+                    .stage(VK_SHADER_STAGE_COMPUTE_BIT)
+                    .module(shaderModule)
+                    .pName(stack.UTF8("main"));
+
+            var pipelineInfo = VkComputePipelineCreateInfo.calloc(1, stack)
+                    .sType$Default();
+            pipelineInfo.get(0)
+                    .stage(stageInfo)
+                    .layout(descriptorManager.pipelineLayout());
+
+            var pPipeline = stack.mallocLong(1);
+            result = vkCreateComputePipelines(device, VK_NULL_HANDLE, pipelineInfo, null, pPipeline);
+            vkDestroyShaderModule(device, shaderModule, null);
+            if (result != VK_SUCCESS) {
+                throw new RuntimeException("Failed to create compute pipeline: " + result);
+            }
+
+            var handle = pipelinePool.allocate();
+            vkPipelines.put(handle.index(), pPipeline.get(0));
+            return handle;
+        }
+    }
+
+    @Override
     public boolean isValidPipeline(Handle<PipelineResource> handle) {
         return pipelinePool.isValid(handle);
     }
@@ -1276,6 +1324,7 @@ public class VkRenderDevice implements RenderDevice {
         descriptorDirty = false;
 
         long set = descriptorManager.allocateSet(currentFrame);
+        currentDescriptorSet = set;
 
         // Count UBO + texture writes
         try (var stack = stackPush()) {
@@ -1568,17 +1617,56 @@ public class VkRenderDevice implements RenderDevice {
                             VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                             0, data);
                 }
-                case dev.engine.graphics.command.RenderCommand.BindComputePipeline bcp -> {
-                    // TODO: implement in Task 19
-                    log.warn("BindComputePipeline not yet implemented in Vulkan backend");
+                case dev.engine.graphics.command.RenderCommand.BindComputePipeline(var pipeline) -> {
+                    var vkPipeline = vkPipelines.get(pipeline.index());
+                    if (vkPipeline != null) {
+                        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vkPipeline);
+                    }
                 }
-                case dev.engine.graphics.command.RenderCommand.Dispatch dispatch -> {
-                    // TODO: implement in Task 19
-                    log.warn("Dispatch not yet implemented in Vulkan backend");
+                case dev.engine.graphics.command.RenderCommand.Dispatch(int gx, int gy, int gz) -> {
+                    // Note: Vulkan compute dispatches cannot happen inside a render pass.
+                    // The caller is responsible for issuing compute work outside of render passes.
+                    if (descriptorDirty) {
+                        flushDescriptorSet(cmd);
+                    }
+                    // Also bind descriptor set to compute bind point
+                    if (currentDescriptorSet != VK_NULL_HANDLE) {
+                        try (var stack = stackPush()) {
+                            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    descriptorManager.pipelineLayout(), 0,
+                                    stack.longs(currentDescriptorSet), null);
+                        }
+                    }
+                    vkCmdDispatch(cmd, gx, gy, gz);
                 }
-                case dev.engine.graphics.command.RenderCommand.MemoryBarrier barrier -> {
-                    // TODO: implement in Task 19
-                    log.warn("MemoryBarrier not yet implemented in Vulkan backend");
+                case dev.engine.graphics.command.RenderCommand.MemoryBarrier(var scope) -> {
+                    try (var stack = stackPush()) {
+                        int srcStage, dstStage, srcAccess, dstAccess;
+                        if (scope == dev.engine.graphics.renderstate.BarrierScope.STORAGE_BUFFER) {
+                            srcStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+                            dstStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                            srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
+                            dstAccess = VK_ACCESS_SHADER_READ_BIT;
+                        } else if (scope == dev.engine.graphics.renderstate.BarrierScope.TEXTURE) {
+                            srcStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+                            dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                            srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
+                            dstAccess = VK_ACCESS_SHADER_READ_BIT;
+                        } else {
+                            srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+                            dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+                            srcAccess = VK_ACCESS_MEMORY_WRITE_BIT;
+                            dstAccess = VK_ACCESS_MEMORY_READ_BIT;
+                        }
+
+                        var memBarrier = VkMemoryBarrier.calloc(1, stack)
+                                .sType$Default()
+                                .srcAccessMask(srcAccess)
+                                .dstAccessMask(dstAccess);
+
+                        vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0,
+                                memBarrier, null, null);
+                    }
                 }
             }
         }

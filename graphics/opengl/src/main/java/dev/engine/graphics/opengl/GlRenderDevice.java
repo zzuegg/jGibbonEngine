@@ -13,6 +13,7 @@ import dev.engine.graphics.TextureResource;
 import dev.engine.graphics.VertexInputResource;
 import dev.engine.graphics.command.CommandList;
 import dev.engine.graphics.command.RenderCommand;
+import dev.engine.graphics.pipeline.ComputePipelineDescriptor;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderCompilationException;
 import dev.engine.graphics.pipeline.ShaderSource;
@@ -378,6 +379,41 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     @Override
+    public Handle<PipelineResource> createComputePipeline(ComputePipelineDescriptor descriptor) {
+        int program = GL45.glCreateProgram();
+
+        ShaderSource source = descriptor.shader();
+        if (source == null) {
+            GL45.glDeleteProgram(program);
+            throw new UnsupportedOperationException("OpenGL compute requires GLSL source, not SPIRV");
+        }
+
+        int shader = GL45.glCreateShader(GL45.GL_COMPUTE_SHADER);
+        GL45.glShaderSource(shader, source.source());
+        GL45.glCompileShader(shader);
+        if (GL45.glGetShaderi(shader, GL45.GL_COMPILE_STATUS) == GL45.GL_FALSE) {
+            String infoLog = GL45.glGetShaderInfoLog(shader);
+            GL45.glDeleteShader(shader);
+            GL45.glDeleteProgram(program);
+            throw new ShaderCompilationException("Compute shader compilation failed: " + infoLog);
+        }
+
+        GL45.glAttachShader(program, shader);
+        GL45.glLinkProgram(program);
+        if (GL45.glGetProgrami(program, GL45.GL_LINK_STATUS) == GL45.GL_FALSE) {
+            String infoLog = GL45.glGetProgramInfoLog(program);
+            GL45.glDeleteShader(shader);
+            GL45.glDeleteProgram(program);
+            throw new ShaderCompilationException("Compute program link failed: " + infoLog);
+        }
+
+        GL45.glDeleteShader(shader);
+        var handle = pipelinePool.allocate();
+        pipelineGlPrograms.put(handle.index(), program);
+        return handle;
+    }
+
+    @Override
     public boolean isValidPipeline(Handle<PipelineResource> pipeline) {
         return pipelinePool.isValid(pipeline);
     }
@@ -527,17 +563,23 @@ public class GlRenderDevice implements RenderDevice {
                 GL45.nglNamedBufferSubData(pushConstantUbo, 0, data.remaining(), org.lwjgl.system.MemoryUtil.memAddress(data));
                 GL45.glBindBufferBase(GL45.GL_UNIFORM_BUFFER, 15, pushConstantUbo);
             }
-            case RenderCommand.BindComputePipeline bcp -> {
-                // TODO: implement in Task 19
-                log.warn("BindComputePipeline not yet implemented in OpenGL backend");
+            case RenderCommand.BindComputePipeline(var pipeline) -> {
+                int program = getGlProgramName(pipeline);
+                GL45.glUseProgram(program);
             }
-            case RenderCommand.Dispatch dispatch -> {
-                // TODO: implement in Task 19
-                log.warn("Dispatch not yet implemented in OpenGL backend");
+            case RenderCommand.Dispatch(int gx, int gy, int gz) -> {
+                GL45.glDispatchCompute(gx, gy, gz);
             }
-            case RenderCommand.MemoryBarrier barrier -> {
-                // TODO: implement in Task 19
-                log.warn("MemoryBarrier not yet implemented in OpenGL backend");
+            case RenderCommand.MemoryBarrier(var scope) -> {
+                int bits;
+                if (scope == dev.engine.graphics.renderstate.BarrierScope.STORAGE_BUFFER) {
+                    bits = GL45.GL_SHADER_STORAGE_BARRIER_BIT;
+                } else if (scope == dev.engine.graphics.renderstate.BarrierScope.TEXTURE) {
+                    bits = GL45.GL_TEXTURE_FETCH_BARRIER_BIT;
+                } else {
+                    bits = GL45.GL_ALL_BARRIER_BITS;
+                }
+                GL45.glMemoryBarrier(bits);
             }
         }
     }
