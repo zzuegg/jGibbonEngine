@@ -3,18 +3,18 @@ package dev.engine.providers.teavm.windowing;
 import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
+import org.teavm.interop.Async;
+import org.teavm.interop.AsyncCallback;
+import org.teavm.jso.JSBody;
 
 /**
  * Browser canvas-based {@link WindowToolkit} for TeaVM.
  *
- * <p>Creates a {@link WindowHandle} backed by an HTML {@code <canvas>}
- * element. The canvas is located by ID ("canvas" by default) rather than
- * created programmatically, so the hosting HTML page must contain a
- * matching element.
- *
- * <p><b>Status:</b> Stub — enough to satisfy the interface so the TeaVM
- * build pipeline compiles. Canvas integration will be wired up via JSO
- * in a follow-up.
+ * <p>{@link #pollEvents()} suspends the TeaVM thread until the next
+ * {@code requestAnimationFrame} fires, yielding to the browser event loop.
+ * This allows the standard {@code while (window.isOpen())} loop in
+ * {@link dev.engine.graphics.common.engine.BaseApplication} to work
+ * identically on desktop and web.
  */
 public class CanvasWindowToolkit implements WindowToolkit {
 
@@ -23,9 +23,13 @@ public class CanvasWindowToolkit implements WindowToolkit {
         return new CanvasWindowHandle(descriptor);
     }
 
+    /**
+     * Yields to the browser by waiting for the next {@code requestAnimationFrame}.
+     * This is the web equivalent of GLFW's poll events + vsync.
+     */
     @Override
     public void pollEvents() {
-        // No-op in browser — events are delivered via the DOM event loop
+        waitForAnimationFrame();
     }
 
     @Override
@@ -33,19 +37,28 @@ public class CanvasWindowToolkit implements WindowToolkit {
         // Nothing to release
     }
 
+    // --- requestAnimationFrame as @Async ---
+
+    @Async
+    private static native void waitForAnimationFrame();
+
+    private static void waitForAnimationFrame(AsyncCallback<Void> callback) {
+        waitForAnimationFrameJS(callback);
+    }
+
+    @JSBody(params = "callback", script = "requestAnimationFrame(function() { callback(null); });")
+    private static native void waitForAnimationFrameJS(AsyncCallback<Void> callback);
+
     // ------------------------------------------------------------------
 
     private static final class CanvasWindowHandle implements WindowHandle {
 
-        private final String title;
-        private final int width;
-        private final int height;
+        private final String canvasId;
         private boolean open = true;
 
         CanvasWindowHandle(WindowDescriptor descriptor) {
-            this.title = descriptor.title();
-            this.width = descriptor.width();
-            this.height = descriptor.height();
+            this.canvasId = "canvas"; // default canvas element ID
+            setCanvasTitle(descriptor.title());
         }
 
         @Override
@@ -55,27 +68,26 @@ public class CanvasWindowToolkit implements WindowToolkit {
 
         @Override
         public int width() {
-            return width;
+            return getCanvasWidth(canvasId);
         }
 
         @Override
         public int height() {
-            return height;
+            return getCanvasHeight(canvasId);
         }
 
         @Override
         public String title() {
-            return title;
+            return getDocumentTitle();
         }
 
         @Override
         public void show() {
-            // Canvas is always visible in the page
+            // Canvas is always visible
         }
 
         @Override
         public long nativeHandle() {
-            // No native handle in browser context
             return 0;
         }
 
@@ -83,5 +95,17 @@ public class CanvasWindowToolkit implements WindowToolkit {
         public void close() {
             open = false;
         }
+
+        @JSBody(params = "title", script = "document.title = title;")
+        private static native void setCanvasTitle(String title);
+
+        @JSBody(script = "return document.title;")
+        private static native String getDocumentTitle();
+
+        @JSBody(params = "id", script = "return document.getElementById(id).width;")
+        private static native int getCanvasWidth(String id);
+
+        @JSBody(params = "id", script = "return document.getElementById(id).height;")
+        private static native int getCanvasHeight(String id);
     }
 }

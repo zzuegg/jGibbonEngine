@@ -16,9 +16,7 @@ import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.core.mesh.VertexFormat;
 
 import dev.engine.core.memory.NativeMemory;
-import dev.engine.core.memory.SegmentNativeMemory;
 
-import java.lang.foreign.Arena;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -50,12 +48,11 @@ public class HeadlessRenderDevice implements RenderDevice {
         return writeBuffer(h, 0, size);
     }
     @Override public BufferWriter writeBuffer(Handle<BufferResource> h, long offset, long length) {
-        var arena = Arena.ofConfined();
-        var seg = arena.allocate(length);
-        var memory = new SegmentNativeMemory(seg);
+        var bb = java.nio.ByteBuffer.allocate((int) length).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        var memory = new dev.engine.core.memory.ByteBufferNativeMemory(bb);
         return new BufferWriter() {
             @Override public NativeMemory memory() { return memory; }
-            @Override public void close() { arena.close(); }
+            @Override public void close() {}
         };
     }
 

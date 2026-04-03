@@ -2,7 +2,6 @@ package dev.engine.graphics.common.engine;
 
 import dev.engine.core.asset.AssetManager;
 import dev.engine.core.asset.FileSystemAssetSource;
-import dev.engine.core.asset.ImageLoader;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.scene.MeshTag;
 import dev.engine.core.mesh.MeshData;
@@ -18,12 +17,11 @@ import dev.engine.graphics.common.HeadlessRenderDevice;
 import dev.engine.graphics.common.NoOpShaderCompiler;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.shader.ShaderCompiler;
-import dev.engine.core.mesh.ObjLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
-import java.util.concurrent.Executors;
+// No Executors import — use Runnable::run for cross-platform compatibility
 
 /**
  * The main engine class. Owns all core systems as a coordinated whole.
@@ -77,20 +75,20 @@ public class Engine {
         this.profiler = new Profiler();
         this.renderStats = new RenderStats();
 
-        // Asset manager with core loaders
-        this.assets = new AssetManager(Executors.newSingleThreadExecutor());
-        assets.addSource(new FileSystemAssetSource(Path.of("assets")));
-        assets.registerLoader(new ImageLoader());
-        assets.registerLoader(new ObjLoader());
+        // Asset manager — synchronous by default, works on all platforms
+        this.assets = new AssetManager(Runnable::run);
         assets.registerLoader(new dev.engine.core.asset.SlangShaderLoader());
+        // Register platform-specific loaders dynamically (TeaVM can't trace Class.forName)
+        registerLoaderIfAvailable(assets, "dev.engine.core.asset.ImageLoader");
+        registerLoaderIfAvailable(assets, "dev.engine.core.mesh.ObjLoader");
 
         // Renderer — connected to asset manager for shader hot-reload
         if (device == null) device = new HeadlessRenderDevice();
         this.renderer = new Renderer(device, scene, compiler);
         this.renderer.shaderManager().setAssetManager(assets);
 
-        // Module manager
-        this.modules = new ModuleManager<>(new VariableTimestep<>(Time::new), Executors.newWorkStealingPool());
+        // Module manager — synchronous executor for cross-platform compatibility
+        this.modules = new ModuleManager<>(new VariableTimestep<>(Time::new), Runnable::run);
 
         log.info("Engine initialized (headless={}, threaded={})", config.headless(), config.threaded());
     }
@@ -195,5 +193,16 @@ public class Engine {
         modules.shutdown();
         renderer.close();
         log.info("Engine shut down");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void registerLoaderIfAvailable(AssetManager assets, String className) {
+        try {
+            var loader = (dev.engine.core.asset.AssetLoader<?>) Class.forName(className)
+                    .getDeclaredConstructor().newInstance();
+            assets.registerLoader(loader);
+        } catch (Throwable ignored) {
+            // Loader not available on this platform (e.g., ImageLoader on TeaVM)
+        }
     }
 }

@@ -1,5 +1,6 @@
 package dev.engine.providers.teavm.webgpu;
 
+import dev.engine.core.memory.ByteBufferNativeMemory;
 import dev.engine.core.memory.NativeMemory;
 import dev.engine.platform.Platform;
 import dev.engine.graphics.RenderDevice;

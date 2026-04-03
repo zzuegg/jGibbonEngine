@@ -1,4 +1,4 @@
-package dev.engine.providers.teavm.webgpu;
+package dev.engine.core.memory;
 
 import dev.engine.core.memory.NativeMemory;
 

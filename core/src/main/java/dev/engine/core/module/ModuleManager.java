@@ -11,8 +11,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
 /**
@@ -33,7 +31,7 @@ public class ModuleManager<T extends Time> {
     private final UpdateStrategy<T> strategy;
     private final Executor executor;
     private final DependencyGraph graph = new DependencyGraph();
-    private final Map<Class<?>, Module<T>> modules = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Module<T>> modules = new java.util.HashMap<>();
     private volatile boolean shutdown = false;
     private final Object lifecycleLock = new Object();
 
@@ -229,20 +227,19 @@ public class ModuleManager<T extends Time> {
                             module.getClass().getSimpleName(), e.getMessage(), e);
                 }
             } else {
-                CompletableFuture<?>[] futures = new CompletableFuture[updatable.size()];
+                // Run all modules — sequentially via executor
                 for (int i = 0; i < updatable.size(); i++) {
                     Module<T> module = updatable.get(i);
                     log.trace("Updating module {} (parallel)", module.getClass().getSimpleName());
-                    futures[i] = CompletableFuture.runAsync(() -> {
+                    executor.execute(() -> {
                         try {
                             module.onUpdate(context);
                         } catch (Exception e) {
                             log.warn("Exception during update of module {}: {}",
                                     module.getClass().getSimpleName(), e.getMessage(), e);
                         }
-                    }, executor);
+                    });
                 }
-                CompletableFuture.allOf(futures).join();
             }
         }
     }
