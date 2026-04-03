@@ -80,19 +80,17 @@ These functions are promoted from `VK_EXT_extended_dynamic_state` and are mandat
 
 The pipeline's rasterizer and depth-stencil initial values are overridden at draw time by these dynamic state commands.
 
-### What is NOT dynamically configurable
+### Pipeline Variants (Blend + Wireframe)
 
-- **Wireframe / polygon mode**: `vkCmdSetPolygonModeEXT` requires `VK_EXT_extended_dynamic_state3`, which has poor driver support. This is a no-op in the Vulkan backend.
+`vkCmdSetColorBlendEnableEXT` and `vkCmdSetPolygonModeEXT` both require `VK_EXT_extended_dynamic_state3`, which has poor driver support. Instead, the backend creates **pipeline variants** on demand when a blend mode or wireframe state is requested.
 
-### Blending via Pipeline Variants
-
-`vkCmdSetColorBlendEnableEXT` requires `VK_EXT_extended_dynamic_state3`, which has poor driver support. Instead, the backend creates **pipeline variants** on demand when a blend mode is requested.
-
-When `SetRenderState` with `BLEND_MODE` (or `SetBlending`) is received:
+When `SetRenderState` with `BLEND_MODE` or `WIREFRAME` (or legacy `SetBlending`/`SetWireframe`) is received:
 1. The currently bound pipeline handle is looked up in a `pipelineSpecs` map to retrieve the original shader binaries and vertex format.
-2. A variant pipeline is created via `VkPipelineFactory.create()` with the appropriate `BlendConfig` (NONE, ALPHA, ADDITIVE, MULTIPLY, PREMULTIPLIED).
-3. Variants are cached in `pipelineBlendVariants` keyed by `"pipelineIndex_blendModeName"` so they are only created once per combination.
+2. A variant pipeline is created via `VkPipelineFactory.create()` with the appropriate `BlendConfig` and `wireframe` boolean (`VK_POLYGON_MODE_LINE` vs `VK_POLYGON_MODE_FILL`).
+3. Variants are cached in `pipelineVariants` keyed by `"pipelineIndex_blendModeName_wireframe"` so they are only created once per combination.
 4. The variant pipeline is bound via `vkCmdBindPipeline`.
+
+The current blend mode and wireframe state are tracked (`currentBlendMode`, `currentWireframe`) so that changing one doesn't lose the other. Both are reset to defaults (NONE, false) when a new base pipeline is bound.
 
 Cleanup: variants are destroyed when the base pipeline is destroyed (`destroyPipeline`) and when the device is closed.
 
