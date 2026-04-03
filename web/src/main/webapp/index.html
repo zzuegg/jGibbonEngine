@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Engine - WebGPU</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #111; overflow: hidden; }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: #aaa;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Loading...</div>
+    <canvas id="canvas" width="1280" height="720"></canvas>
+    <script>
+        // Check WebGPU support before loading the engine
+        if (!navigator.gpu) {
+            document.getElementById('status').textContent =
+                'WebGPU is not supported in this browser.';
+        }
+    </script>
+    <script src="web.js"></script>
+</body>
+</html>
