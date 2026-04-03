@@ -8,6 +8,8 @@ public interface TextureFormat {
     TextureFormat R8 = NamedFormat.of("R8");
     TextureFormat DEPTH24 = NamedFormat.of("DEPTH24");
     TextureFormat DEPTH32F = NamedFormat.of("DEPTH32F");
+    TextureFormat DEPTH24_STENCIL8 = NamedFormat.of("DEPTH24_STENCIL8");
+    TextureFormat DEPTH32F_STENCIL8 = NamedFormat.of("DEPTH32F_STENCIL8");
 
     // HDR
     TextureFormat RGBA16F = NamedFormat.of("RGBA16F");

@@ -578,6 +578,21 @@ public class GlRenderDevice implements RenderDevice {
                 if (props.contains(RenderState.LINE_WIDTH)) {
                     GL45.glLineWidth(props.get(RenderState.LINE_WIDTH));
                 }
+                if (props.contains(RenderState.STENCIL_TEST)) {
+                    if (props.get(RenderState.STENCIL_TEST)) GL45.glEnable(GL45.GL_STENCIL_TEST);
+                    else GL45.glDisable(GL45.GL_STENCIL_TEST);
+                }
+                if (props.contains(RenderState.STENCIL_FUNC)) {
+                    int ref = props.contains(RenderState.STENCIL_REF) ? props.get(RenderState.STENCIL_REF) : 0;
+                    int mask = props.contains(RenderState.STENCIL_MASK) ? props.get(RenderState.STENCIL_MASK) : 0xFF;
+                    GL45.glStencilFunc(mapCompareFunc(props.get(RenderState.STENCIL_FUNC)), ref, mask);
+                }
+                if (props.contains(RenderState.STENCIL_FAIL)) {
+                    StencilOp fail = props.get(RenderState.STENCIL_FAIL);
+                    StencilOp depthFail = props.contains(RenderState.STENCIL_DEPTH_FAIL) ? props.get(RenderState.STENCIL_DEPTH_FAIL) : StencilOp.KEEP;
+                    StencilOp pass = props.contains(RenderState.STENCIL_PASS) ? props.get(RenderState.STENCIL_PASS) : StencilOp.KEEP;
+                    GL45.glStencilOp(mapStencilOp(fail), mapStencilOp(depthFail), mapStencilOp(pass));
+                }
             }
             case RenderCommand.PushConstants(var data) -> {
                 data.rewind();
@@ -761,6 +776,8 @@ public class GlRenderDevice implements RenderDevice {
         if (format == TextureFormat.R8) return GL45.GL_R8;
         if (format == TextureFormat.DEPTH24) return GL45.GL_DEPTH_COMPONENT24;
         if (format == TextureFormat.DEPTH32F) return GL45.GL_DEPTH_COMPONENT32F;
+        if (format == TextureFormat.DEPTH24_STENCIL8) return GL45.GL_DEPTH24_STENCIL8;
+        if (format == TextureFormat.DEPTH32F_STENCIL8) return GL45.GL_DEPTH32F_STENCIL8;
         return GL45.GL_RGBA8;
     }
 
@@ -788,6 +805,18 @@ public class GlRenderDevice implements RenderDevice {
         if (func == CompareFunc.ALWAYS) return GL45.GL_ALWAYS;
         if (func == CompareFunc.NEVER) return GL45.GL_NEVER;
         return GL45.GL_LESS;
+    }
+
+    private static int mapStencilOp(StencilOp op) {
+        if (op == StencilOp.KEEP) return GL45.GL_KEEP;
+        if (op == StencilOp.ZERO) return GL45.GL_ZERO;
+        if (op == StencilOp.REPLACE) return GL45.GL_REPLACE;
+        if (op == StencilOp.INCR) return GL45.GL_INCR;
+        if (op == StencilOp.DECR) return GL45.GL_DECR;
+        if (op == StencilOp.INVERT) return GL45.GL_INVERT;
+        if (op == StencilOp.INCR_WRAP) return GL45.GL_INCR_WRAP;
+        if (op == StencilOp.DECR_WRAP) return GL45.GL_DECR_WRAP;
+        return GL45.GL_KEEP;
     }
 
     private static void applyBlendMode(BlendMode mode) {

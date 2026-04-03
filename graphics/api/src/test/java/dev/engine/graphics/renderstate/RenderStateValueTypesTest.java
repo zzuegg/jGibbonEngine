@@ -34,4 +34,11 @@ class RenderStateValueTypesTest {
         assertNotNull(FrontFace.CCW);
         assertNotNull(FrontFace.CW);
     }
+
+    @Test void stencilOpHasExpectedInstances() {
+        assertNotNull(StencilOp.KEEP);
+        assertNotNull(StencilOp.REPLACE);
+        assertNotNull(StencilOp.INCR);
+        assertNotNull(StencilOp.DECR_WRAP);
+    }
 }

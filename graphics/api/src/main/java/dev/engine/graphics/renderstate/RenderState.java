@@ -13,6 +13,14 @@ public interface RenderState {
     PropertyKey<Boolean>     WIREFRAME   = PropertyKey.of("wireframe", Boolean.class);
     PropertyKey<Float>       LINE_WIDTH  = PropertyKey.of("lineWidth", Float.class);
 
+    PropertyKey<Boolean>     STENCIL_TEST       = PropertyKey.of("stencilTest", Boolean.class);
+    PropertyKey<CompareFunc> STENCIL_FUNC       = PropertyKey.of("stencilFunc", CompareFunc.class);
+    PropertyKey<Integer>     STENCIL_REF        = PropertyKey.of("stencilRef", Integer.class);
+    PropertyKey<Integer>     STENCIL_MASK        = PropertyKey.of("stencilMask", Integer.class);
+    PropertyKey<StencilOp>   STENCIL_FAIL       = PropertyKey.of("stencilFail", StencilOp.class);
+    PropertyKey<StencilOp>   STENCIL_DEPTH_FAIL = PropertyKey.of("stencilDepthFail", StencilOp.class);
+    PropertyKey<StencilOp>   STENCIL_PASS       = PropertyKey.of("stencilPass", StencilOp.class);
+
     static PropertyMap defaults() {
         return PropertyMap.builder()
             .set(DEPTH_TEST, true)

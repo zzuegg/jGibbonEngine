@@ -10,9 +10,7 @@ import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.target.RenderTargetDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.core.mesh.VertexFormat;
-import dev.engine.graphics.renderstate.CullMode;
-import dev.engine.graphics.renderstate.FrontFace;
-import dev.engine.graphics.renderstate.RenderState;
+import dev.engine.graphics.renderstate.*;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -1612,6 +1610,24 @@ public class VkRenderDevice implements RenderDevice {
                         VK13.vkCmdSetFrontFace(cmd,
                                 "CCW".equals(ff.name()) ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE);
                     }
+                    if (props.contains(RenderState.STENCIL_TEST)) {
+                        VK13.vkCmdSetStencilTestEnable(cmd, props.get(RenderState.STENCIL_TEST));
+                    }
+                    if (props.contains(RenderState.STENCIL_FUNC)) {
+                        int ref = props.contains(RenderState.STENCIL_REF) ? props.get(RenderState.STENCIL_REF) : 0;
+                        int mask = props.contains(RenderState.STENCIL_MASK) ? props.get(RenderState.STENCIL_MASK) : 0xFF;
+                        int func = mapCompareFunc(props.get(RenderState.STENCIL_FUNC));
+                        VK13.vkCmdSetStencilCompareMask(cmd, VK_STENCIL_FACE_FRONT_AND_BACK, mask);
+                        VK13.vkCmdSetStencilReference(cmd, VK_STENCIL_FACE_FRONT_AND_BACK, ref);
+                    }
+                    if (props.contains(RenderState.STENCIL_FAIL)) {
+                        StencilOp fail = props.get(RenderState.STENCIL_FAIL);
+                        StencilOp depthFail = props.contains(RenderState.STENCIL_DEPTH_FAIL) ? props.get(RenderState.STENCIL_DEPTH_FAIL) : StencilOp.KEEP;
+                        StencilOp pass = props.contains(RenderState.STENCIL_PASS) ? props.get(RenderState.STENCIL_PASS) : StencilOp.KEEP;
+                        VK13.vkCmdSetStencilOp(cmd, VK_STENCIL_FACE_FRONT_AND_BACK,
+                                mapStencilOp(fail), mapStencilOp(pass), mapStencilOp(depthFail),
+                                mapCompareFunc(props.contains(RenderState.STENCIL_FUNC) ? props.get(RenderState.STENCIL_FUNC) : CompareFunc.ALWAYS));
+                    }
                     // BLEND_MODE, WIREFRAME, LINE_WIDTH: not yet available as dynamic state
                 }
                 case dev.engine.graphics.command.RenderCommand.PushConstants(var data) -> {
@@ -1896,12 +1912,45 @@ public class VkRenderDevice implements RenderDevice {
             case "R32F" -> VK_FORMAT_R32_SFLOAT;
             case "R32UI" -> VK_FORMAT_R32_UINT;
             case "R32I" -> VK_FORMAT_R32_SINT;
+            case "DEPTH24_STENCIL8" -> VK_FORMAT_D24_UNORM_S8_UINT;
+            case "DEPTH32F_STENCIL8" -> VK_FORMAT_D32_SFLOAT_S8_UINT;
             default -> VK_FORMAT_R8G8B8A8_UNORM;
         };
     }
 
     private boolean isDepthFormat(dev.engine.graphics.texture.TextureFormat format) {
-        return "DEPTH24".equals(format.name()) || "DEPTH32F".equals(format.name());
+        return switch (format.name()) {
+            case "DEPTH24", "DEPTH32F", "DEPTH24_STENCIL8", "DEPTH32F_STENCIL8" -> true;
+            default -> false;
+        };
+    }
+
+    private static int mapCompareFunc(CompareFunc func) {
+        return switch (func.name()) {
+            case "LESS"      -> VK_COMPARE_OP_LESS;
+            case "LEQUAL"    -> VK_COMPARE_OP_LESS_OR_EQUAL;
+            case "GREATER"   -> VK_COMPARE_OP_GREATER;
+            case "GEQUAL"    -> VK_COMPARE_OP_GREATER_OR_EQUAL;
+            case "EQUAL"     -> VK_COMPARE_OP_EQUAL;
+            case "NOT_EQUAL" -> VK_COMPARE_OP_NOT_EQUAL;
+            case "ALWAYS"    -> VK_COMPARE_OP_ALWAYS;
+            case "NEVER"     -> VK_COMPARE_OP_NEVER;
+            default          -> VK_COMPARE_OP_LESS;
+        };
+    }
+
+    private static int mapStencilOp(StencilOp op) {
+        return switch (op.name()) {
+            case "KEEP"      -> VK_STENCIL_OP_KEEP;
+            case "ZERO"      -> VK_STENCIL_OP_ZERO;
+            case "REPLACE"   -> VK_STENCIL_OP_REPLACE;
+            case "INCR"      -> VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+            case "DECR"      -> VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+            case "INVERT"    -> VK_STENCIL_OP_INVERT;
+            case "INCR_WRAP" -> VK_STENCIL_OP_INCREMENT_AND_WRAP;
+            case "DECR_WRAP" -> VK_STENCIL_OP_DECREMENT_AND_WRAP;
+            default          -> VK_STENCIL_OP_KEEP;
+        };
     }
 
     private int computeMipLevels(TextureDescriptor desc) {

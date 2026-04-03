@@ -29,6 +29,16 @@ class RenderStateTest {
         assertEquals(false, defaults.get(RenderState.WIREFRAME));
     }
 
+    @Test void stencilKeysExist() {
+        assertNotNull(RenderState.STENCIL_TEST);
+        assertNotNull(RenderState.STENCIL_FUNC);
+        assertNotNull(RenderState.STENCIL_REF);
+        assertNotNull(RenderState.STENCIL_FAIL);
+        assertEquals(Boolean.class, RenderState.STENCIL_TEST.type());
+        assertEquals(CompareFunc.class, RenderState.STENCIL_FUNC.type());
+        assertEquals(StencilOp.class, RenderState.STENCIL_FAIL.type());
+    }
+
     @Test void canBuildCustomState() {
         PropertyMap state = PropertyMap.builder()
             .set(RenderState.BLEND_MODE, BlendMode.ALPHA)
