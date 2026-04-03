@@ -66,4 +66,16 @@ class VulkanRenderTest {
     @Test void depthFuncGreater() throws IOException {
         harness.assertVulkanMatchesReference(ScreenshotTestSuite.DEPTH_FUNC_GREATER, "depth_func_greater");
     }
+
+    @Test void shaderSwitching() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.SHADER_SWITCHING, "shader_switching");
+    }
+
+    @Test void materialTexture() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.MATERIAL_TEXTURE, "material_texture");
+    }
+
+    @Test void textureSwitching() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.TEXTURE_SWITCHING, "texture_switching");
+    }
 }

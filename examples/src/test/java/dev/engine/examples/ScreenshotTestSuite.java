@@ -311,6 +311,98 @@ public final class ScreenshotTestSuite {
         cube.add(Transform.IDENTITY);
     };
 
+    /** Multiple shader types in one scene — PBR and UNLIT entities rendered together, forcing pipeline switches. */
+    static final RenderTestScene SHADER_SWITCHING = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 3, 8), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // PBR sphere on the left
+        var pbrSphere = renderer.scene().createEntity();
+        pbrSphere.add(PrimitiveMeshes.sphere());
+        pbrSphere.add(MaterialData.pbr(new Vec3(0.8f, 0.2f, 0.1f), 0.3f, 0.8f));
+        pbrSphere.add(Transform.at(-2, 0, 0));
+
+        // Unlit cube on the right
+        var unlitCube = renderer.scene().createEntity();
+        unlitCube.add(PrimitiveMeshes.cube());
+        unlitCube.add(MaterialData.unlit(new Vec3(0.1f, 0.8f, 0.2f)));
+        unlitCube.add(Transform.at(2, 0, 0));
+
+        // Another PBR sphere in the middle-back (forces pipeline switch back to PBR)
+        var pbrSphere2 = renderer.scene().createEntity();
+        pbrSphere2.add(PrimitiveMeshes.sphere());
+        pbrSphere2.add(MaterialData.pbr(new Vec3(0.2f, 0.2f, 0.9f), 0.9f, 0.1f));
+        pbrSphere2.add(Transform.at(0, 0, -2));
+    };
+
+    /** Textured quad using ALBEDO_MAP through the material system with the "textured" shader. */
+    static final RenderTestScene MATERIAL_TEXTURE = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 0, 3), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Create 8x8 checkerboard texture
+        int texW = 8, texH = 8;
+        var pixels = java.nio.ByteBuffer.allocateDirect(texW * texH * 4);
+        for (int y = 0; y < texH; y++) {
+            for (int x = 0; x < texW; x++) {
+                boolean white = (x + y) % 2 == 0;
+                byte c = white ? (byte) 255 : (byte) 40;
+                pixels.put(c).put(c).put(c).put((byte) 255);
+            }
+        }
+        pixels.flip();
+
+        var texData = TextureData.rgba(texW, texH, pixels);
+
+        var quad = renderer.scene().createEntity();
+        quad.add(PrimitiveMeshes.quad());
+        quad.add(MaterialData.create("textured")
+            .set(MaterialData.ALBEDO_MAP, texData));
+        quad.add(Transform.IDENTITY);
+    };
+
+    /** Two quads with different textures — verifies texture switching between draws. */
+    static final RenderTestScene TEXTURE_SWITCHING = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 0, 4), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Red checkerboard texture on the left
+        var leftQuad = renderer.scene().createEntity();
+        leftQuad.add(PrimitiveMeshes.quad());
+        leftQuad.add(MaterialData.create("textured")
+            .set(MaterialData.ALBEDO_MAP, createCheckerboard(8, 8, (byte) 255, (byte) 0, (byte) 0)));
+        leftQuad.add(Transform.at(-1.5f, 0, 0));
+
+        // Blue checkerboard texture on the right
+        var rightQuad = renderer.scene().createEntity();
+        rightQuad.add(PrimitiveMeshes.quad());
+        rightQuad.add(MaterialData.create("textured")
+            .set(MaterialData.ALBEDO_MAP, createCheckerboard(8, 8, (byte) 0, (byte) 0, (byte) 255)));
+        rightQuad.add(Transform.at(1.5f, 0, 0));
+    };
+
+    /** Creates a checkerboard RGBA texture with the given color for lit squares. */
+    private static TextureData createCheckerboard(int w, int h, byte r, byte g, byte b) {
+        var pixels = java.nio.ByteBuffer.allocateDirect(w * h * 4);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                boolean lit = (x + y) % 2 == 0;
+                pixels.put(lit ? r : (byte) 20);
+                pixels.put(lit ? g : (byte) 20);
+                pixels.put(lit ? b : (byte) 20);
+                pixels.put((byte) 255);
+            }
+        }
+        pixels.flip();
+        return TextureData.rgba(w, h, pixels);
+    }
+
     /** Stencil write + test — left quad writes to stencil, right quad only shows where stencil is set. */
     static final RenderTestScene STENCIL_MASKING = (renderer, w, h) -> {
         var cam = renderer.createCamera();

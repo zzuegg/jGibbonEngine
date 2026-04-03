@@ -66,4 +66,16 @@ class OpenGlRenderTest {
     @Test void stencilMasking() throws IOException {
         harness.assertOpenGlMatchesReference(ScreenshotTestSuite.STENCIL_MASKING, "stencil_masking");
     }
+
+    @Test void shaderSwitching() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.SHADER_SWITCHING, "shader_switching");
+    }
+
+    @Test void materialTexture() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.MATERIAL_TEXTURE, "material_texture");
+    }
+
+    @Test void textureSwitching() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.TEXTURE_SWITCHING, "texture_switching");
+    }
 }
