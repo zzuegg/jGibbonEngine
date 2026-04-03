@@ -53,6 +53,11 @@ public interface RenderDevice extends AutoCloseable {
     void destroyPipeline(Handle<PipelineResource> pipeline);
     boolean isValidPipeline(Handle<PipelineResource> pipeline);
 
+    default Handle<PipelineResource> createComputePipeline(
+            dev.engine.graphics.pipeline.ComputePipelineDescriptor descriptor) {
+        throw new UnsupportedOperationException("Compute pipelines not supported by this backend");
+    }
+
     // --- Frame lifecycle ---
     void beginFrame();
     void endFrame();
@@ -76,6 +81,13 @@ public interface RenderDevice extends AutoCloseable {
         Boolean result = queryCapability(feature);
         return result != null && result;
     }
+
+    /**
+     * Reads back the current framebuffer as RGBA8 byte array.
+     * Must be called after endFrame(). May wait for GPU idle.
+     * Returns null if readback is not supported.
+     */
+    default byte[] readFramebuffer(int width, int height) { return null; }
 
     @Override
     void close();
