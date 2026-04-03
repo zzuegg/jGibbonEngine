@@ -35,6 +35,7 @@ import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.renderer.DrawCommand;
 import dev.engine.graphics.renderer.MeshRenderer;
 import dev.engine.graphics.renderer.Renderable;
+import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.core.mesh.VertexFormat;
 
 import java.lang.foreign.ValueLayout;
@@ -92,6 +93,12 @@ public class Renderer implements AutoCloseable {
 
     // Shader hint → compiled shader (pipeline + reflection bindings)
     private final Map<String, CompiledShader> shaderCache = new HashMap<>();
+
+    // Per-entity compiled shader reference (for texture binding during draw)
+    private final Map<Integer, CompiledShader> entityShaders = new HashMap<>();
+
+    // Default sampler for texture bindings (lazily created)
+    private Handle<SamplerResource> defaultSampler;
 
     // Three-layer render state: forced > material > defaults
     private final MutablePropertyMap defaultProperties = new MutablePropertyMap();
@@ -359,6 +366,10 @@ public class Renderer implements AutoCloseable {
             var pipeline = compiled != null ? compiled.pipeline() : defaultPipeline;
             var bindings = compiled != null ? extractBufferBindings(compiled) : Map.<String, Integer>of();
 
+            if (compiled != null) {
+                entityShaders.put(entity.index(), compiled);
+            }
+
             meshRenderer.setRenderable(entity, new Renderable(
                     resolvedMesh.vertexBuffer(), resolvedMesh.indexBuffer(), resolvedMesh.vertexInput(),
                     pipeline, resolvedMesh.vertexCount(), resolvedMesh.indexCount(), bindings));
@@ -451,6 +462,12 @@ public class Renderer implements AutoCloseable {
                 if (mat != null) {
                     int materialSlot = r.bindingFor("MaterialBuffer", globalParams.nextBinding());
                     uploadMaterialData(mat, cmd.entity(), draw, materialSlot);
+
+                    // Bind textures from material
+                    var compiled = entityShaders.get(cmd.entity().index());
+                    if (compiled != null) {
+                        bindMaterialTextures(mat, compiled, draw);
+                    }
                 }
 
                 draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
@@ -548,6 +565,49 @@ public class Renderer implements AutoCloseable {
         }
 
         draw.bindUniformBuffer(bindingSlot, ubo);
+    }
+
+    /**
+     * Binds TextureData properties from MaterialData to the correct texture units
+     * based on shader reflection metadata.
+     */
+    private void bindMaterialTextures(MaterialData matData, CompiledShader shader, CommandRecorder draw) {
+        for (var key : matData.keys()) {
+            if (key.type() != TextureData.class) continue;
+
+            TextureData texData = (TextureData) matData.get(key);
+            if (texData == null) continue;
+
+            // Upload texture if not cached
+            var texHandle = uploadTexture(texData);
+
+            // Find the texture binding from shader reflection
+            String paramName = mapTextureKeyToShaderParam(key);
+            var binding = shader.findBinding(paramName);
+            if (binding != null && binding.type() == CompiledShader.BindingType.TEXTURE) {
+                draw.bindTexture(binding.binding(), texHandle);
+                draw.bindSampler(binding.binding(), getOrCreateDefaultSampler());
+            }
+        }
+    }
+
+    private String mapTextureKeyToShaderParam(PropertyKey<?> key) {
+        return switch (key.name()) {
+            case "albedoMap" -> "albedoTexture";
+            case "normalMap" -> "normalTexture";
+            case "roughnessMap" -> "roughnessTexture";
+            case "metallicMap" -> "metallicTexture";
+            case "emissiveMap" -> "emissiveTexture";
+            case "aoMap" -> "aoTexture";
+            default -> key.name();
+        };
+    }
+
+    private Handle<SamplerResource> getOrCreateDefaultSampler() {
+        if (defaultSampler == null) {
+            defaultSampler = device.createSampler(SamplerDescriptor.linear());
+        }
+        return defaultSampler;
     }
 
     // --- Capabilities ---
@@ -659,6 +719,7 @@ public class Renderer implements AutoCloseable {
         materialUbos.clear();
         for (var ubo : objectUbos.values()) device.destroyBuffer(ubo);
         objectUbos.clear();
+        if (defaultSampler != null) device.destroySampler(defaultSampler);
         if (defaultPipeline != null) device.destroyPipeline(defaultPipeline);
         device.close();
     }
