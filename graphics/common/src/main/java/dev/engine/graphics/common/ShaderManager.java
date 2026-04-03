@@ -313,8 +313,17 @@ public class ShaderManager {
 
         if (assetManager != null) {
             try {
-                return assetManager.loadSync(shaderPath, SlangShaderSource.class).source();
-            } catch (Exception ignored) {}
+                log.debug("Loading shader via AssetManager: {}", shaderPath);
+                var result = assetManager.loadSync(shaderPath, SlangShaderSource.class);
+                if (result != null) {
+                    log.debug("Shader loaded via AssetManager: {} ({} chars)", shaderPath, result.source().length());
+                    return result.source();
+                }
+            } catch (Exception e) {
+                log.warn("AssetManager failed to load shader {}: {}", shaderPath, e.getMessage());
+            }
+        } else {
+            log.debug("No AssetManager set, trying classpath for: {}", shaderPath);
         }
 
         try (InputStream is = getClass().getClassLoader().getResourceAsStream(shaderPath)) {

@@ -27,19 +27,20 @@ public class WebMain {
 
     private static Renderer renderer;
 
-    @JSFunctor
-    public interface FrameCallback extends JSObject {
-        void onFrame();
+    /**
+     * Waits for the next animation frame. Uses TeaVM's @Async to suspend
+     * the calling thread until requestAnimationFrame fires.
+     * This allows @Async methods (like fetch) to work inside the render loop.
+     */
+    @org.teavm.interop.Async
+    private static native void waitForNextFrame();
+
+    private static void waitForNextFrame(org.teavm.interop.AsyncCallback<Void> callback) {
+        waitForNextFrameJS(callback);
     }
 
-    @JSBody(params = "callback", script = """
-        function loop() {
-            callback();
-            requestAnimationFrame(loop);
-        }
-        requestAnimationFrame(loop);
-    """)
-    private static native void requestAnimationFrame(FrameCallback callback);
+    @JSBody(params = "callback", script = "requestAnimationFrame(function() { callback(null); });")
+    private static native void waitForNextFrameJS(org.teavm.interop.AsyncCallback<Void> callback);
 
     @JSBody(params = "msg", script = """
         var el = document.getElementById('status');
@@ -96,16 +97,15 @@ public class WebMain {
         setStatus("Creating renderer...");
         renderer = new Renderer(device, compiler);
 
-        // Wire fetch-based asset loading: shaders and assets are served via HTTP
-        // from the assets/ directory alongside the generated JS output.
+        int width = getCanvasWidth();
+        int height = getCanvasHeight();
+        renderer.setViewport(width, height);
+
+        // Wire fetch-based asset loading
         var assetManager = new AssetManager(Runnable::run);
         assetManager.addSource(new FetchAssetSource("assets/"));
         assetManager.registerLoader(new SlangShaderLoader());
         renderer.shaderManager().setAssetManager(assetManager);
-
-        int width = getCanvasWidth();
-        int height = getCanvasHeight();
-        renderer.setViewport(width, height);
 
         // Set up camera — same as CrossBackendScenes.TWO_CUBES_UNLIT
         var cam = renderer.createCamera();
@@ -127,8 +127,14 @@ public class WebMain {
         setStatus("Rendering (full engine pipeline)");
         consoleLog("[Engine] Scene ready, entering render loop");
 
-        // Enter the render loop
-        requestAnimationFrame(WebMain::renderFrame);
+        // Run the render loop in a TeaVM thread so @Async methods (fetch, etc.) work.
+        // waitForNextFrame() suspends the thread until requestAnimationFrame fires.
+        new Thread(() -> {
+            while (true) {
+                waitForNextFrame();
+                renderFrame();
+            }
+        }).start();
     }
 
     private static int frameCount = 0;
