@@ -1447,6 +1447,14 @@ public class VkRenderDevice implements RenderDevice {
                     log.debug("vkCmdDrawIndexed(indexCount={}, firstIndex={})", di.indexCount(), di.firstIndex());
                     vkCmdDrawIndexed(cmd, di.indexCount(), 1, di.firstIndex(), 0, 0);
                 }
+                case dev.engine.graphics.command.RenderCommand.DrawInstanced di -> {
+                    flushDescriptorSet(cmd);
+                    vkCmdDraw(cmd, di.vertexCount(), di.instanceCount(), di.firstVertex(), di.firstInstance());
+                }
+                case dev.engine.graphics.command.RenderCommand.DrawIndexedInstanced di -> {
+                    flushDescriptorSet(cmd);
+                    vkCmdDrawIndexed(cmd, di.indexCount(), di.instanceCount(), di.firstIndex(), 0, di.firstInstance());
+                }
                 case dev.engine.graphics.command.RenderCommand.Viewport vp -> {
                     try (var stack = stackPush()) {
                         // Negative height flips Y axis to match OpenGL convention

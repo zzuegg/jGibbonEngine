@@ -253,6 +253,14 @@ public class GlRenderDevice implements RenderDevice {
                     attr.componentCount(), glType, attr.normalized(), attr.offset());
             GL45.glVertexArrayAttribBinding(vao, attr.location(), 0); // binding point 0
         }
+        // Set per-instance divisors for instanced attributes
+        for (var attr : format.attributes()) {
+            if (attr.divisor() > 0) {
+                GL45.glBindVertexArray(vao);
+                GL45.glVertexAttribDivisor(attr.location(), attr.divisor());
+                GL45.glBindVertexArray(0);
+            }
+        }
 
         return vertexInputs.register(new GlVertexInput(vao, format.stride()));
     }
@@ -484,6 +492,13 @@ public class GlRenderDevice implements RenderDevice {
             case RenderCommand.DrawIndexed cmd -> {
                 GL45.glDrawElements(GL45.GL_TRIANGLES, cmd.indexCount(), GL45.GL_UNSIGNED_INT,
                         (long) cmd.firstIndex() * Integer.BYTES);
+            }
+            case RenderCommand.DrawInstanced cmd -> {
+                GL45.glDrawArraysInstancedBaseInstance(GL45.GL_TRIANGLES, cmd.firstVertex(), cmd.vertexCount(), cmd.instanceCount(), cmd.firstInstance());
+            }
+            case RenderCommand.DrawIndexedInstanced cmd -> {
+                GL45.glDrawElementsInstancedBaseInstance(GL45.GL_TRIANGLES, cmd.indexCount(), GL45.GL_UNSIGNED_INT,
+                        (long) cmd.firstIndex() * Integer.BYTES, cmd.instanceCount(), cmd.firstInstance());
             }
             case RenderCommand.BindRenderTarget cmd -> {
                 int fbo = getGlFboName(cmd.renderTarget());

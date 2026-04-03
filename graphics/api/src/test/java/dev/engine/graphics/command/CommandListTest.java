@@ -141,6 +141,24 @@ class CommandListTest {
         assertInstanceOf(RenderCommand.BindComputePipeline.class, list.commands().getFirst());
     }
 
+    @Test void drawInstancedCommand() {
+        var recorder = new CommandRecorder();
+        recorder.drawInstanced(36, 0, 100, 0);
+        var list = recorder.finish();
+        var cmd = (RenderCommand.DrawInstanced) list.commands().getFirst();
+        assertEquals(36, cmd.vertexCount());
+        assertEquals(100, cmd.instanceCount());
+    }
+
+    @Test void drawIndexedInstancedCommand() {
+        var recorder = new CommandRecorder();
+        recorder.drawIndexedInstanced(36, 0, 50, 0);
+        var list = recorder.finish();
+        var cmd = (RenderCommand.DrawIndexedInstanced) list.commands().getFirst();
+        assertEquals(36, cmd.indexCount());
+        assertEquals(50, cmd.instanceCount());
+    }
+
     @Test void uniformAndTextureBindingRecorded() {
         var ctx = new CommandRecorder();
         ctx.bindUniformBuffer(0, new Handle<>(1, 0));
