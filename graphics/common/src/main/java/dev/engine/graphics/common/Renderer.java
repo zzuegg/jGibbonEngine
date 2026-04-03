@@ -387,8 +387,8 @@ public class Renderer implements AutoCloseable {
                     activeCamera.viewProjectionMatrix(),
                     activeCamera.viewMatrix(),
                     activeCamera.projectionMatrix(),
-                    Vec3.ZERO, // TODO: extract camera position from view matrix
-                    0.1f, 100f)); // TODO: store near/far on Camera
+                    activeCamera.position(),
+                    activeCamera.nearPlane(), activeCamera.farPlane()));
         }
 
         // Upload all per-frame global params to GPU (skip per-object ones)
