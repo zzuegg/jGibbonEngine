@@ -3,7 +3,7 @@ package dev.engine.graphics.buffer;
 import dev.engine.core.handle.Handle;
 import dev.engine.graphics.BufferResource;
 
-import java.lang.foreign.MemorySegment;
+import dev.engine.core.gpu.GpuMemory;
 
 /**
  * A streaming buffer for per-frame data uploads.
@@ -26,11 +26,11 @@ public interface StreamingBuffer extends AutoCloseable {
     long frameSize();
 
     /**
-     * Begins writing for the current frame. Returns a MemorySegment
-     * pointing to the current frame's region. The segment is valid
+     * Begins writing for the current frame. Returns a {@link GpuMemory}
+     * pointing to the current frame's region. The memory is valid
      * until {@link #endWrite()} is called.
      */
-    MemorySegment beginWrite();
+    GpuMemory beginWrite();
 
     /** Finishes writing. The data becomes available to the GPU. */
     void endWrite();

@@ -26,7 +26,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.opengl.GL45;
 
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -178,20 +177,20 @@ class GlMaterialUploadTest {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < verts.length; i++)
-                layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+                layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
 
         var matLayout = StructLayout.of(Mat4.class);
         var ubo = device.createBuffer(new BufferDescriptor(matLayout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
-        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, Mat4.IDENTITY); }
+        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.memory(), 0, Mat4.IDENTITY); }
 
         // Material UBO: vec3 albedoColor + float roughness (std140: vec3 padded to 16 bytes)
         var matUbo = device.createBuffer(new BufferDescriptor(32, BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
         try (var w = device.writeBuffer(matUbo)) {
-            w.segment().set(ValueLayout.JAVA_FLOAT, 0, color.x());
-            w.segment().set(ValueLayout.JAVA_FLOAT, 4, color.y());
-            w.segment().set(ValueLayout.JAVA_FLOAT, 8, color.z());
-            w.segment().set(ValueLayout.JAVA_FLOAT, 16, 0.5f); // roughness at offset 16 (std140 padding)
+            w.memory().putFloat( 0, color.x());
+            w.memory().putFloat( 4, color.y());
+            w.memory().putFloat( 8, color.z());
+            w.memory().putFloat( 16, 0.5f); // roughness at offset 16 (std140 padding)
         }
 
         var format = VertexFormat.of(new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0));
@@ -243,7 +242,7 @@ class GlMaterialUploadTest {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < verts.length; i++)
-                layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+                layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
 
         var format = VertexFormat.of(new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0));
@@ -256,7 +255,7 @@ class GlMaterialUploadTest {
 
         var matLayout = StructLayout.of(Mat4.class);
         var mvpUbo = device.createBuffer(new BufferDescriptor(matLayout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
-        try (var w = device.writeBuffer(mvpUbo)) { matLayout.write(w.segment(), 0, Mat4.IDENTITY); }
+        try (var w = device.writeBuffer(mvpUbo)) { matLayout.write(w.memory(), 0, Mat4.IDENTITY); }
 
         // Create material UBO from the MeshRenderer's tracked material data
         var matData = meshRenderer.getMaterial(entity);
@@ -265,12 +264,12 @@ class GlMaterialUploadTest {
             Vec3 albedo = matData.get(ALBEDO);
             Float roughness = matData.get(ROUGHNESS);
             if (albedo != null) {
-                w.segment().set(ValueLayout.JAVA_FLOAT, 0, albedo.x());
-                w.segment().set(ValueLayout.JAVA_FLOAT, 4, albedo.y());
-                w.segment().set(ValueLayout.JAVA_FLOAT, 8, albedo.z());
+                w.memory().putFloat( 0, albedo.x());
+                w.memory().putFloat( 4, albedo.y());
+                w.memory().putFloat( 8, albedo.z());
             }
             if (roughness != null) {
-                w.segment().set(ValueLayout.JAVA_FLOAT, 16, roughness);
+                w.memory().putFloat( 16, roughness);
             }
         }
 

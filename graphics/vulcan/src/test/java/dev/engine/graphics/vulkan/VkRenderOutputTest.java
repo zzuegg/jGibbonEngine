@@ -16,7 +16,6 @@ import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.graphics.window.WindowDescriptor;
 import org.junit.jupiter.api.*;
 
-import java.lang.foreign.ValueLayout;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -83,7 +82,7 @@ class VkRenderOutputTest {
             var vb = device.createBuffer(new BufferDescriptor(verts.length * 4L, BufferUsage.VERTEX, AccessPattern.STATIC));
             try (var w = device.writeBuffer(vb)) {
                 for (int i = 0; i < verts.length; i++)
-                    w.segment().set(ValueLayout.JAVA_FLOAT, i * 4L, verts[i]);
+                    w.memory().putFloat( i * 4L, verts[i]);
             }
 
             // Render 3 frames without error
@@ -139,7 +138,7 @@ class VkRenderOutputTest {
             var vb = device.createBuffer(new BufferDescriptor(verts.length * 4L, BufferUsage.VERTEX, AccessPattern.STATIC));
             try (var w = device.writeBuffer(vb)) {
                 for (int i = 0; i < verts.length; i++)
-                    w.segment().set(ValueLayout.JAVA_FLOAT, i * 4L, verts[i]);
+                    w.memory().putFloat( i * 4L, verts[i]);
             }
 
             device.beginFrame();
@@ -205,16 +204,16 @@ class VkRenderOutputTest {
             var vb = device.createBuffer(new BufferDescriptor(verts.length * 4L, BufferUsage.VERTEX, AccessPattern.STATIC));
             try (var w = device.writeBuffer(vb)) {
                 for (int i = 0; i < verts.length; i++)
-                    w.segment().set(ValueLayout.JAVA_FLOAT, i * 4L, verts[i]);
+                    w.memory().putFloat( i * 4L, verts[i]);
             }
 
             // Green UBO
             var colorUbo = device.createBuffer(new BufferDescriptor(16, BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
             try (var w = device.writeBuffer(colorUbo)) {
-                w.segment().set(ValueLayout.JAVA_FLOAT, 0, 0.0f);
-                w.segment().set(ValueLayout.JAVA_FLOAT, 4, 1.0f);
-                w.segment().set(ValueLayout.JAVA_FLOAT, 8, 0.0f);
-                w.segment().set(ValueLayout.JAVA_FLOAT, 12, 1.0f);
+                w.memory().putFloat( 0, 0.0f);
+                w.memory().putFloat( 4, 1.0f);
+                w.memory().putFloat( 8, 0.0f);
+                w.memory().putFloat( 12, 1.0f);
             }
 
             device.beginFrame();
@@ -308,21 +307,21 @@ class VkRenderOutputTest {
             var vb = device.createBuffer(new BufferDescriptor(verts.length * 4L, BufferUsage.VERTEX, AccessPattern.STATIC));
             try (var w = device.writeBuffer(vb)) {
                 for (int i = 0; i < verts.length; i++)
-                    w.segment().set(ValueLayout.JAVA_FLOAT, i * 4L, verts[i]);
+                    w.memory().putFloat( i * 4L, verts[i]);
             }
 
             // Green UBO
             var colorUbo = device.createBuffer(new BufferDescriptor(16, BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
             try (var w = device.writeBuffer(colorUbo)) {
-                w.segment().set(ValueLayout.JAVA_FLOAT, 0, 0.0f);
-                w.segment().set(ValueLayout.JAVA_FLOAT, 4, 1.0f);
-                w.segment().set(ValueLayout.JAVA_FLOAT, 8, 0.0f);
-                w.segment().set(ValueLayout.JAVA_FLOAT, 12, 1.0f);
+                w.memory().putFloat( 0, 0.0f);
+                w.memory().putFloat( 4, 1.0f);
+                w.memory().putFloat( 8, 0.0f);
+                w.memory().putFloat( 12, 1.0f);
             }
 
             // Verify UBO data was written
             try (var r = device.writeBuffer(colorUbo)) {
-                float g = r.segment().get(ValueLayout.JAVA_FLOAT, 4);
+                float g = r.memory().getFloat(4);
                 System.out.println("UBO readback: green channel = " + g);
                 assertEquals(1.0f, g, 0.001f);
             }
@@ -396,16 +395,16 @@ class VkRenderOutputTest {
             var vb = device.createBuffer(new BufferDescriptor(verts.length * 4L, BufferUsage.VERTEX, AccessPattern.STATIC));
             try (var w = device.writeBuffer(vb)) {
                 for (int i = 0; i < verts.length; i++)
-                    w.segment().set(ValueLayout.JAVA_FLOAT, i * 4L, verts[i]);
+                    w.memory().putFloat( i * 4L, verts[i]);
             }
 
             // Green color UBO (float4)
             var colorUbo = device.createBuffer(new BufferDescriptor(16, BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
             try (var w = device.writeBuffer(colorUbo)) {
-                w.segment().set(ValueLayout.JAVA_FLOAT, 0, 0.0f);  // r
-                w.segment().set(ValueLayout.JAVA_FLOAT, 4, 1.0f);  // g
-                w.segment().set(ValueLayout.JAVA_FLOAT, 8, 0.0f);  // b
-                w.segment().set(ValueLayout.JAVA_FLOAT, 12, 1.0f); // a
+                w.memory().putFloat( 0, 0.0f);  // r
+                w.memory().putFloat( 4, 1.0f);  // g
+                w.memory().putFloat( 8, 0.0f);  // b
+                w.memory().putFloat( 12, 1.0f); // a
             }
 
             // This should not crash — if UBO binding is wrong, validation catches it

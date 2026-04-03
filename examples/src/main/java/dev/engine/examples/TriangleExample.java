@@ -57,7 +57,7 @@ public class TriangleExample {
         var vbo = device.createBuffer(new BufferDescriptor(bufSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var writer = device.writeBuffer(vbo)) {
             for (int i = 0; i < vertices.length; i++) {
-                layout.write(writer.segment(), (long) layout.size() * i, vertices[i]);
+                layout.write(writer.memory(), (long) layout.size() * i, vertices[i]);
             }
         }
 

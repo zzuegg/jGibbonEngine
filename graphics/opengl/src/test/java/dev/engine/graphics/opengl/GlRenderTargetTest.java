@@ -71,7 +71,7 @@ class GlRenderTargetTest {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < verts.length; i++)
-                layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+                layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
 
         var format = VertexFormat.of(new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0));

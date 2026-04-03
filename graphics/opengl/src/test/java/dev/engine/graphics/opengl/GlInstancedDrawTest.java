@@ -12,7 +12,6 @@ import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
 import org.junit.jupiter.api.Test;
 
-import java.lang.foreign.ValueLayout;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -54,7 +53,7 @@ class GlInstancedDrawTest {
             var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
             try (var w = device.writeBuffer(vbo)) {
                 for (int i = 0; i < verts.length; i++)
-                    w.segment().set(ValueLayout.JAVA_FLOAT, (long) i * Float.BYTES, verts[i]);
+                    w.memory().putFloat((long) i * Float.BYTES, verts[i]);
             }
             var vi = device.createVertexInput(VertexFormat.of(
                 new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0)));

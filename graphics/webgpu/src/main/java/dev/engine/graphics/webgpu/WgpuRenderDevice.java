@@ -37,6 +37,9 @@ import dev.engine.graphics.window.WindowHandle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.gpu.NativeGpuMemory;
+
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -262,9 +265,10 @@ public class WgpuRenderDevice implements RenderDevice {
         var buf = buffers.get(buffer);
         var arena = Arena.ofConfined();
         var segment = arena.allocate(length);
+        var gpuMemory = new NativeGpuMemory(segment);
         return new BufferWriter() {
             @Override
-            public MemorySegment segment() { return segment; }
+            public GpuMemory memory() { return gpuMemory; }
 
             @Override
             public void close() {

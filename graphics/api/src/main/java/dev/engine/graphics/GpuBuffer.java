@@ -60,7 +60,7 @@ public class GpuBuffer<T> {
     public void write(int index, T value) {
         long offset = (long) index * layout.size();
         try (var writer = device.writeBuffer(handle, offset, layout.size())) {
-            layout.write(writer.segment(), 0, value);
+            layout.write(writer.memory(), 0, value);
         }
     }
 

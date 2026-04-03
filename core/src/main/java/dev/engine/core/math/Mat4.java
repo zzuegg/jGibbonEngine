@@ -130,25 +130,25 @@ public record Mat4(
     }
 
     /**
-     * Writes this matrix to a MemorySegment in column-major order (GPU layout).
+     * Writes this matrix to a {@link dev.engine.core.gpu.GpuMemory} in column-major order (GPU layout).
      * GPU APIs (OpenGL, Vulkan) expect columns stored contiguously.
      */
-    public void writeGpu(java.lang.foreign.MemorySegment segment, long offset) {
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset,      m00);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 4,  m10);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 8,  m20);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 12, m30);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 16, m01);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 20, m11);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 24, m21);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 28, m31);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 32, m02);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 36, m12);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 40, m22);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 44, m32);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 48, m03);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 52, m13);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 56, m23);
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 60, m33);
+    public void writeGpu(dev.engine.core.gpu.GpuMemory mem, long offset) {
+        mem.putFloat(offset,      m00);
+        mem.putFloat(offset + 4,  m10);
+        mem.putFloat(offset + 8,  m20);
+        mem.putFloat(offset + 12, m30);
+        mem.putFloat(offset + 16, m01);
+        mem.putFloat(offset + 20, m11);
+        mem.putFloat(offset + 24, m21);
+        mem.putFloat(offset + 28, m31);
+        mem.putFloat(offset + 32, m02);
+        mem.putFloat(offset + 36, m12);
+        mem.putFloat(offset + 40, m22);
+        mem.putFloat(offset + 44, m32);
+        mem.putFloat(offset + 48, m03);
+        mem.putFloat(offset + 52, m13);
+        mem.putFloat(offset + 56, m23);
+        mem.putFloat(offset + 60, m33);
     }
 }

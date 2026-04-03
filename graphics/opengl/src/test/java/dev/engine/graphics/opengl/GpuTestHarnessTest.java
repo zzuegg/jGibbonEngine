@@ -91,9 +91,9 @@ class GpuTestHarnessTest {
 
         // Update to cyan
         try (var w = gpu.device().writeBuffer(ubo)) {
-            w.segment().set(java.lang.foreign.ValueLayout.JAVA_FLOAT, 0, 0f);
-            w.segment().set(java.lang.foreign.ValueLayout.JAVA_FLOAT, 4, 1f);
-            w.segment().set(java.lang.foreign.ValueLayout.JAVA_FLOAT, 8, 1f);
+            w.memory().putFloat(0, 0f);
+            w.memory().putFloat(4, 1f);
+            w.memory().putFloat(8, 1f);
         }
 
         gpu.drawFullscreen(PASSTHROUGH_VS, fs, rec -> rec.bindUniformBuffer(1, ubo));

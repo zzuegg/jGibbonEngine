@@ -17,7 +17,6 @@ import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.window.WindowDescriptor;
 
-import java.lang.foreign.ValueLayout;
 
 public class SpinningCubeExample {
 
@@ -89,7 +88,7 @@ public class SpinningCubeExample {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < verts.length; i++)
-                layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+                layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
 
         // Index buffer: 6 faces * 2 triangles * 3 indices = 36
@@ -107,7 +106,7 @@ public class SpinningCubeExample {
         var ibo = device.createBuffer(new BufferDescriptor(ibSize, BufferUsage.INDEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(ibo)) {
             for (int i = 0; i < indices.length; i++)
-                w.segment().setAtIndex(ValueLayout.JAVA_INT, i, indices[i]);
+                w.memory().putInt((long) i * Integer.BYTES, indices[i]);
         }
 
         // Uniform buffer for MVP matrix
@@ -141,7 +140,7 @@ public class SpinningCubeExample {
 
             // Upload MVP (transpose for OpenGL column-major layout)
             try (var writer = device.writeBuffer(ubo)) {
-                matLayout.write(writer.segment(), 0, mvp);
+                matLayout.write(writer.memory(), 0, mvp);
             }
 
             device.beginFrame();

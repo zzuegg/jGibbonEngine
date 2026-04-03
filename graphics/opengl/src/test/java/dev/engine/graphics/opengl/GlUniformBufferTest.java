@@ -74,14 +74,14 @@ class GlUniformBufferTest {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < verts.length; i++)
-                layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+                layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
 
         // UBO with identity matrix — should render normally
         var matLayout = StructLayout.of(Mat4.class);
         var ubo = device.createBuffer(new BufferDescriptor(matLayout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
         try (var w = device.writeBuffer(ubo)) {
-            matLayout.write(w.segment(), 0, Mat4.IDENTITY);
+            matLayout.write(w.memory(), 0, Mat4.IDENTITY);
         }
 
         var format = VertexFormat.of(new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0));

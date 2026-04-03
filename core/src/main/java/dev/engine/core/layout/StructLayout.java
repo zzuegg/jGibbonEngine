@@ -1,18 +1,15 @@
 package dev.engine.core.layout;
 
 import dev.engine.core.gpu.BufferWriter;
+import dev.engine.core.gpu.GpuMemory;
 import dev.engine.core.math.*;
 
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class StructLayout {
 
@@ -53,9 +50,9 @@ public final class StructLayout {
     public int size() { return size; }
     public LayoutMode mode() { return mode; }
 
-    public void write(MemorySegment segment, long offset, Object record) {
+    public void write(GpuMemory memory, long offset, Object record) {
         for (var writer : writers) {
-            writer.write(segment, offset, record);
+            writer.write(memory, offset, record);
         }
     }
 
@@ -95,10 +92,10 @@ public final class StructLayout {
                 for (var nestedWriter : nested.writers) {
                     var capturedWriter = nestedWriter;
                     var capturedOffset = nestedBaseOffset;
-                    writers.add((seg, off, rec) -> {
+                    writers.add((mem, off, rec) -> {
                         try {
                             var nestedRec = outerAccessor.invoke(rec);
-                            capturedWriter.write(seg, off + capturedOffset, nestedRec);
+                            capturedWriter.write(mem, off + capturedOffset, nestedRec);
                         } catch (Throwable t) { throw new RuntimeException(t); }
                     });
                 }
@@ -179,27 +176,27 @@ public final class StructLayout {
     private static FieldWriter createPrimitiveWriter(MethodHandle accessor, Class<?> type, int offset) {
         // Delegate to BufferWriter for types it supports
         if (BufferWriter.supports(type)) {
-            return (seg, base, rec) -> {
+            return (mem, base, rec) -> {
                 try {
-                    BufferWriter.write(seg, base + offset, accessor.invoke(rec));
+                    BufferWriter.write(mem, base + offset, accessor.invoke(rec));
                 } catch (Throwable t) { throw new RuntimeException(t); }
             };
         }
         // Fallback for types BufferWriter doesn't handle (double, long, short, byte)
         if (type == double.class || type == Double.class) {
-            return (seg, base, rec) -> { try { seg.set(ValueLayout.JAVA_DOUBLE, base + offset, (double) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
+            return (mem, base, rec) -> { try { mem.putDouble(base + offset, (double) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
         } else if (type == long.class || type == Long.class) {
-            return (seg, base, rec) -> { try { seg.set(ValueLayout.JAVA_LONG, base + offset, (long) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
+            return (mem, base, rec) -> { try { mem.putLong(base + offset, (long) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
         } else if (type == short.class || type == Short.class) {
-            return (seg, base, rec) -> { try { seg.set(ValueLayout.JAVA_SHORT, base + offset, (short) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
+            return (mem, base, rec) -> { try { mem.putShort(base + offset, (short) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
         } else if (type == byte.class || type == Byte.class) {
-            return (seg, base, rec) -> { try { seg.set(ValueLayout.JAVA_BYTE, base + offset, (byte) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
+            return (mem, base, rec) -> { try { mem.putByte(base + offset, (byte) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
         }
         throw new IllegalArgumentException("Unsupported: " + type);
     }
 
     @FunctionalInterface
     private interface FieldWriter {
-        void write(MemorySegment segment, long baseOffset, Object record);
+        void write(GpuMemory memory, long baseOffset, Object record);
     }
 }

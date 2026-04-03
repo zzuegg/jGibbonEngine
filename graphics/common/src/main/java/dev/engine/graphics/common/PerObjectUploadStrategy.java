@@ -12,7 +12,6 @@ import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.common.material.MaterialCompiler;
 
-import java.lang.foreign.ValueLayout;
 import java.util.List;
 
 /**
@@ -36,7 +35,7 @@ public class PerObjectUploadStrategy implements UploadStrategy {
     public void record(RenderDevice device, CommandRecorder recorder, DrawCommand command, int index) {
         // Upload MVP
         try (var w = device.writeBuffer(mvpUbo)) {
-            mat4Layout.write(w.segment(), 0, command.transform());
+            mat4Layout.write(w.memory(), 0, command.transform());
         }
         recorder.bindUniformBuffer(0, mvpUbo);
 

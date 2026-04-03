@@ -39,6 +39,9 @@ import dev.engine.graphics.texture.TextureType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.gpu.NativeGpuMemory;
+
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
@@ -153,9 +156,10 @@ public class GlRenderDevice implements RenderDevice {
         int glName = buffers.get(buffer).glName();
         var arena = Arena.ofConfined();
         var segment = arena.allocate(length);
+        var memory = new NativeGpuMemory(segment);
         return new BufferWriter() {
             @Override
-            public MemorySegment segment() { return segment; }
+            public GpuMemory memory() { return memory; }
 
             @Override
             public void close() {

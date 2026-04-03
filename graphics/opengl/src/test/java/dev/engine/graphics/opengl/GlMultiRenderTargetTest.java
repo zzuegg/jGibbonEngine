@@ -58,7 +58,7 @@ class GlMultiRenderTargetTest {
                 dev.engine.graphics.buffer.AccessPattern.STATIC));
             try (var w = device.writeBuffer(vbo)) {
                 for (int i = 0; i < verts.length; i++)
-                    w.segment().set(java.lang.foreign.ValueLayout.JAVA_FLOAT, (long) i * Float.BYTES, verts[i]);
+                    w.memory().putFloat((long) i * Float.BYTES, verts[i]);
             }
             var vi = device.createVertexInput(dev.engine.core.mesh.VertexFormat.of(
                 new dev.engine.core.mesh.VertexAttribute(0, 3,

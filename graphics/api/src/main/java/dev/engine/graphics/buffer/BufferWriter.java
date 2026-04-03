@@ -1,12 +1,10 @@
 package dev.engine.graphics.buffer;
 
-import dev.engine.core.handle.Handle;
-
-import java.lang.foreign.MemorySegment;
+import dev.engine.core.gpu.GpuMemory;
 
 public interface BufferWriter extends AutoCloseable {
 
-    MemorySegment segment();
+    GpuMemory memory();
 
     @Override
     void close();

@@ -39,7 +39,8 @@ import dev.engine.graphics.renderer.Renderable;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.core.mesh.VertexFormat;
 
-import java.lang.foreign.ValueLayout;
+import dev.engine.core.gpu.GpuMemory;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -183,7 +184,7 @@ public class Renderer implements AutoCloseable {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < vertices.length; i++) {
-                w.segment().setAtIndex(ValueLayout.JAVA_FLOAT, i, vertices[i]);
+                w.memory().putFloat((long) i * Float.BYTES, vertices[i]);
             }
         }
 
@@ -195,7 +196,7 @@ public class Renderer implements AutoCloseable {
             ibo = device.createBuffer(new BufferDescriptor(ibSize, BufferUsage.INDEX, AccessPattern.STATIC));
             try (var w = device.writeBuffer(ibo)) {
                 for (int i = 0; i < indices.length; i++) {
-                    w.segment().setAtIndex(ValueLayout.JAVA_INT, i, indices[i]);
+                    w.memory().putInt((long) i * Integer.BYTES, indices[i]);
                 }
             }
             indexCount = indices.length;
@@ -415,7 +416,7 @@ public class Renderer implements AutoCloseable {
             var layout = globalLayouts.get(entry.name());
             if (ubo != null && layout != null) {
                 try (var w = device.writeBuffer(ubo)) {
-                    layout.write(w.segment(), 0, entry.data());
+                    layout.write(w.memory(), 0, entry.data());
                 }
             }
         }
@@ -436,7 +437,7 @@ public class Renderer implements AutoCloseable {
                                     objectLayout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
                     var objectParams = new ObjectParams(cmd.transform());
                     try (var w = device.writeBuffer(objectUbo)) {
-                        objectLayout.write(w.segment(), 0, objectParams);
+                        objectLayout.write(w.memory(), 0, objectParams);
                     }
                 }
 
@@ -578,10 +579,10 @@ public class Renderer implements AutoCloseable {
 
                 if (key.type() == Vec3.class) {
                     offset = align(offset, 16);
-                    BufferWriter.write(w.segment(), offset, value);
+                    BufferWriter.write(w.memory(), offset, value);
                     offset += 16; // std140 padded
                 } else {
-                    BufferWriter.write(w.segment(), offset, value);
+                    BufferWriter.write(w.memory(), offset, value);
                     offset += BufferWriter.sizeOf(key.type());
                 }
             }
@@ -671,7 +672,7 @@ public class Renderer implements AutoCloseable {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < vertices.length; i++)
-                w.segment().setAtIndex(ValueLayout.JAVA_FLOAT, i, vertices[i]);
+                w.memory().putFloat((long) i * Float.BYTES, vertices[i]);
         }
 
         Handle<BufferResource> ibo = null;
@@ -680,7 +681,7 @@ public class Renderer implements AutoCloseable {
             ibo = device.createBuffer(new BufferDescriptor(ibSize, BufferUsage.INDEX, AccessPattern.STATIC));
             try (var w = device.writeBuffer(ibo)) {
                 for (int i = 0; i < data.indices().length; i++)
-                    w.segment().setAtIndex(ValueLayout.JAVA_INT, i, data.indices()[i]);
+                    w.memory().putInt((long) i * Integer.BYTES, data.indices()[i]);
             }
         }
 

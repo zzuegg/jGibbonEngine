@@ -145,9 +145,9 @@ class WgpuRenderDeviceTest {
         var buffer = device.createBuffer(descriptor);
 
         try (var writer = device.writeBuffer(buffer)) {
-            var segment = writer.segment();
-            segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, 0, 1.0f);
-            segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, 4, 2.0f);
+            var mem = writer.memory();
+            mem.putFloat(0, 1.0f);
+            mem.putFloat(4, 2.0f);
         }
 
         device.destroyBuffer(buffer);
@@ -206,8 +206,8 @@ class WgpuRenderDeviceTest {
         assertEquals(256, streaming.frameSize());
         assertEquals(768, streaming.size());
 
-        var segment = streaming.beginWrite();
-        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, 0, 42.0f);
+        var memory = streaming.beginWrite();
+        memory.putFloat(0, 42.0f);
         streaming.endWrite();
 
         streaming.advance();

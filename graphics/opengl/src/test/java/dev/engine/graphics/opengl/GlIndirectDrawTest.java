@@ -12,7 +12,6 @@ import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
 import org.junit.jupiter.api.Test;
 
-import java.lang.foreign.ValueLayout;
 
 class GlIndirectDrawTest {
 
@@ -41,7 +40,7 @@ class GlIndirectDrawTest {
             var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
             try (var w = device.writeBuffer(vbo)) {
                 for (int i = 0; i < verts.length; i++)
-                    w.segment().set(ValueLayout.JAVA_FLOAT, (long) i * Float.BYTES, verts[i]);
+                    w.memory().putFloat((long) i * Float.BYTES, verts[i]);
             }
             var vi = device.createVertexInput(VertexFormat.of(
                 new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0)));
@@ -49,10 +48,10 @@ class GlIndirectDrawTest {
             // Create indirect draw buffer: { vertexCount=3, instanceCount=1, firstVertex=0, firstInstance=0 }
             var indirectBuf = device.createBuffer(new BufferDescriptor(16, BufferUsage.STORAGE, AccessPattern.STATIC));
             try (var w = device.writeBuffer(indirectBuf)) {
-                w.segment().set(ValueLayout.JAVA_INT, 0, 3);   // vertexCount
-                w.segment().set(ValueLayout.JAVA_INT, 4, 1);   // instanceCount
-                w.segment().set(ValueLayout.JAVA_INT, 8, 0);   // firstVertex
-                w.segment().set(ValueLayout.JAVA_INT, 12, 0);  // firstInstance
+                w.memory().putInt(0, 3);   // vertexCount
+                w.memory().putInt(4, 1);   // instanceCount
+                w.memory().putInt(8, 0);   // firstVertex
+                w.memory().putInt(12, 0);  // firstInstance
             }
 
             // Clear and draw via indirect

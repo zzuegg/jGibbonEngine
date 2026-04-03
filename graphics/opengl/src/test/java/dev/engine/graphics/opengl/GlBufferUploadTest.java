@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.opengl.GL45;
 
-import java.lang.foreign.ValueLayout;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -45,11 +44,11 @@ class GlBufferUploadTest {
             var handle = device.createBuffer(desc);
 
             try (var writer = device.writeBuffer(handle)) {
-                var seg = writer.segment();
-                seg.setAtIndex(ValueLayout.JAVA_FLOAT, 0, 1.0f);
-                seg.setAtIndex(ValueLayout.JAVA_FLOAT, 1, 2.0f);
-                seg.setAtIndex(ValueLayout.JAVA_FLOAT, 2, 3.0f);
-                seg.setAtIndex(ValueLayout.JAVA_FLOAT, 3, 4.0f);
+                var mem = writer.memory();
+                mem.putFloat(0, 1.0f);
+                mem.putFloat(4, 2.0f);
+                mem.putFloat(8, 3.0f);
+                mem.putFloat(12, 4.0f);
             }
 
             // Readback via GL to verify data reached the GPU
@@ -76,10 +75,10 @@ class GlBufferUploadTest {
             var handle = device.createBuffer(desc);
 
             try (var writer = device.writeBuffer(handle)) {
-                var seg = writer.segment();
-                layout.write(seg, 0, new Vertex(0f, 0f, 0f));
-                layout.write(seg, layout.size(), new Vertex(1f, 0f, 0f));
-                layout.write(seg, layout.size() * 2L, new Vertex(0.5f, 1f, 0f));
+                var mem = writer.memory();
+                layout.write(mem, 0, new Vertex(0f, 0f, 0f));
+                layout.write(mem, layout.size(), new Vertex(1f, 0f, 0f));
+                layout.write(mem, layout.size() * 2L, new Vertex(0.5f, 1f, 0f));
             }
 
             // Readback

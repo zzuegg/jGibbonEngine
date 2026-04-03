@@ -27,7 +27,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.opengl.GL45;
 
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -95,7 +94,7 @@ class SceneRenderVerificationTest {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < verts.length; i++)
-                layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+                layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
 
         int[] indices = {0, 1, 2, 0, 2, 3};
@@ -103,7 +102,7 @@ class SceneRenderVerificationTest {
         var ibo = device.createBuffer(new BufferDescriptor(ibSize, BufferUsage.INDEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(ibo)) {
             for (int i = 0; i < indices.length; i++)
-                w.segment().setAtIndex(ValueLayout.JAVA_INT, i, indices[i]);
+                w.memory().putInt((long) i * Integer.BYTES, indices[i]);
         }
 
         var format = VertexFormat.of(
@@ -150,7 +149,7 @@ class SceneRenderVerificationTest {
         for (var cmd : meshRenderer.collectBatch()) {
             var mvp = vp.mul(cmd.transform());
             try (var writer = device.writeBuffer(ubo)) {
-                matLayout.write(writer.segment(), 0, mvp);
+                matLayout.write(writer.memory(), 0, mvp);
             }
             rec.bindUniformBuffer(0, ubo);
             rec.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());

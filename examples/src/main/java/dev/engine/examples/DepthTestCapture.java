@@ -17,8 +17,6 @@ import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.window.WindowDescriptor;
 
-import java.lang.foreign.ValueLayout;
-
 /**
  * Renders two cubes at known depths to verify perspective + depth ordering.
  * Red cube at z=0 (closer), blue cube at z=-3 (farther).
@@ -87,7 +85,7 @@ public class DepthTestCapture {
 
         // Draw red cube at z=0 (closer)
         var mvpRed = proj.mul(view).mul(Mat4.translation(-0.5f, 0f, 0f));
-        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, mvpRed); }
+        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.memory(), 0, mvpRed); }
         var drawRed = new CommandRecorder();
         drawRed.bindUniformBuffer(0, ubo);
         drawRed.bindVertexBuffer(redVbo, vertexInput);
@@ -97,7 +95,7 @@ public class DepthTestCapture {
 
         // Draw blue cube at z=-3 (farther)
         var mvpBlue = proj.mul(view).mul(Mat4.translation(0.5f, 0f, -3f));
-        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, mvpBlue); }
+        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.memory(), 0, mvpBlue); }
         var drawBlue = new CommandRecorder();
         drawBlue.bindUniformBuffer(0, ubo);
         drawBlue.bindVertexBuffer(blueVbo, vertexInput);
@@ -132,7 +130,7 @@ public class DepthTestCapture {
         long size = (long) layout.size() * verts.length;
         var vbo = device.createBuffer(new BufferDescriptor(size, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
-            for (int i = 0; i < verts.length; i++) layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+            for (int i = 0; i < verts.length; i++) layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
         return vbo;
     }
@@ -142,7 +140,7 @@ public class DepthTestCapture {
         for (int f = 0; f < 6; f++) { int b = f*4; idx[f*6]=b; idx[f*6+1]=b+1; idx[f*6+2]=b+2; idx[f*6+3]=b; idx[f*6+4]=b+2; idx[f*6+5]=b+3; }
         long size = (long) idx.length * Integer.BYTES;
         var ibo = device.createBuffer(new BufferDescriptor(size, BufferUsage.INDEX, AccessPattern.STATIC));
-        try (var w = device.writeBuffer(ibo)) { for (int i = 0; i < idx.length; i++) w.segment().setAtIndex(ValueLayout.JAVA_INT, i, idx[i]); }
+        try (var w = device.writeBuffer(ibo)) { for (int i = 0; i < idx.length; i++) w.memory().putInt((long) i * Integer.BYTES, idx[i]); }
         return ibo;
     }
 }

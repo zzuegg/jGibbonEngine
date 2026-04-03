@@ -1,12 +1,13 @@
 package dev.engine.core.layout;
 
+import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.gpu.NativeGpuMemory;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.math.Vec4;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -15,6 +16,10 @@ class StructLayoutTest {
     record SimpleVertex(float x, float y, float z) {}
     record ColorVertex(float x, float y, float z, float r, float g, float b, float a) {}
     record MixedVertex(float x, float y, float z, int id) {}
+
+    private GpuMemory allocate(long size) {
+        return new NativeGpuMemory(Arena.ofAuto().allocate(size, 16));
+    }
 
     @Nested
     class LayoutDerivation {
@@ -51,36 +56,30 @@ class StructLayoutTest {
     class Writing {
         @Test void writeAndReadSimpleVertex() {
             var layout = StructLayout.of(SimpleVertex.class);
-            try (var arena = Arena.ofConfined()) {
-                var segment = arena.allocate(layout.size());
-                layout.write(segment, 0, new SimpleVertex(1f, 2f, 3f));
-                assertEquals(1f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 0));
-                assertEquals(2f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 1));
-                assertEquals(3f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 2));
-            }
+            var memory = allocate(layout.size());
+            layout.write(memory, 0, new SimpleVertex(1f, 2f, 3f));
+            assertEquals(1f, memory.getFloat(0));
+            assertEquals(2f, memory.getFloat(4));
+            assertEquals(3f, memory.getFloat(8));
         }
 
         @Test void writeAtOffset() {
             var layout = StructLayout.of(SimpleVertex.class);
-            try (var arena = Arena.ofConfined()) {
-                var segment = arena.allocate(layout.size() * 2);
-                layout.write(segment, 0, new SimpleVertex(1f, 2f, 3f));
-                layout.write(segment, layout.size(), new SimpleVertex(4f, 5f, 6f));
-                assertEquals(4f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 3));
-                assertEquals(5f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 4));
-                assertEquals(6f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 5));
-            }
+            var memory = allocate(layout.size() * 2);
+            layout.write(memory, 0, new SimpleVertex(1f, 2f, 3f));
+            layout.write(memory, layout.size(), new SimpleVertex(4f, 5f, 6f));
+            assertEquals(4f, memory.getFloat(12));
+            assertEquals(5f, memory.getFloat(16));
+            assertEquals(6f, memory.getFloat(20));
         }
 
         @Test void writeMixedTypes() {
             var layout = StructLayout.of(MixedVertex.class);
-            try (var arena = Arena.ofConfined()) {
-                var segment = arena.allocate(layout.size());
-                layout.write(segment, 0, new MixedVertex(1f, 2f, 3f, 42));
-                assertEquals(1f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 0));
-                // int at byte offset 12
-                assertEquals(42, segment.get(java.lang.foreign.ValueLayout.JAVA_INT, 12));
-            }
+            var memory = allocate(layout.size());
+            layout.write(memory, 0, new MixedVertex(1f, 2f, 3f, 42));
+            assertEquals(1f, memory.getFloat(0));
+            // int at byte offset 12
+            assertEquals(42, memory.getInt(12));
         }
     }
 
@@ -96,17 +95,15 @@ class StructLayoutTest {
 
         @Test void writeNestedRecord() {
             var layout = StructLayout.of(VertexWithNormal.class);
-            try (var arena = Arena.ofConfined()) {
-                var segment = arena.allocate(layout.size());
-                layout.write(segment, 0, new VertexWithNormal(
-                        new Vec3(1f, 2f, 3f), new Vec3(0f, 1f, 0f)));
-                assertEquals(1f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 0));
-                assertEquals(2f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 1));
-                assertEquals(3f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 2));
-                assertEquals(0f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 3));
-                assertEquals(1f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 4));
-                assertEquals(0f, segment.getAtIndex(java.lang.foreign.ValueLayout.JAVA_FLOAT, 5));
-            }
+            var memory = allocate(layout.size());
+            layout.write(memory, 0, new VertexWithNormal(
+                    new Vec3(1f, 2f, 3f), new Vec3(0f, 1f, 0f)));
+            assertEquals(1f, memory.getFloat(0));
+            assertEquals(2f, memory.getFloat(4));
+            assertEquals(3f, memory.getFloat(8));
+            assertEquals(0f, memory.getFloat(12));
+            assertEquals(1f, memory.getFloat(16));
+            assertEquals(0f, memory.getFloat(20));
         }
     }
 }

@@ -20,7 +20,6 @@ import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.window.WindowDescriptor;
 
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
 /**
@@ -82,7 +81,7 @@ public class GpuTestHarness implements AutoCloseable {
         long vbSize = (long) layout.size() * verts.length;
         fullscreenVbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(fullscreenVbo)) {
-            for (int i = 0; i < verts.length; i++) layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+            for (int i = 0; i < verts.length; i++) layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
         posOnlyInput = device.createVertexInput(VertexFormat.of(
                 new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0)));
@@ -90,7 +89,7 @@ public class GpuTestHarness implements AutoCloseable {
         // Identity MVP UBO at binding 0
         var matLayout = StructLayout.of(Mat4.class);
         identityMvpUbo = device.createBuffer(new BufferDescriptor(matLayout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
-        try (var w = device.writeBuffer(identityMvpUbo)) { matLayout.write(w.segment(), 0, Mat4.IDENTITY); }
+        try (var w = device.writeBuffer(identityMvpUbo)) { matLayout.write(w.memory(), 0, Mat4.IDENTITY); }
     }
 
     /**
@@ -171,7 +170,7 @@ public class GpuTestHarness implements AutoCloseable {
         var ubo = device.createBuffer(new BufferDescriptor(Math.max(size, 16), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
         try (var w = device.writeBuffer(ubo)) {
             for (int i = 0; i < data.length; i++) {
-                w.segment().set(ValueLayout.JAVA_FLOAT, (long) i * Float.BYTES, data[i]);
+                w.memory().putFloat((long) i * Float.BYTES, data[i]);
             }
         }
         return ubo;
@@ -183,7 +182,7 @@ public class GpuTestHarness implements AutoCloseable {
         var ssbo = device.createBuffer(new BufferDescriptor(Math.max(size, 16), BufferUsage.STORAGE, AccessPattern.DYNAMIC));
         try (var w = device.writeBuffer(ssbo)) {
             for (int i = 0; i < data.length; i++) {
-                w.segment().set(ValueLayout.JAVA_FLOAT, (long) i * Float.BYTES, data[i]);
+                w.memory().putFloat((long) i * Float.BYTES, data[i]);
             }
         }
         return ssbo;

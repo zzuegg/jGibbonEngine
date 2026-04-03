@@ -19,7 +19,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.opengl.GL45;
 
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -69,7 +68,7 @@ class GlIndexedDrawTest {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < verts.length; i++)
-                layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+                layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
 
         // Index buffer: two triangles forming a quad
@@ -78,7 +77,7 @@ class GlIndexedDrawTest {
         var ibo = device.createBuffer(new BufferDescriptor(ibSize, BufferUsage.INDEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(ibo)) {
             for (int i = 0; i < indices.length; i++)
-                w.segment().setAtIndex(ValueLayout.JAVA_INT, i, indices[i]);
+                w.memory().putInt((long) i * Integer.BYTES, indices[i]);
         }
 
         var format = VertexFormat.of(new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0));

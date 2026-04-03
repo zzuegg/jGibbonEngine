@@ -13,6 +13,9 @@ import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.core.mesh.VertexFormat;
 
+import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.gpu.NativeGpuMemory;
+
 import java.lang.foreign.Arena;
 import java.nio.ByteBuffer;
 import java.util.Map;
@@ -55,8 +58,9 @@ class StubRenderDevice implements RenderDevice {
     public BufferWriter writeBuffer(Handle<BufferResource> buffer) {
         var arena = Arena.ofConfined();
         var seg = arena.allocate(1024);
+        var memory = new NativeGpuMemory(seg);
         return new BufferWriter() {
-            @Override public java.lang.foreign.MemorySegment segment() { return seg; }
+            @Override public GpuMemory memory() { return memory; }
             @Override public void close() { arena.close(); }
         };
     }

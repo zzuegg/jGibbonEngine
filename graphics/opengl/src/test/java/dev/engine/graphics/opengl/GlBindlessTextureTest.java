@@ -22,7 +22,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.lwjgl.opengl.GL45;
 
-import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -81,7 +80,7 @@ class GlBindlessTextureTest {
         // SSBO holding the texture handle
         var handleBuf = device.createBuffer(new BufferDescriptor(8, BufferUsage.STORAGE, AccessPattern.DYNAMIC));
         try (var w = device.writeBuffer(handleBuf)) {
-            w.segment().set(ValueLayout.JAVA_LONG, 0, bindlessHandle);
+            w.memory().putLong(0, bindlessHandle);
         }
 
         // Shader that reads bindless texture from SSBO
@@ -111,7 +110,7 @@ class GlBindlessTextureTest {
         var vbo = device.createBuffer(new BufferDescriptor(vbSize, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
             for (int i = 0; i < verts.length; i++)
-                layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+                layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
 
         var format = VertexFormat.of(new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0));

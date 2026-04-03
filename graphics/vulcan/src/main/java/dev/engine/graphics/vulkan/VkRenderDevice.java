@@ -15,6 +15,9 @@ import dev.engine.graphics.renderstate.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.gpu.NativeGpuMemory;
+
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -218,11 +221,12 @@ public class VkRenderDevice implements RenderDevice {
         long dataPtr = vk.mapMemory(device, alloc.memory(), offset, length);
         MemorySegment segment = MemorySegment.ofAddress(dataPtr).reinterpret(length);
         long memory = alloc.memory();
+        var gpuMemory = new NativeGpuMemory(segment);
 
         return new BufferWriter() {
             @Override
-            public MemorySegment segment() {
-                return segment;
+            public GpuMemory memory() {
+                return gpuMemory;
             }
 
             @Override

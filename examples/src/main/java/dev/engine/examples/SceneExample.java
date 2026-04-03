@@ -22,8 +22,6 @@ import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.window.WindowDescriptor;
 
-import java.lang.foreign.ValueLayout;
-
 /**
  * Complete scene rendering example demonstrating:
  * - Scene graph with entity hierarchy
@@ -142,7 +140,7 @@ public class SceneExample {
             for (var cmd : meshRenderer.collectBatch()) {
                 var mvp = vp.mul(cmd.transform());
                 try (var writer = device.writeBuffer(ubo)) {
-                    matLayout.write(writer.segment(), 0, mvp);
+                    matLayout.write(writer.memory(), 0, mvp);
                 }
                 var draw = new CommandRecorder();
                 draw.bindUniformBuffer(0, ubo);
@@ -180,7 +178,7 @@ public class SceneExample {
         long size = (long) layout.size() * verts.length;
         var vbo = device.createBuffer(new BufferDescriptor(size, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
-            for (int i = 0; i < verts.length; i++) layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+            for (int i = 0; i < verts.length; i++) layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
         return vbo;
     }
@@ -190,7 +188,7 @@ public class SceneExample {
         long size = (long) idx.length * Integer.BYTES;
         var ibo = device.createBuffer(new BufferDescriptor(size, BufferUsage.INDEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(ibo)) {
-            for (int i = 0; i < idx.length; i++) w.segment().setAtIndex(ValueLayout.JAVA_INT, i, idx[i]);
+            for (int i = 0; i < idx.length; i++) w.memory().putInt((long) i * Integer.BYTES, idx[i]);
         }
         return ibo;
     }

@@ -5,6 +5,9 @@ import dev.engine.graphics.BufferResource;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.StreamingBuffer;
 
+import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.gpu.NativeGpuMemory;
+
 import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 
@@ -71,9 +74,9 @@ public class GlStreamingBuffer implements StreamingBuffer {
     }
 
     @Override
-    public MemorySegment beginWrite() {
+    public GpuMemory beginWrite() {
         long offset = (long) currentFrame * frameSize;
-        return mappedSegment.asSlice(offset, frameSize);
+        return new NativeGpuMemory(mappedSegment.asSlice(offset, frameSize));
     }
 
     @Override

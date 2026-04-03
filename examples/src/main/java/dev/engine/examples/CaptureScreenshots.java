@@ -22,7 +22,6 @@ import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.window.WindowDescriptor;
 
-import java.lang.foreign.ValueLayout;
 
 public class CaptureScreenshots {
 
@@ -119,7 +118,7 @@ public class CaptureScreenshots {
         }
         var cubeIbo = device.createBuffer(new BufferDescriptor((long) idx.length * Integer.BYTES, BufferUsage.INDEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(cubeIbo)) {
-            for (int i = 0; i < idx.length; i++) w.segment().setAtIndex(ValueLayout.JAVA_INT, i, idx[i]);
+            for (int i = 0; i < idx.length; i++) w.memory().putInt((long) i * Integer.BYTES, idx[i]);
         }
 
         float time = 1.5f;
@@ -127,7 +126,7 @@ public class CaptureScreenshots {
         var view = Mat4.lookAt(new Vec3(0f, 0f, 3f), Vec3.ZERO, Vec3.UNIT_Y);
         var proj = Mat4.perspective((float) Math.toRadians(45), 800f / 600f, 0.1f, 100f);
         var mvp = proj.mul(view).mul(model);
-        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, mvp); }
+        try (var w = device.writeBuffer(ubo)) { matLayout.write(w.memory(), 0, mvp); }
 
         device.beginFrame();
         rec = new CommandRecorder();
@@ -181,7 +180,7 @@ public class CaptureScreenshots {
         device.submit(setup2.finish());
         for (var cmd : meshRenderer.collectBatch()) {
             var m = vp.mul(cmd.transform());
-            try (var w = device.writeBuffer(ubo)) { matLayout.write(w.segment(), 0, m); }
+            try (var w = device.writeBuffer(ubo)) { matLayout.write(w.memory(), 0, m); }
             var draw = new CommandRecorder();
             draw.bindUniformBuffer(0, ubo);
             draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
@@ -203,7 +202,7 @@ public class CaptureScreenshots {
         long size = (long) layout.size() * verts.length;
         var vbo = device.createBuffer(new BufferDescriptor(size, BufferUsage.VERTEX, AccessPattern.STATIC));
         try (var w = device.writeBuffer(vbo)) {
-            for (int i = 0; i < verts.length; i++) layout.write(w.segment(), (long) layout.size() * i, verts[i]);
+            for (int i = 0; i < verts.length; i++) layout.write(w.memory(), (long) layout.size() * i, verts[i]);
         }
         return vbo;
     }

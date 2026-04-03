@@ -5,12 +5,10 @@ import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.math.Vec4;
 
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.ValueLayout;
 import java.util.Map;
 
 /**
- * Writes typed values to a MemorySegment for GPU buffer upload.
+ * Writes typed values to a {@link GpuMemory} for GPU buffer upload.
  * Works with any buffer: UBOs, SSBOs, mapped streaming buffers, staging buffers.
  *
  * <p>Matrices are written in column-major order (GPU convention).
@@ -35,55 +33,55 @@ public final class BufferWriter {
 
     // --- Typed writes ---
 
-    public static void write(MemorySegment seg, long offset, float value) {
-        seg.set(ValueLayout.JAVA_FLOAT, offset, value);
+    public static void write(GpuMemory mem, long offset, float value) {
+        mem.putFloat(offset, value);
     }
 
-    public static void write(MemorySegment seg, long offset, int value) {
-        seg.set(ValueLayout.JAVA_INT, offset, value);
+    public static void write(GpuMemory mem, long offset, int value) {
+        mem.putInt(offset, value);
     }
 
-    public static void write(MemorySegment seg, long offset, boolean value) {
-        seg.set(ValueLayout.JAVA_INT, offset, value ? 1 : 0);
+    public static void write(GpuMemory mem, long offset, boolean value) {
+        mem.putInt(offset, value ? 1 : 0);
     }
 
-    public static void write(MemorySegment seg, long offset, Vec2 v) {
-        seg.set(ValueLayout.JAVA_FLOAT, offset, v.x());
-        seg.set(ValueLayout.JAVA_FLOAT, offset + 4, v.y());
+    public static void write(GpuMemory mem, long offset, Vec2 v) {
+        mem.putFloat(offset, v.x());
+        mem.putFloat(offset + 4, v.y());
     }
 
-    public static void write(MemorySegment seg, long offset, Vec3 v) {
-        seg.set(ValueLayout.JAVA_FLOAT, offset, v.x());
-        seg.set(ValueLayout.JAVA_FLOAT, offset + 4, v.y());
-        seg.set(ValueLayout.JAVA_FLOAT, offset + 8, v.z());
+    public static void write(GpuMemory mem, long offset, Vec3 v) {
+        mem.putFloat(offset, v.x());
+        mem.putFloat(offset + 4, v.y());
+        mem.putFloat(offset + 8, v.z());
     }
 
-    public static void write(MemorySegment seg, long offset, Vec4 v) {
-        seg.set(ValueLayout.JAVA_FLOAT, offset, v.x());
-        seg.set(ValueLayout.JAVA_FLOAT, offset + 4, v.y());
-        seg.set(ValueLayout.JAVA_FLOAT, offset + 8, v.z());
-        seg.set(ValueLayout.JAVA_FLOAT, offset + 12, v.w());
+    public static void write(GpuMemory mem, long offset, Vec4 v) {
+        mem.putFloat(offset, v.x());
+        mem.putFloat(offset + 4, v.y());
+        mem.putFloat(offset + 8, v.z());
+        mem.putFloat(offset + 12, v.w());
     }
 
-    public static void write(MemorySegment seg, long offset, Mat4 m) {
-        m.writeGpu(seg, offset);
+    public static void write(GpuMemory mem, long offset, Mat4 m) {
+        m.writeGpu(mem, offset);
     }
 
-    public static void writeTextureHandle(MemorySegment seg, long offset, long handle) {
-        seg.set(ValueLayout.JAVA_LONG, offset, handle);
+    public static void writeTextureHandle(GpuMemory mem, long offset, long handle) {
+        mem.putLong(offset, handle);
     }
 
     // --- Dynamic dispatch by Object type ---
 
-    public static void write(MemorySegment seg, long offset, Object value) {
+    public static void write(GpuMemory mem, long offset, Object value) {
         switch (value) {
-            case Float f -> write(seg, offset, f.floatValue());
-            case Integer i -> write(seg, offset, i.intValue());
-            case Boolean b -> write(seg, offset, b.booleanValue());
-            case Vec2 v -> write(seg, offset, v);
-            case Vec3 v -> write(seg, offset, v);
-            case Vec4 v -> write(seg, offset, v);
-            case Mat4 m -> write(seg, offset, m);
+            case Float f -> write(mem, offset, f.floatValue());
+            case Integer i -> write(mem, offset, i.intValue());
+            case Boolean b -> write(mem, offset, b.booleanValue());
+            case Vec2 v -> write(mem, offset, v);
+            case Vec3 v -> write(mem, offset, v);
+            case Vec4 v -> write(mem, offset, v);
+            case Mat4 m -> write(mem, offset, m);
             default -> throw new IllegalArgumentException("Unsupported type: " + value.getClass().getName());
         }
     }

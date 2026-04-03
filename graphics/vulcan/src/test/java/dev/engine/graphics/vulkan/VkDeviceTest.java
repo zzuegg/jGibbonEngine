@@ -154,10 +154,10 @@ class VkDeviceTest {
                 var vbDesc = new BufferDescriptor(3 * 3 * 4, BufferUsage.VERTEX, AccessPattern.STATIC);
                 var vb = device.createBuffer(vbDesc);
                 try (var w = device.writeBuffer(vb)) {
-                    var seg = w.segment();
+                    var mem = w.memory();
                     float[] verts = {0f, 0.5f, 0f, -0.5f, -0.5f, 0f, 0.5f, -0.5f, 0f};
                     for (int i = 0; i < verts.length; i++) {
-                        seg.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, i * 4L, verts[i]);
+                        mem.putFloat(i * 4L, verts[i]);
                     }
                 }
 
