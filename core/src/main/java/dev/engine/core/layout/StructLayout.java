@@ -36,12 +36,32 @@ public final class StructLayout {
         return of(recordType, LayoutMode.PACKED);
     }
 
+    /**
+     * Strategy for building layouts from types. Default uses reflection.
+     * Set to null on platforms without reflection (TeaVM) — all types must be pre-registered.
+     */
+    private static volatile java.util.function.BiFunction<Class<?>, LayoutMode, StructLayout> buildStrategy = StructLayout::build;
+
+    /**
+     * Disables reflection-based layout building.
+     * All struct types must be pre-registered via {@link #register} before use.
+     * Call this on platforms without reflection (e.g., TeaVM).
+     */
+    public static void disableReflection() {
+        buildStrategy = null;
+    }
+
     /** Layout with specific mode (PACKED, STD140, STD430). */
     public static synchronized StructLayout of(Class<?> recordType, LayoutMode mode) {
         var key = recordType.getName() + ":" + mode.name();
         var cached = CACHE.get(key);
         if (cached != null) return cached;
-        var layout = build(recordType, mode);
+        if (buildStrategy == null) {
+            throw new IllegalStateException(
+                "StructLayout for " + recordType.getName() + " not registered. " +
+                "On platforms without reflection, call StructLayout.register() for all struct types.");
+        }
+        var layout = buildStrategy.apply(recordType, mode);
         CACHE.put(key, layout);
         return layout;
     }

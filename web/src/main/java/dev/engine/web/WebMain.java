@@ -55,6 +55,8 @@ public class WebMain {
 
     public static void main(String[] args) {
         // Register struct layouts for TeaVM (no reflection available)
+        // TeaVM has no reflection — disable it and register layouts manually
+        dev.engine.core.layout.StructLayout.disableReflection();
         WebStructLayouts.registerAll();
 
         setStatus("Initializing WebGPU...");
