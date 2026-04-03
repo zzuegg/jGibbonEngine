@@ -25,12 +25,46 @@ final class VkPipelineFactory {
     private VkPipelineFactory() {}
 
     /**
+     * Blend configuration for pipeline color attachment state.
+     */
+    record BlendConfig(boolean enabled, int srcColorFactor, int dstColorFactor,
+                       int srcAlphaFactor, int dstAlphaFactor) {
+        static final BlendConfig NONE = new BlendConfig(false,
+                VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO,
+                VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO);
+        static final BlendConfig ALPHA = new BlendConfig(true,
+                VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA);
+        static final BlendConfig ADDITIVE = new BlendConfig(true,
+                VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE,
+                VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE);
+        static final BlendConfig MULTIPLY = new BlendConfig(true,
+                VK_BLEND_FACTOR_DST_COLOR, VK_BLEND_FACTOR_ZERO,
+                VK_BLEND_FACTOR_DST_ALPHA, VK_BLEND_FACTOR_ZERO);
+        static final BlendConfig PREMULTIPLIED = new BlendConfig(true,
+                VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA);
+    }
+
+    /**
      * Creates a graphics pipeline from SPIRV binaries.
      *
      * @param pipelineLayout the shared pipeline layout (from VkDescriptorManager)
      */
+    /**
+     * Creates a graphics pipeline with no blending (default).
+     */
     static long create(VkDevice device, long renderPass, long pipelineLayout,
                         List<ShaderBinary> binaries, VertexFormat vertexFormat) {
+        return create(device, renderPass, pipelineLayout, binaries, vertexFormat, BlendConfig.NONE);
+    }
+
+    /**
+     * Creates a graphics pipeline with the specified blend configuration.
+     */
+    static long create(VkDevice device, long renderPass, long pipelineLayout,
+                        List<ShaderBinary> binaries, VertexFormat vertexFormat,
+                        BlendConfig blendConfig) {
         try (var stack = stackPush()) {
             // Create shader modules
             long[] modules = new long[binaries.size()];
@@ -131,7 +165,13 @@ final class VkPipelineFactory {
             var colorBlendAttachment = VkPipelineColorBlendAttachmentState.calloc(1, stack)
                     .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
-                    .blendEnable(false);
+                    .blendEnable(blendConfig.enabled())
+                    .srcColorBlendFactor(blendConfig.srcColorFactor())
+                    .dstColorBlendFactor(blendConfig.dstColorFactor())
+                    .colorBlendOp(VK_BLEND_OP_ADD)
+                    .srcAlphaBlendFactor(blendConfig.srcAlphaFactor())
+                    .dstAlphaBlendFactor(blendConfig.dstAlphaFactor())
+                    .alphaBlendOp(VK_BLEND_OP_ADD);
 
             var colorBlending = VkPipelineColorBlendStateCreateInfo.calloc(stack)
                     .sType$Default()

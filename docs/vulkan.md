@@ -82,10 +82,19 @@ The pipeline's rasterizer and depth-stencil initial values are overridden at dra
 
 ### What is NOT dynamically configurable
 
-- **Blending**: `vkCmdSetColorBlendEnableEXT` requires `VK_EXT_extended_dynamic_state3`, which has poor driver support. Blending is baked into the pipeline (currently disabled).
-- **Wireframe / polygon mode**: `vkCmdSetPolygonModeEXT` also requires `VK_EXT_extended_dynamic_state3`. This is a no-op in the Vulkan backend.
+- **Wireframe / polygon mode**: `vkCmdSetPolygonModeEXT` requires `VK_EXT_extended_dynamic_state3`, which has poor driver support. This is a no-op in the Vulkan backend.
 
-These limitations mean that toggling blending or wireframe at runtime requires pipeline permutations (not yet implemented).
+### Blending via Pipeline Variants
+
+`vkCmdSetColorBlendEnableEXT` requires `VK_EXT_extended_dynamic_state3`, which has poor driver support. Instead, the backend creates **pipeline variants** on demand when a blend mode is requested.
+
+When `SetRenderState` with `BLEND_MODE` (or `SetBlending`) is received:
+1. The currently bound pipeline handle is looked up in a `pipelineSpecs` map to retrieve the original shader binaries and vertex format.
+2. A variant pipeline is created via `VkPipelineFactory.create()` with the appropriate `BlendConfig` (NONE, ALPHA, ADDITIVE, MULTIPLY, PREMULTIPLIED).
+3. Variants are cached in `pipelineBlendVariants` keyed by `"pipelineIndex_blendModeName"` so they are only created once per combination.
+4. The variant pipeline is bound via `vkCmdBindPipeline`.
+
+Cleanup: variants are destroyed when the base pipeline is destroyed (`destroyPipeline`) and when the device is closed.
 
 ## Compute Pipelines
 
