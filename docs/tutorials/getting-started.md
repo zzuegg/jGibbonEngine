@@ -6,7 +6,7 @@ description: "Set up your first jGibbonEngine project and render a 3D scene in u
 
 Welcome to jGibbonEngine! In this tutorial you will:
 
-- Add jGibbonEngine to a Gradle Kotlin project
+- Add jGibbonEngine to a Gradle project
 - Create your first application class
 - Display a simple 3D box on screen
 - Understand the basic rendering loop
@@ -14,8 +14,8 @@ Welcome to jGibbonEngine! In this tutorial you will:
 ## Prerequisites
 
 - JDK 17 or later
-- Gradle 8.x (Kotlin DSL)
-- Basic familiarity with Kotlin or Java
+- Gradle 8.x
+- Basic familiarity with Java
 
 ---
 
@@ -25,7 +25,7 @@ Create a new directory and initialize a Gradle project:
 
 ```bash
 mkdir my-gibbon-game && cd my-gibbon-game
-gradle init --type kotlin-application --dsl kotlin
+gradle init --type java-application --dsl kotlin
 ```
 
 Your directory will look like:
@@ -33,7 +33,7 @@ Your directory will look like:
 ```
 my-gibbon-game/
   app/
-    src/main/kotlin/…
+    src/main/java/…
     build.gradle.kts
   settings.gradle.kts
   gradle/
@@ -59,30 +59,30 @@ dependencies {
 
 ## Step 3 — Create your Application class
 
-Create `app/src/main/kotlin/com/example/MyGame.kt`:
+Create `app/src/main/java/com/example/MyGame.java`:
 
-```kotlin
-package com.example
+```java
+package com.example;
 
-import io.github.zzuegg.engine.GibbonApplication
-import io.github.zzuegg.engine.scene.Box
-import io.github.zzuegg.engine.scene.DirectionalLight
-import io.github.zzuegg.engine.math.ColorRGBA
+import io.github.zzuegg.engine.GibbonApplication;
+import io.github.zzuegg.engine.scene.Box;
+import io.github.zzuegg.engine.scene.DirectionalLight;
+import io.github.zzuegg.engine.math.ColorRGBA;
 
-class MyGame : GibbonApplication() {
+public class MyGame extends GibbonApplication {
 
-    override fun init() {
+    @Override
+    public void init() {
         // Add a simple box to the scene
-        val box = Box(halfExtents = 1f)
-        box.setMaterial(assetManager.loadDefaultMaterial())
-        rootNode.attachChild(box)
+        Box box = new Box(1f);
+        box.setMaterial(getAssetManager().loadDefaultMaterial());
+        getRootNode().attachChild(box);
 
         // Add a directional light
-        val sun = DirectionalLight(
-            direction  = floatArrayOf(0f, -1f, -1f),
-            color      = ColorRGBA.White
-        )
-        rootNode.addLight(sun)
+        DirectionalLight sun = new DirectionalLight();
+        sun.setDirection(new float[]{0f, -1f, -1f});
+        sun.setColor(ColorRGBA.White);
+        getRootNode().addLight(sun);
     }
 }
 ```
@@ -91,18 +91,20 @@ class MyGame : GibbonApplication() {
 
 ## Step 4 — Add the entry point
 
-Create or edit `app/src/main/kotlin/com/example/Main.kt`:
+Create or edit `app/src/main/java/com/example/Main.java`:
 
-```kotlin
-package com.example
+```java
+package com.example;
 
-fun main() {
-    val app = MyGame()
-    app.settings.title        = "My First Gibbon Game"
-    app.settings.width        = 1280
-    app.settings.height       = 720
-    app.settings.vsync        = true
-    app.start()
+public class Main {
+    public static void main(String[] args) {
+        MyGame app = new MyGame();
+        app.getSettings().setTitle("My First Gibbon Game");
+        app.getSettings().setWidth(1280);
+        app.getSettings().setHeight(720);
+        app.getSettings().setVSync(true);
+        app.start();
+    }
 }
 ```
 
@@ -142,7 +144,7 @@ Now that your first scene is running, continue with:
 
 - **[Building Your First Scene]({{ site.baseurl }}/tutorials/first-scene)** — lights, cameras, and geometry
 - **[Examples]({{ site.baseurl }}/examples/)** — copy-paste runnable snippets
-- **[API Reference]({{ site.baseurl }}/javadoc/)** — full Kotlin/Java API documentation
+- **[API Reference]({{ site.baseurl }}/javadoc/)** — full Java API documentation
 
 ---
 
