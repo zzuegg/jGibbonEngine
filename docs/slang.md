@@ -191,6 +191,74 @@ Slang can emit WGSL directly (target 28) without any additional libraries. The g
 
 The `ShaderManager` must select `SLANG_WGSL` when the backend is "WebGPU" (not fall through to GLSL). Passing GLSL source to `wgpuDeviceCreateShaderModule` causes a Rust panic in wgpu-native.
 
+## Slang WASM (Browser Compilation)
+
+The Slang compiler is available as a WASM module for in-browser shader compilation. This allows the same `.slang` shader sources used on desktop to compile to WGSL in the browser.
+
+### Setup
+
+The Slang WASM distribution contains:
+- `slang-wasm.js` (or `.mjs`) — Emscripten-generated JS loader (ES module with `export default Module`)
+- `slang-wasm.wasm` — the compiled Slang compiler
+
+The JS file is an ES module (`export default Module`), not a global `createSlangWasm()` function. Load it via:
+```html
+<script type="module">
+import SlangModule from './slang/slang-wasm.mjs';
+var slang = await SlangModule({
+    locateFile: function(path) {
+        if (path.endsWith('.wasm')) return 'slang/slang-wasm.wasm';
+        return path;
+    }
+});
+window._slangModule = slang;
+</script>
+```
+
+### API Pattern
+
+```javascript
+var globalSession = slang.createGlobalSession();
+var targets = slang.getCompileTargets();  // { WGSL: N, SPIRV: M, ... }
+var session = globalSession.createSession(targets.WGSL);
+var module = session.loadModuleFromSource('shader', 'shader.slang', source);
+var vertexEP = module.findEntryPointByName('vertexMain');
+var fragmentEP = module.findEntryPointByName('fragmentMain');
+var composite = session.createCompositeComponentType([module, vertexEP, fragmentEP]);
+var linked = composite.link();
+var vertexWGSL = linked.getEntryPointCode(0, 0);   // entry 0, target 0
+var fragmentWGSL = linked.getEntryPointCode(1, 0);  // entry 1, target 0
+// MUST call .delete() on all Embind objects to avoid memory leaks
+```
+
+### Key Differences from Desktop slangc
+
+- No file I/O — all source is passed as strings via `loadModuleFromSource()`
+- No `import` support — shaders must be self-contained (inline all interfaces/structs)
+- The module factory is async (returns a Promise)
+- All Embind objects must be explicitly `.delete()`d to avoid WASM memory leaks
+- `getLastError()` is on the module object, not the session
+
+### Self-Contained Shaders for WASM
+
+Since the WASM compiler cannot resolve `import` statements, shaders compiled in the browser must inline all dependencies. Instead of generic interfaces (`ICameraParams`, `IMaterialParams`), use concrete `ParameterBlock<T>` declarations:
+
+```slang
+struct CameraData { float4x4 viewProjection; };
+struct ObjectData { float4x4 world; };
+struct MaterialData { float3 color; };
+
+ParameterBlock<CameraData> camera;
+ParameterBlock<ObjectData> object;
+ParameterBlock<MaterialData> material;
+
+[shader("vertex")]
+VertexOutput vertexMain(VertexInput input) {
+    float4x4 mvp = mul(object.world, camera.viewProjection);
+    // ...
+}
+```
+
 ## Common Pitfalls
 
 1. **mul order** — always `mul(vector, matrix)`, never `mul(matrix, vector)`

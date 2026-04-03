@@ -26,12 +26,13 @@ teavm {
     }
 }
 
-// Copy webapp resources (index.html) next to the generated JS
+// Copy webapp resources (index.html, slang-wasm) next to the generated JS
 tasks.register<Copy>("assembleWeb") {
     dependsOn("generateJavaScript")
     from("src/main/webapp")
     into(layout.buildDirectory.dir("generated/js/teavm/js"))
     // The TeaVM plugin writes web.js into a 'js' subdirectory of outputDir
+    // This also copies slang/ directory with slang-wasm.mjs and slang-wasm.wasm
 }
 
 tasks.named("generateJavaScript") {

@@ -1,6 +1,7 @@
 package dev.engine.web;
 
 import dev.engine.graphics.webgpu.WgpuBindings;
+import dev.engine.providers.teavm.webgpu.TeaVmSlangCompiler;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuBindings;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuInit;
 import org.teavm.jso.JSBody;
@@ -11,13 +12,66 @@ import org.teavm.jso.JSObject;
  * Entry point for the TeaVM-compiled web application.
  *
  * <p>Renders a colored triangle using the browser's native WebGPU API.
- * Shaders are hard-coded WGSL since the Slang compiler is not available
- * in the browser environment.
+ * Shaders are compiled from Slang source via the Slang WASM compiler when
+ * available, falling back to hardcoded WGSL otherwise.
  */
 public class WebMain {
 
-    // Hard-coded WGSL shaders for the triangle
-    private static final String WGSL_SHADER = """
+    // Slang shader source — same as graphics/common/src/main/resources/shaders/unlit.slang
+    // but self-contained (interfaces + param blocks inlined) so it compiles standalone.
+    private static final String SLANG_SHADER = """
+        // Inline interfaces and param blocks for standalone compilation
+
+        struct CameraData {
+            float4x4 viewProjection;
+        };
+
+        struct ObjectData {
+            float4x4 world;
+        };
+
+        struct MaterialData {
+            float3 color;
+        };
+
+        ParameterBlock<CameraData> camera;
+        ParameterBlock<ObjectData> object;
+        ParameterBlock<MaterialData> material;
+
+        struct VertexInput {
+            float3 position : POSITION;
+            float3 normal   : NORMAL;
+            float2 uv       : TEXCOORD;
+        };
+
+        struct VertexOutput {
+            float4 position : SV_Position;
+            float3 normal;
+            float2 uv;
+        };
+
+        [shader("vertex")]
+        VertexOutput vertexMain(VertexInput input) {
+            VertexOutput output;
+            float4x4 mvp = mul(object.world, camera.viewProjection);
+            output.position = mul(float4(input.position, 1.0), mvp);
+            output.normal = mul(float4(input.normal, 0.0), object.world).xyz;
+            output.uv = input.uv;
+            return output;
+        }
+
+        [shader("fragment")]
+        float4 fragmentMain(VertexOutput input) : SV_Target {
+            float3 N = normalize(input.normal);
+            float3 L = normalize(float3(0.5, 1.0, 0.3));
+            float NdotL = max(dot(N, L), 0.0);
+            float3 lit = material.color * (0.3 + 0.7 * NdotL);
+            return float4(lit, 1.0);
+        }
+        """;
+
+    // Fallback hard-coded WGSL shaders (simple passthrough triangle)
+    private static final String FALLBACK_VERTEX_WGSL = """
         struct VertexOutput {
             @builtin(position) position: vec4f,
             @location(0) color: vec3f,
@@ -30,6 +84,13 @@ public class WebMain {
             out.color = color;
             return out;
         }
+        """;
+
+    private static final String FALLBACK_FRAGMENT_WGSL = """
+        struct VertexOutput {
+            @builtin(position) position: vec4f,
+            @location(0) color: vec3f,
+        }
 
         @fragment
         fn fs_main(in: VertexOutput) -> @location(0) vec4f {
@@ -37,7 +98,7 @@ public class WebMain {
         }
         """;
 
-    // Interleaved vertex data: position (x,y,z) + color (r,g,b) per vertex
+    // Interleaved vertex data: position (x,y,z) + color/normal (r,g,b) per vertex
     private static final float[] TRIANGLE_VERTICES = {
         //  x      y     z      r    g    b
          0.0f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // top - red
@@ -56,6 +117,11 @@ public class WebMain {
     private static long pipeline;
     private static long vertexBuffer;
     private static int vertexBufferSize;
+    private static boolean slangCompiled;
+
+    // Entry point names from Slang compilation
+    private static String vertexEntryName = "vs_main";
+    private static String fragmentEntryName = "fs_main";
 
     @JSFunctor
     public interface FrameCallback extends JSObject {
@@ -76,6 +142,9 @@ public class WebMain {
         if (el) el.textContent = msg;
     """)
     private static native void setStatus(String msg);
+
+    @JSBody(params = "msg", script = "console.log(msg);")
+    private static native void consoleLog(String msg);
 
     public static void main(String[] args) {
         setStatus("Initializing WebGPU...");
@@ -100,14 +169,45 @@ public class WebMain {
         contextId = TeaVmWgpuBindings.configureCanvasContext("canvas", deviceId);
         String canvasFormat = TeaVmWgpuBindings.getPreferredCanvasFormat();
 
-        // Create shader module
-        long shaderModule = bindings.deviceCreateShaderModule(deviceId, WGSL_SHADER);
+        // Compile shaders — try Slang WASM first, fall back to hardcoded WGSL
+        String vertexWGSL;
+        String fragmentWGSL;
 
-        // Create render pipeline (auto layout, no bind groups needed)
+        if (TeaVmSlangCompiler.isAvailable()) {
+            String version = TeaVmSlangCompiler.getVersionString();
+            consoleLog("[Slang WASM] Compiler available, version: " + version);
+            setStatus("Compiling Slang shaders to WGSL...");
+
+            try {
+                String[] wgsl = TeaVmSlangCompiler.compile(SLANG_SHADER, "vertexMain", "fragmentMain");
+                vertexWGSL = wgsl[0];
+                fragmentWGSL = wgsl[1];
+                vertexEntryName = "vertexMain";
+                fragmentEntryName = "fragmentMain";
+                slangCompiled = true;
+                consoleLog("[Slang WASM] Vertex WGSL:\n" + vertexWGSL);
+                consoleLog("[Slang WASM] Fragment WGSL:\n" + fragmentWGSL);
+            } catch (Exception e) {
+                consoleLog("[Slang WASM] Compilation failed: " + e.getMessage() + ", using fallback WGSL");
+                vertexWGSL = FALLBACK_VERTEX_WGSL;
+                fragmentWGSL = FALLBACK_FRAGMENT_WGSL;
+            }
+        } else {
+            consoleLog("[Slang WASM] Not available, using fallback WGSL shaders");
+            vertexWGSL = FALLBACK_VERTEX_WGSL;
+            fragmentWGSL = FALLBACK_FRAGMENT_WGSL;
+        }
+
+        // Create shader modules — one combined WGSL or two separate modules
+        // WebGPU allows vertex and fragment from different modules
+        long vertexShaderModule = bindings.deviceCreateShaderModule(deviceId, vertexWGSL);
+        long fragmentShaderModule = bindings.deviceCreateShaderModule(deviceId, fragmentWGSL);
+
+        // Create render pipeline
         var pipelineDesc = new WgpuBindings.RenderPipelineDescriptor(
                 0,  // auto layout
-                shaderModule, "vs_main",
-                shaderModule, "fs_main",
+                vertexShaderModule, vertexEntryName,
+                fragmentShaderModule, fragmentEntryName,
                 new WgpuBindings.VertexBufferLayoutDesc(
                         VERTEX_STRIDE,
                         WgpuBindings.VERTEX_STEP_MODE_VERTEX,
@@ -115,7 +215,7 @@ public class WebMain {
                                 new WgpuBindings.VertexAttributeDesc(
                                         WgpuBindings.VERTEX_FORMAT_FLOAT32X3, 0, 0),  // position
                                 new WgpuBindings.VertexAttributeDesc(
-                                        WgpuBindings.VERTEX_FORMAT_FLOAT32X3, 12, 1), // color
+                                        WgpuBindings.VERTEX_FORMAT_FLOAT32X3, 12, 1), // color/normal
                         }
                 ),
                 WgpuBindings.PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
@@ -139,7 +239,11 @@ public class WebMain {
                 WgpuBindings.BUFFER_USAGE_VERTEX | WgpuBindings.BUFFER_USAGE_COPY_DST);
         writeVertexData(queueId, (int) vertexBuffer, TRIANGLE_VERTICES);
 
-        setStatus("Rendering...");
+        if (slangCompiled) {
+            setStatus("Rendering (Slang -> WGSL)");
+        } else {
+            setStatus("Rendering (fallback WGSL)");
+        }
 
         // Enter the render loop
         requestAnimationFrame(WebMain::renderFrame);

@@ -43,16 +43,41 @@
         }
     </script>
     <script src="web.js"></script>
-    <script>
-        // TeaVM assigns main to `this` (window/self) via the module wrapper
-        // Try several ways to find it
-        var mainFn = this.main || window.main || self.main;
+    <script type="module">
+        // Load Slang WASM compiler, then start Java main
+        import SlangModule from './slang/slang-wasm.mjs';
+
+        var statusEl = document.getElementById('status');
+
+        try {
+            statusEl.textContent = 'Loading Slang WASM compiler...';
+            var slangModule = await SlangModule({
+                locateFile: function(path) {
+                    if (path.endsWith('.wasm')) {
+                        return 'slang/slang-wasm.wasm';
+                    }
+                    return path;
+                }
+            });
+            window._slangModule = slangModule;
+            console.log('Slang WASM loaded:', slangModule.getVersionString());
+            statusEl.textContent = 'Slang loaded. Starting engine...';
+        } catch (err) {
+            console.error('Failed to load Slang WASM:', err);
+            statusEl.textContent = 'Slang WASM failed: ' + err.message + ' (falling back to hardcoded shaders)';
+            // Continue anyway — WebMain will detect isAvailable() == false
+        }
+
+        // Start the TeaVM main
+        var mainFn = window.main || self.main;
         if (typeof mainFn === 'function') {
             mainFn();
         } else {
-            document.getElementById('status').textContent =
+            statusEl.textContent =
                 'Error: main() not found. Check console for details.';
-            console.error('Available globals:', Object.keys(window).filter(k => k.includes('main') || k.includes('rt')));
+            console.error('Available globals:', Object.keys(window).filter(function(k) {
+                return k.includes('main') || k.includes('rt');
+            }));
         }
     </script>
 </body>
