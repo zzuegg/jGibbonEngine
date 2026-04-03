@@ -1,8 +1,8 @@
 package dev.engine.graphics.vulkan;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.core.handle.HandlePool;
 import dev.engine.graphics.*;
+import dev.engine.graphics.resource.ResourceRegistry;
 import dev.engine.graphics.buffer.*;
 import dev.engine.graphics.sync.GpuFence;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -68,29 +68,11 @@ public class VkRenderDevice implements RenderDevice {
     private final long[] pendingSsboBuffers = new long[8];
     private final long[] pendingSsboSizes = new long[8];
 
-    private final HandlePool<BufferResource> bufferPool = new HandlePool<>();
-    private final Map<Integer, BufferAllocation> buffers = new HashMap<>();
-
-    private final HandlePool<TextureResource> texturePool = new HandlePool<>();
-    private final HandlePool<RenderTargetResource> renderTargetPool = new HandlePool<>();
-    private final HandlePool<VertexInputResource> vertexInputPool = new HandlePool<>();
-    private final HandlePool<SamplerResource> samplerPool = new HandlePool<>();
-    private final HandlePool<PipelineResource> pipelinePool = new HandlePool<>();
-
     private final AtomicLong frameCounter = new AtomicLong(0);
 
     private record BufferAllocation(long buffer, long memory, long size) {}
     private record VkTextureAllocation(long image, long memory, long imageView, TextureDescriptor desc) {}
-    private final Map<Integer, VkTextureAllocation> textures = new HashMap<>();
-    private final Map<Integer, Long> vkSamplers = new HashMap<>();
-    private final Map<Integer, Boolean> textureMipsDirty = new HashMap<>();
-    private final Map<Integer, SamplerDescriptor> vkSamplerDescs = new HashMap<>();
-    // Track bound textures/samplers per unit for lazy mip generation
-    @SuppressWarnings("unchecked")
-    private final Handle<TextureResource>[] currentTextures = new Handle[8];
-    @SuppressWarnings("unchecked")
-    private final Handle<SamplerResource>[] currentSamplerHandles = new Handle[8];
-
+    private record VkSamplerAllocation(long sampler, SamplerDescriptor desc) {}
     private record VkRenderTargetAllocation(
         long renderPass,
         long framebuffer,
@@ -99,7 +81,20 @@ public class VkRenderDevice implements RenderDevice {
         VkTextureAllocation depthAttachment,
         List<Handle<TextureResource>> colorTextureHandles
     ) {}
-    private final Map<Integer, VkRenderTargetAllocation> renderTargets = new HashMap<>();
+
+    private final ResourceRegistry<BufferResource, BufferAllocation> bufferRegistry = new ResourceRegistry<>("buffer");
+    private final ResourceRegistry<TextureResource, VkTextureAllocation> textureRegistry = new ResourceRegistry<>("texture");
+    private final ResourceRegistry<SamplerResource, VkSamplerAllocation> samplerRegistry = new ResourceRegistry<>("sampler");
+    private final ResourceRegistry<PipelineResource, Long> pipelineRegistry = new ResourceRegistry<>("pipeline");
+    private final ResourceRegistry<RenderTargetResource, VkRenderTargetAllocation> renderTargetRegistry = new ResourceRegistry<>("render-target");
+    private final ResourceRegistry<VertexInputResource, Void> vertexInputRegistry = new ResourceRegistry<>("vertex-input");
+
+    private final Map<Integer, Boolean> textureMipsDirty = new HashMap<>();
+    // Track bound textures/samplers per unit for lazy mip generation
+    @SuppressWarnings("unchecked")
+    private final Handle<TextureResource>[] currentTextures = new Handle[8];
+    @SuppressWarnings("unchecked")
+    private final Handle<SamplerResource>[] currentSamplerHandles = new Handle[8];
 
     // Pending texture+sampler bindings for descriptor flush (unit -> imageView, unit -> sampler)
     private final long[] pendingTextureViews = new long[8];
@@ -365,38 +360,35 @@ public class VkRenderDevice implements RenderDevice {
                 throw new RuntimeException("Failed to bind buffer memory: " + result);
             }
 
-            Handle<BufferResource> handle = bufferPool.allocate();
-            buffers.put(handle.index(), new BufferAllocation(buffer, memory, descriptor.size()));
-            return handle;
+            return bufferRegistry.register(new BufferAllocation(buffer, memory, descriptor.size()));
         }
     }
 
     @Override
     public void destroyBuffer(Handle<BufferResource> handle) {
-        if (!bufferPool.isValid(handle)) return;
-        var alloc = buffers.remove(handle.index());
+        if (!bufferRegistry.isValid(handle)) return;
+        var alloc = bufferRegistry.remove(handle);
         if (alloc != null) {
             vkFreeMemory(device, alloc.memory(), null);
             vkDestroyBuffer(device, alloc.buffer(), null);
         }
-        bufferPool.release(handle);
     }
 
     @Override
     public boolean isValidBuffer(Handle<BufferResource> handle) {
-        return bufferPool.isValid(handle);
+        return bufferRegistry.isValid(handle);
     }
 
     @Override
     public BufferWriter writeBuffer(Handle<BufferResource> handle) {
-        var alloc = buffers.get(handle.index());
+        var alloc = bufferRegistry.get(handle);
         if (alloc == null) throw new IllegalArgumentException("Invalid buffer handle");
         return writeBuffer(handle, 0, alloc.size());
     }
 
     @Override
     public BufferWriter writeBuffer(Handle<BufferResource> handle, long offset, long length) {
-        var alloc = buffers.get(handle.index());
+        var alloc = bufferRegistry.get(handle);
         if (alloc == null) throw new IllegalArgumentException("Invalid buffer handle");
 
         try (var stack = stackPush()) {
@@ -487,15 +479,13 @@ public class VkRenderDevice implements RenderDevice {
             transitionImageLayout(image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                     aspectMask, mipLevels);
 
-            var handle = texturePool.allocate();
-            textures.put(handle.index(), new VkTextureAllocation(image, memory, imageView, descriptor));
-            return handle;
+            return textureRegistry.register(new VkTextureAllocation(image, memory, imageView, descriptor));
         }
     }
 
     @Override
     public void uploadTexture(Handle<TextureResource> texture, ByteBuffer pixels) {
-        var alloc = textures.get(texture.index());
+        var alloc = textureRegistry.get(texture);
         if (alloc == null) return;
 
         long imageSize = pixels.remaining();
@@ -584,19 +574,18 @@ public class VkRenderDevice implements RenderDevice {
 
     @Override
     public void destroyTexture(Handle<TextureResource> handle) {
-        if (!texturePool.isValid(handle)) return;
-        var alloc = textures.remove(handle.index());
+        if (!textureRegistry.isValid(handle)) return;
+        var alloc = textureRegistry.remove(handle);
         if (alloc != null) {
             vkDestroyImageView(device, alloc.imageView(), null);
             vkDestroyImage(device, alloc.image(), null);
             vkFreeMemory(device, alloc.memory(), null);
         }
-        texturePool.release(handle);
     }
 
     @Override
     public boolean isValidTexture(Handle<TextureResource> handle) {
-        return texturePool.isValid(handle);
+        return textureRegistry.isValid(handle);
     }
 
     @Override
@@ -671,8 +660,7 @@ public class VkRenderDevice implements RenderDevice {
                 colorAttachments.add(texAlloc);
 
                 // Register as a texture so it can be bound with BindTexture
-                var texHandle = texturePool.allocate();
-                textures.put(texHandle.index(), texAlloc);
+                var texHandle = textureRegistry.register(texAlloc);
                 colorTextureHandles.add(texHandle);
             }
 
@@ -753,8 +741,7 @@ public class VkRenderDevice implements RenderDevice {
             if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT framebuffer: " + result);
             long framebuffer = pFramebuffer.get(0);
 
-            var handle = renderTargetPool.allocate();
-            renderTargets.put(handle.index(), new VkRenderTargetAllocation(
+            var handle = renderTargetRegistry.register(new VkRenderTargetAllocation(
                     rtRenderPass, framebuffer, descriptor.width(), descriptor.height(),
                     List.copyOf(colorAttachments), depthAttachment, List.copyOf(colorTextureHandles)));
 
@@ -767,7 +754,7 @@ public class VkRenderDevice implements RenderDevice {
 
     @Override
     public Handle<TextureResource> getRenderTargetColorTexture(Handle<RenderTargetResource> renderTarget, int index) {
-        var rtAlloc = renderTargets.get(renderTarget.index());
+        var rtAlloc = renderTargetRegistry.get(renderTarget);
         if (rtAlloc == null || index < 0 || index >= rtAlloc.colorTextureHandles().size()) {
             return Handle.invalid();
         }
@@ -776,8 +763,8 @@ public class VkRenderDevice implements RenderDevice {
 
     @Override
     public void destroyRenderTarget(Handle<RenderTargetResource> handle) {
-        if (!renderTargetPool.isValid(handle)) return;
-        var rtAlloc = renderTargets.remove(handle.index());
+        if (!renderTargetRegistry.isValid(handle)) return;
+        var rtAlloc = renderTargetRegistry.remove(handle);
         if (rtAlloc != null) {
             vkDestroyFramebuffer(device, rtAlloc.framebuffer(), null);
             vkDestroyRenderPass(device, rtAlloc.renderPass(), null);
@@ -786,8 +773,7 @@ public class VkRenderDevice implements RenderDevice {
             for (int i = 0; i < rtAlloc.colorAttachments().size(); i++) {
                 var colorAlloc = rtAlloc.colorAttachments().get(i);
                 var texHandle = rtAlloc.colorTextureHandles().get(i);
-                textures.remove(texHandle.index());
-                texturePool.release(texHandle);
+                textureRegistry.remove(texHandle);
                 vkDestroyImageView(device, colorAlloc.imageView(), null);
                 vkDestroyImage(device, colorAlloc.image(), null);
                 vkFreeMemory(device, colorAlloc.memory(), null);
@@ -801,7 +787,6 @@ public class VkRenderDevice implements RenderDevice {
                 vkFreeMemory(device, depthAlloc.memory(), null);
             }
         }
-        renderTargetPool.release(handle);
     }
 
     private long createOffscreenRenderPass(RenderTargetDescriptor descriptor,
@@ -896,13 +881,13 @@ public class VkRenderDevice implements RenderDevice {
 
     @Override
     public Handle<VertexInputResource> createVertexInput(VertexFormat format) {
-        return vertexInputPool.allocate();
+        return vertexInputRegistry.register(null);
     }
 
     @Override
     public void destroyVertexInput(Handle<VertexInputResource> handle) {
-        if (vertexInputPool.isValid(handle)) {
-            vertexInputPool.release(handle);
+        if (vertexInputRegistry.isValid(handle)) {
+            vertexInputRegistry.remove(handle);
         }
     }
 
@@ -937,25 +922,18 @@ public class VkRenderDevice implements RenderDevice {
             int result = vkCreateSampler(device, samplerInfo, null, pSampler);
             if (result != VK_SUCCESS) throw new RuntimeException("Failed to create sampler: " + result);
 
-            var handle = samplerPool.allocate();
-            vkSamplers.put(handle.index(), pSampler.get(0));
-            vkSamplerDescs.put(handle.index(), descriptor);
-            return handle;
+            return samplerRegistry.register(new VkSamplerAllocation(pSampler.get(0), descriptor));
         }
     }
 
     @Override
     public void destroySampler(Handle<SamplerResource> handle) {
-        if (!samplerPool.isValid(handle)) return;
-        var sampler = vkSamplers.remove(handle.index());
-        vkSamplerDescs.remove(handle.index());
-        if (sampler != null) {
-            vkDestroySampler(device, sampler, null);
+        if (!samplerRegistry.isValid(handle)) return;
+        var alloc = samplerRegistry.remove(handle);
+        if (alloc != null) {
+            vkDestroySampler(device, alloc.sampler(), null);
         }
-        samplerPool.release(handle);
     }
-
-    private final Map<Integer, Long> vkPipelines = new HashMap<>();
 
     @Override
     public Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor) {
@@ -963,22 +941,19 @@ public class VkRenderDevice implements RenderDevice {
             log.debug("createPipeline: using pipelineLayout=0x{}", Long.toHexString(descriptorManager.pipelineLayout()));
             long pipeline = VkPipelineFactory.create(device, renderPass,
                     descriptorManager.pipelineLayout(), descriptor.binaries(), descriptor.vertexFormat());
-            var handle = pipelinePool.allocate();
-            vkPipelines.put(handle.index(), pipeline);
-            return handle;
+            return pipelineRegistry.register(pipeline);
         }
         log.warn("Vulkan backend received GLSL source pipeline descriptor — ignoring");
-        return pipelinePool.allocate();
+        return pipelineRegistry.register(VK_NULL_HANDLE);
     }
 
     @Override
     public void destroyPipeline(Handle<PipelineResource> handle) {
-        if (!pipelinePool.isValid(handle)) return;
-        var pipeline = vkPipelines.remove(handle.index());
-        if (pipeline != null) {
+        if (!pipelineRegistry.isValid(handle)) return;
+        var pipeline = pipelineRegistry.remove(handle);
+        if (pipeline != null && pipeline != VK_NULL_HANDLE) {
             vkDestroyPipeline(device, pipeline, null);
         }
-        pipelinePool.release(handle);
     }
 
     @Override
@@ -1023,15 +998,13 @@ public class VkRenderDevice implements RenderDevice {
                 throw new RuntimeException("Failed to create compute pipeline: " + result);
             }
 
-            var handle = pipelinePool.allocate();
-            vkPipelines.put(handle.index(), pPipeline.get(0));
-            return handle;
+            return pipelineRegistry.register(pPipeline.get(0));
         }
     }
 
     @Override
     public boolean isValidPipeline(Handle<PipelineResource> handle) {
-        return pipelinePool.isValid(handle);
+        return pipelineRegistry.isValid(handle);
     }
 
     // --- Frame operations ---
@@ -1445,13 +1418,13 @@ public class VkRenderDevice implements RenderDevice {
         for (var command : commands.commands()) {
             switch (command) {
                 case dev.engine.graphics.command.RenderCommand.BindPipeline bp -> {
-                    var pipeline = vkPipelines.get(bp.pipeline().index());
+                    var pipeline = pipelineRegistry.get(bp.pipeline());
                     if (pipeline != null) {
                         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindVertexBuffer bvb -> {
-                    var alloc = buffers.get(bvb.buffer().index());
+                    var alloc = bufferRegistry.get(bvb.buffer());
                     if (alloc != null) {
                         try (var stack = stackPush()) {
                             vkCmdBindVertexBuffers(cmd, 0, stack.longs(alloc.buffer()), stack.longs(0));
@@ -1459,7 +1432,7 @@ public class VkRenderDevice implements RenderDevice {
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindIndexBuffer bib -> {
-                    var alloc = buffers.get(bib.buffer().index());
+                    var alloc = bufferRegistry.get(bib.buffer());
                     if (alloc != null) {
                         vkCmdBindIndexBuffer(cmd, alloc.buffer(), 0, VK_INDEX_TYPE_UINT32);
                     }
@@ -1501,7 +1474,7 @@ public class VkRenderDevice implements RenderDevice {
                     // Clear is handled by render pass load op — ignore here
                 }
                 case dev.engine.graphics.command.RenderCommand.BindUniformBuffer bub -> {
-                    var alloc = buffers.get(bub.buffer().index());
+                    var alloc = bufferRegistry.get(bub.buffer());
                     if (alloc != null && bub.binding() < pendingUboBuffers.length) {
                         pendingUboBuffers[bub.binding()] = alloc.buffer();
                         pendingUboSizes[bub.binding()] = alloc.size();
@@ -1509,7 +1482,7 @@ public class VkRenderDevice implements RenderDevice {
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindTexture bt -> {
-                    var texAlloc = textures.get(bt.texture().index());
+                    var texAlloc = textureRegistry.get(bt.texture());
                     if (texAlloc != null && bt.unit() < pendingTextureViews.length) {
                         pendingTextureViews[bt.unit()] = texAlloc.imageView();
                         descriptorDirty = true;
@@ -1520,9 +1493,9 @@ public class VkRenderDevice implements RenderDevice {
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindSampler bs -> {
-                    var sampler = vkSamplers.get(bs.sampler().index());
-                    if (sampler != null && bs.unit() < pendingTextureSamplers.length) {
-                        pendingTextureSamplers[bs.unit()] = sampler;
+                    var samplerAlloc = samplerRegistry.get(bs.sampler());
+                    if (samplerAlloc != null && bs.unit() < pendingTextureSamplers.length) {
+                        pendingTextureSamplers[bs.unit()] = samplerAlloc.sampler();
                         descriptorDirty = true;
                     }
                     if (bs.unit() < currentSamplerHandles.length) {
@@ -1531,7 +1504,7 @@ public class VkRenderDevice implements RenderDevice {
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindStorageBuffer bsb -> {
-                    var alloc = buffers.get(bsb.buffer().index());
+                    var alloc = bufferRegistry.get(bsb.buffer());
                     if (alloc != null && bsb.binding() < pendingSsboBuffers.length) {
                         pendingSsboBuffers[bsb.binding()] = alloc.buffer();
                         pendingSsboSizes[bsb.binding()] = alloc.size();
@@ -1558,7 +1531,7 @@ public class VkRenderDevice implements RenderDevice {
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindRenderTarget brt -> {
-                    var rtAlloc = renderTargets.get(brt.renderTarget().index());
+                    var rtAlloc = renderTargetRegistry.get(brt.renderTarget());
                     if (rtAlloc != null) {
                         // End current render pass
                         vkCmdEndRenderPass(cmd);
@@ -1640,7 +1613,7 @@ public class VkRenderDevice implements RenderDevice {
                             0, data);
                 }
                 case dev.engine.graphics.command.RenderCommand.BindComputePipeline(var pipeline) -> {
-                    var vkPipeline = vkPipelines.get(pipeline.index());
+                    var vkPipeline = pipelineRegistry.get(pipeline);
                     if (vkPipeline != null) {
                         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, vkPipeline);
                     }
@@ -1716,12 +1689,23 @@ public class VkRenderDevice implements RenderDevice {
     public void close() {
         vkDeviceWaitIdle(device);
 
+        // Report leaked resources
+        int leaks = bufferRegistry.reportLeaks()
+                + textureRegistry.reportLeaks()
+                + vertexInputRegistry.reportLeaks()
+                + renderTargetRegistry.reportLeaks()
+                + samplerRegistry.reportLeaks()
+                + pipelineRegistry.reportLeaks();
+        if (leaks > 0) {
+            log.warn("Total {} resource handle(s) leaked at Vulkan device shutdown", leaks);
+        }
+
         // Destroy remaining render targets (before textures, since RT owns some textures)
-        for (var rtAlloc : renderTargets.values()) {
+        renderTargetRegistry.destroyAll(rtAlloc -> {
             vkDestroyFramebuffer(device, rtAlloc.framebuffer(), null);
             vkDestroyRenderPass(device, rtAlloc.renderPass(), null);
             for (var texHandle : rtAlloc.colorTextureHandles()) {
-                textures.remove(texHandle.index());
+                textureRegistry.remove(texHandle);
             }
             for (var colorAlloc : rtAlloc.colorAttachments()) {
                 vkDestroyImageView(device, colorAlloc.imageView(), null);
@@ -1733,29 +1717,23 @@ public class VkRenderDevice implements RenderDevice {
                 vkDestroyImage(device, rtAlloc.depthAttachment().image(), null);
                 vkFreeMemory(device, rtAlloc.depthAttachment().memory(), null);
             }
-        }
-        renderTargets.clear();
+        });
 
         // Destroy remaining textures
-        for (var alloc : textures.values()) {
+        textureRegistry.destroyAll(alloc -> {
             vkDestroyImageView(device, alloc.imageView(), null);
             vkDestroyImage(device, alloc.image(), null);
             vkFreeMemory(device, alloc.memory(), null);
-        }
-        textures.clear();
+        });
 
         // Destroy remaining samplers
-        for (var sampler : vkSamplers.values()) {
-            vkDestroySampler(device, sampler, null);
-        }
-        vkSamplers.clear();
+        samplerRegistry.destroyAll(alloc -> vkDestroySampler(device, alloc.sampler(), null));
 
         // Destroy remaining buffers
-        for (var alloc : buffers.values()) {
+        bufferRegistry.destroyAll(alloc -> {
             vkFreeMemory(device, alloc.memory(), null);
             vkDestroyBuffer(device, alloc.buffer(), null);
-        }
-        buffers.clear();
+        });
 
         for (var frame : frames) frame.close();
         descriptorManager.close();
@@ -1927,16 +1905,16 @@ public class VkRenderDevice implements RenderDevice {
         var samplerHandle = currentSamplerHandles[unit];
         if (texHandle == null || samplerHandle == null) return;
 
-        var texAlloc = textures.get(texHandle.index());
+        var texAlloc = textureRegistry.get(texHandle);
         if (texAlloc == null) return;
         if (texAlloc.desc().mipMode() == dev.engine.graphics.texture.MipMode.NONE) return;
 
         Boolean dirty = textureMipsDirty.get(texHandle.index());
         if (dirty == null || !dirty) return;
 
-        var samplerDesc = vkSamplerDescs.get(samplerHandle.index());
-        if (samplerDesc == null) return;
-        if (!usesMipmaps(samplerDesc)) return;
+        var samplerAlloc = samplerRegistry.get(samplerHandle);
+        if (samplerAlloc == null) return;
+        if (!usesMipmaps(samplerAlloc.desc())) return;
 
         generateMipmaps(texHandle);
     }
@@ -1946,7 +1924,7 @@ public class VkRenderDevice implements RenderDevice {
     }
 
     private void generateMipmaps(Handle<TextureResource> textureHandle) {
-        var alloc = textures.get(textureHandle.index());
+        var alloc = textureRegistry.get(textureHandle);
         if (alloc == null) return;
 
         var desc = alloc.desc();
