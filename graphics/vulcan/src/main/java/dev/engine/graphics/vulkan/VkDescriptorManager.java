@@ -16,7 +16,9 @@ class VkDescriptorManager implements AutoCloseable {
     private static final int MAX_UBO_BINDINGS = 16;
     private static final int MAX_TEXTURE_BINDINGS = 8;
     private static final int TEXTURE_BINDING_OFFSET = MAX_UBO_BINDINGS; // bindings 16-23
-    private static final int TOTAL_BINDINGS = MAX_UBO_BINDINGS + MAX_TEXTURE_BINDINGS;
+    private static final int MAX_SSBO_BINDINGS = 8;
+    static final int SSBO_BINDING_OFFSET = TEXTURE_BINDING_OFFSET + MAX_TEXTURE_BINDINGS; // bindings 24-31
+    private static final int TOTAL_BINDINGS = MAX_UBO_BINDINGS + MAX_TEXTURE_BINDINGS + MAX_SSBO_BINDINGS;
     private static final int MAX_SETS_PER_FRAME = 256;
 
     private final VkDevice device;
@@ -41,7 +43,7 @@ class VkDescriptorManager implements AutoCloseable {
             var bufInfo = VkBufferCreateInfo.calloc(stack)
                     .sType$Default()
                     .size(16)
-                    .usage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT)
+                    .usage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
                     .sharingMode(VK_SHARING_MODE_EXCLUSIVE);
             var pBuf = stack.mallocLong(1);
             vkCreateBuffer(device, bufInfo, null, pBuf);
@@ -134,6 +136,13 @@ class VkDescriptorManager implements AutoCloseable {
                         .descriptorCount(1)
                         .stageFlags(VK_SHADER_STAGE_FRAGMENT_BIT);
             }
+            for (int i = 0; i < MAX_SSBO_BINDINGS; i++) {
+                bindings.get(MAX_UBO_BINDINGS + MAX_TEXTURE_BINDINGS + i)
+                        .binding(SSBO_BINDING_OFFSET + i)
+                        .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                        .descriptorCount(1)
+                        .stageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+            }
 
             var layoutInfo = VkDescriptorSetLayoutCreateInfo.calloc(stack)
                     .sType$Default()
@@ -144,10 +153,16 @@ class VkDescriptorManager implements AutoCloseable {
             if (result != VK_SUCCESS) throw new RuntimeException("Failed to create descriptor set layout: " + result);
             this.descriptorSetLayout = pLayout.get(0);
 
-            // Create pipeline layout with this descriptor set layout
+            // Create pipeline layout with this descriptor set layout + push constants
+            var pushConstantRange = VkPushConstantRange.calloc(1, stack)
+                    .stageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT)
+                    .offset(0)
+                    .size(128);
+
             var pipelineLayoutInfo = VkPipelineLayoutCreateInfo.calloc(stack)
                     .sType$Default()
-                    .pSetLayouts(stack.longs(descriptorSetLayout));
+                    .pSetLayouts(stack.longs(descriptorSetLayout))
+                    .pPushConstantRanges(pushConstantRange);
 
             var pPipelineLayout = stack.mallocLong(1);
             result = vkCreatePipelineLayout(device, pipelineLayoutInfo, null, pPipelineLayout);
@@ -208,6 +223,16 @@ class VkDescriptorManager implements AutoCloseable {
                         .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                         .pImageInfo(imageInfo);
             }
+            // Pre-fill all SSBO bindings with the dummy buffer
+            for (int i = 0; i < MAX_SSBO_BINDINGS; i++) {
+                var bufferInfo = VkDescriptorBufferInfo.calloc(1, stack)
+                        .buffer(dummyBuffer).offset(0).range(16);
+                writes.get(MAX_UBO_BINDINGS + MAX_TEXTURE_BINDINGS + i).sType$Default().dstSet(set)
+                        .dstBinding(SSBO_BINDING_OFFSET + i)
+                        .dstArrayElement(0).descriptorCount(1)
+                        .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                        .pBufferInfo(bufferInfo);
+            }
             vkUpdateDescriptorSets(device, writes, null);
             return set;
         }
@@ -215,6 +240,9 @@ class VkDescriptorManager implements AutoCloseable {
 
     /** Returns the texture binding offset (added to unit index to get descriptor binding). */
     int textureBindingOffset() { return TEXTURE_BINDING_OFFSET; }
+
+    /** Returns the SSBO binding offset (added to slot index to get descriptor binding). */
+    int ssboBindingOffset() { return SSBO_BINDING_OFFSET; }
 
     /** Updates a uniform buffer binding in a descriptor set. */
     void updateUniformBuffer(long descriptorSet, int binding, long buffer, long size) {
@@ -236,15 +264,38 @@ class VkDescriptorManager implements AutoCloseable {
         }
     }
 
+    /** Updates a storage buffer binding in a descriptor set. */
+    void updateStorageBuffer(long descriptorSet, int binding, long buffer, long size) {
+        try (var stack = stackPush()) {
+            var bufferInfo = VkDescriptorBufferInfo.calloc(1, stack)
+                    .buffer(buffer)
+                    .offset(0)
+                    .range(size);
+
+            var write = VkWriteDescriptorSet.calloc(1, stack)
+                    .sType$Default()
+                    .dstSet(descriptorSet)
+                    .dstBinding(binding)
+                    .dstArrayElement(0)
+                    .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                    .pBufferInfo(bufferInfo);
+
+            vkUpdateDescriptorSets(device, write, null);
+        }
+    }
+
     private long createPool() {
         try (var stack = stackPush()) {
-            var poolSizes = VkDescriptorPoolSize.calloc(2, stack);
+            var poolSizes = VkDescriptorPoolSize.calloc(3, stack);
             poolSizes.get(0)
                     .type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER)
                     .descriptorCount(MAX_UBO_BINDINGS * MAX_SETS_PER_FRAME);
             poolSizes.get(1)
                     .type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                     .descriptorCount(MAX_TEXTURE_BINDINGS * MAX_SETS_PER_FRAME);
+            poolSizes.get(2)
+                    .type(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                    .descriptorCount(MAX_SSBO_BINDINGS * MAX_SETS_PER_FRAME);
 
             var poolInfo = VkDescriptorPoolCreateInfo.calloc(stack)
                     .sType$Default()

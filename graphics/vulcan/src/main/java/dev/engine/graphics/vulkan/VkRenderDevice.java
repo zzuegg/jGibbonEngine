@@ -65,6 +65,8 @@ public class VkRenderDevice implements RenderDevice {
     private boolean descriptorDirty = false;
     private final long[] pendingUboBuffers = new long[16];
     private final long[] pendingUboSizes = new long[16];
+    private final long[] pendingSsboBuffers = new long[8];
+    private final long[] pendingSsboSizes = new long[8];
 
     private final HandlePool<BufferResource> bufferPool = new HandlePool<>();
     private final Map<Integer, BufferAllocation> buffers = new HashMap<>();
@@ -997,6 +999,8 @@ public class VkRenderDevice implements RenderDevice {
         descriptorManager.resetPool(currentFrame);
         java.util.Arrays.fill(pendingUboBuffers, VK_NULL_HANDLE);
         java.util.Arrays.fill(pendingUboSizes, 0);
+        java.util.Arrays.fill(pendingSsboBuffers, VK_NULL_HANDLE);
+        java.util.Arrays.fill(pendingSsboSizes, 0);
         java.util.Arrays.fill(pendingTextureViews, VK_NULL_HANDLE);
         java.util.Arrays.fill(pendingTextureSamplers, VK_NULL_HANDLE);
         descriptorDirty = false;
@@ -1282,6 +1286,9 @@ public class VkRenderDevice implements RenderDevice {
             for (int i = 0; i < pendingTextureViews.length; i++) {
                 if (pendingTextureViews[i] != VK_NULL_HANDLE) count++;
             }
+            for (int i = 0; i < pendingSsboBuffers.length; i++) {
+                if (pendingSsboBuffers[i] != VK_NULL_HANDLE) count++;
+            }
 
             var writes = VkWriteDescriptorSet.calloc(count, stack);
             int idx = 0;
@@ -1325,6 +1332,26 @@ public class VkRenderDevice implements RenderDevice {
                             .descriptorCount(1)
                             .descriptorType(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER)
                             .pImageInfo(imageInfo);
+                    idx++;
+                }
+            }
+
+            // SSBO writes
+            int ssboOffset = descriptorManager.ssboBindingOffset();
+            for (int i = 0; i < pendingSsboBuffers.length; i++) {
+                if (pendingSsboBuffers[i] != VK_NULL_HANDLE) {
+                    var bufInfo = VkDescriptorBufferInfo.calloc(1, stack)
+                            .buffer(pendingSsboBuffers[i])
+                            .offset(0)
+                            .range(pendingSsboSizes[i]);
+                    writes.get(idx)
+                            .sType$Default()
+                            .dstSet(set)
+                            .dstBinding(ssboOffset + i)
+                            .dstArrayElement(0)
+                            .descriptorCount(1)
+                            .descriptorType(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
+                            .pBufferInfo(bufInfo);
                     idx++;
                 }
             }
@@ -1433,7 +1460,12 @@ public class VkRenderDevice implements RenderDevice {
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindStorageBuffer bsb -> {
-                    // TODO: descriptor set binding
+                    var alloc = buffers.get(bsb.buffer().index());
+                    if (alloc != null && bsb.binding() < pendingSsboBuffers.length) {
+                        pendingSsboBuffers[bsb.binding()] = alloc.buffer();
+                        pendingSsboSizes[bsb.binding()] = alloc.size();
+                        descriptorDirty = true;
+                    }
                 }
                 case dev.engine.graphics.command.RenderCommand.SetDepthTest sdt -> {
                     VK13.vkCmdSetDepthTestEnable(cmd, sdt.enabled());
@@ -1530,9 +1562,11 @@ public class VkRenderDevice implements RenderDevice {
                     }
                     // BLEND_MODE, WIREFRAME, LINE_WIDTH: not yet available as dynamic state
                 }
-                case dev.engine.graphics.command.RenderCommand.PushConstants pc -> {
-                    // TODO: implement in Task 18
-                    log.warn("PushConstants not yet implemented in Vulkan backend");
+                case dev.engine.graphics.command.RenderCommand.PushConstants(var data) -> {
+                    data.rewind();
+                    vkCmdPushConstants(cmd, descriptorManager.pipelineLayout(),
+                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                            0, data);
                 }
                 case dev.engine.graphics.command.RenderCommand.BindComputePipeline bcp -> {
                     // TODO: implement in Task 19

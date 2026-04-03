@@ -71,12 +71,17 @@ public class GlRenderDevice implements RenderDevice {
     private final AtomicLong frameCounter = new AtomicLong(0);
     private final CapabilityRegistry capabilities = new CapabilityRegistry();
     private final long glfwWindow;
+    private final int pushConstantUbo;
 
     public GlRenderDevice(dev.engine.graphics.window.WindowHandle window) {
         this.glfwWindow = window.nativeHandle();
         GLFW.glfwMakeContextCurrent(glfwWindow);
         GL.createCapabilities();
         log.info("OpenGL context created: {}", GL45.glGetString(GL45.GL_VERSION));
+
+        pushConstantUbo = GL45.glCreateBuffers();
+        GL45.glNamedBufferStorage(pushConstantUbo, 128, GL45.GL_DYNAMIC_STORAGE_BIT);
+
         registerCapabilities();
     }
 
@@ -517,9 +522,10 @@ public class GlRenderDevice implements RenderDevice {
                     GL45.glLineWidth(props.get(RenderState.LINE_WIDTH));
                 }
             }
-            case RenderCommand.PushConstants pc -> {
-                // TODO: implement in Task 18
-                log.warn("PushConstants not yet implemented in OpenGL backend");
+            case RenderCommand.PushConstants(var data) -> {
+                data.rewind();
+                GL45.nglNamedBufferSubData(pushConstantUbo, 0, data.remaining(), org.lwjgl.system.MemoryUtil.memAddress(data));
+                GL45.glBindBufferBase(GL45.GL_UNIFORM_BUFFER, 15, pushConstantUbo);
             }
             case RenderCommand.BindComputePipeline bcp -> {
                 // TODO: implement in Task 19
@@ -629,6 +635,7 @@ public class GlRenderDevice implements RenderDevice {
             GL45.glDeleteSamplers(glSampler);
         }
         samplerGlNames.clear();
+        GL45.glDeleteBuffers(pushConstantUbo);
         log.info("GlRenderDevice closed");
     }
 
