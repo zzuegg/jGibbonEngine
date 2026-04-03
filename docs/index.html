@@ -1,7 +1,7 @@
 ---
 layout: default
-title: "jGibbonEngine – The Next-Gen Java/Kotlin 3D Engine"
-description: "A modern, high-performance 3D game engine for the JVM — built on years of jMonkeyEngine heritage."
+title: "jGibbonEngine – The Next-Gen Java 3D Engine"
+description: "A modern, high-performance 3D game engine for the JVM, written in Java."
 ---
 
 <!-- ==================== HERO ==================== -->
@@ -12,8 +12,8 @@ description: "A modern, high-performance 3D game engine for the JVM — built on
     <span class="hero-badge">🚀 Early Access · Open Source</span>
     <h1 class="hero-title">jGibbonEngine</h1>
     <p class="hero-tagline">
-      The spiritual successor of jMonkeyEngine — a powerful, modern 3D game engine for
-      the JVM, written in Kotlin with Java interoperability at its core.
+      A powerful, modern 3D game engine for the JVM, written in Java with a clean,
+      extensible API designed for performance and developer productivity.
     </p>
     <div class="hero-ctas">
       <a href="{{ site.baseurl }}/tutorials/getting-started" class="btn btn-primary">
@@ -44,7 +44,7 @@ description: "A modern, high-performance 3D game engine for the JVM — built on
     <div class="stats-grid fade-in">
       <div>
         <span class="stat-value">JVM</span>
-        <span class="stat-label">Java &amp; Kotlin native</span>
+        <span class="stat-label">Pure Java</span>
       </div>
       <div>
         <span class="stat-value">3D</span>
@@ -73,8 +73,8 @@ description: "A modern, high-performance 3D game engine for the JVM — built on
       <span class="section-label">Capabilities</span>
       <h2 class="section-title">Everything you need to build your game</h2>
       <p class="section-subtitle">
-        jGibbonEngine combines a battle-tested JVM heritage with a modern, idiomatic
-        Kotlin API — so you spend more time building worlds, less time fighting frameworks.
+        jGibbonEngine combines a battle-tested JVM heritage with a modern, extensible
+        Java API — so you spend more time building worlds, less time fighting frameworks.
       </p>
     </header>
     <div class="features-grid">
@@ -98,8 +98,8 @@ description: "A modern, high-performance 3D game engine for the JVM — built on
         <span class="feature-icon">🏔️</span>
         <h3 class="feature-title">Scene Graph</h3>
         <p class="feature-desc">
-          Familiar jMonkeyEngine-style scene graph for teams migrating from jME, with
-          modern Kotlin DSL sugar on top.
+          Hierarchical scene graph for intuitive 3D world organisation. Attach, detach,
+          and transform nodes with a clean, fluent Java API.
         </p>
       </div>
       <div class="feature-card fade-in">
@@ -120,10 +120,10 @@ description: "A modern, high-performance 3D game engine for the JVM — built on
       </div>
       <div class="feature-card fade-in">
         <span class="feature-icon">💡</span>
-        <h3 class="feature-title">Kotlin-First API</h3>
+        <h3 class="feature-title">Clean Java API</h3>
         <p class="feature-desc">
-          Idiomatic Kotlin DSLs for scene construction, shader configuration, and
-          asset loading. Full Java interop ensured by design.
+          Straightforward, well-documented Java API for scene construction, shader
+          configuration, and asset loading. No boilerplate, no friction.
         </p>
       </div>
       <div class="feature-card fade-in">
@@ -180,9 +180,10 @@ description: "A modern, high-performance 3D game engine for the JVM — built on
         <h3 class="step-title">Create your application</h3>
         <div class="step-body">
           Extend <code>GibbonApplication</code> and override <code>init()</code>:
-          <code>class MyGame : GibbonApplication() {
-    override fun init() {
-        scene += Box(size = 1f)
+          <code>public class MyGame extends GibbonApplication {
+    @Override
+    public void init() {
+        getRootNode().attachChild(new Box(1f));
     }
 }</code>
         </div>
@@ -191,9 +192,9 @@ description: "A modern, high-performance 3D game engine for the JVM — built on
         <span class="step-number">3</span>
         <h3 class="step-title">Run it!</h3>
         <div class="step-body">
-          Start the engine from your <code>main</code> function:
-          <code>fun main() {
-    MyGame().start()
+          Start the engine from your <code>main</code> method:
+          <code>public static void main(String[] args) {
+    new MyGame().start();
 }</code>
         </div>
       </div>

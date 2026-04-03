@@ -4,7 +4,7 @@ title: "Tutorials"
 description: "Step-by-step guides to help you learn jGibbonEngine, from your very first scene to advanced rendering techniques."
 ---
 
-Whether you are coming from jMonkeyEngine or starting 3D engine development for the first time, these tutorials will walk you through everything you need to know.
+Whether you are new to 3D engine development or coming from another engine, these tutorials will walk you through everything you need to know.
 
 <div class="callout callout-info">
 <p>📌 Tutorials are actively being written. Check back often, and feel free to <a href="https://github.com/zzuegg/jGibbonEngine/discussions">suggest topics</a> in the community forum.</p>
