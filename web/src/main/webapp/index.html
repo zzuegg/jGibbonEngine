@@ -43,5 +43,17 @@
         }
     </script>
     <script src="web.js"></script>
+    <script>
+        // TeaVM assigns main to `this` (window/self) via the module wrapper
+        // Try several ways to find it
+        var mainFn = this.main || window.main || self.main;
+        if (typeof mainFn === 'function') {
+            mainFn();
+        } else {
+            document.getElementById('status').textContent =
+                'Error: main() not found. Check console for details.';
+            console.error('Available globals:', Object.keys(window).filter(k => k.includes('main') || k.includes('rt')));
+        }
+    </script>
 </body>
 </html>
