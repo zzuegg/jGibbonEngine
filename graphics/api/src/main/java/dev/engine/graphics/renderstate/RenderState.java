@@ -10,8 +10,9 @@ public interface RenderState {
     PropertyKey<BlendMode>   BLEND_MODE  = PropertyKey.of("blendMode", BlendMode.class);
     PropertyKey<CullMode>    CULL_MODE   = PropertyKey.of("cullMode", CullMode.class);
     PropertyKey<FrontFace>   FRONT_FACE  = PropertyKey.of("frontFace", FrontFace.class);
-    PropertyKey<Boolean>     WIREFRAME   = PropertyKey.of("wireframe", Boolean.class);
-    PropertyKey<Float>       LINE_WIDTH  = PropertyKey.of("lineWidth", Float.class);
+    PropertyKey<Boolean>     WIREFRAME     = PropertyKey.of("wireframe", Boolean.class);
+    PropertyKey<Float>       LINE_WIDTH    = PropertyKey.of("lineWidth", Float.class);
+    PropertyKey<Boolean>     SCISSOR_TEST  = PropertyKey.of("scissorTest", Boolean.class);
 
     PropertyKey<Boolean>     STENCIL_TEST       = PropertyKey.of("stencilTest", Boolean.class);
     PropertyKey<CompareFunc> STENCIL_FUNC       = PropertyKey.of("stencilFunc", CompareFunc.class);

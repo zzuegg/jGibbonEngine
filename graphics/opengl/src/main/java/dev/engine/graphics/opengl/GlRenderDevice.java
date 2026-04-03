@@ -521,6 +521,12 @@ public class GlRenderDevice implements RenderDevice {
             case RenderCommand.BindRenderTarget cmd -> {
                 int fbo = getGlFboName(cmd.renderTarget());
                 GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
+                var rt = renderTargets.get(cmd.renderTarget());
+                if (rt != null && rt.colorTextures().size() > 1) {
+                    int[] drawBuffers = new int[rt.colorTextures().size()];
+                    for (int i = 0; i < drawBuffers.length; i++) drawBuffers[i] = GL45.GL_COLOR_ATTACHMENT0 + i;
+                    GL45.glDrawBuffers(drawBuffers);
+                }
                 currentRenderTarget = cmd.renderTarget();
             }
             case RenderCommand.BindDefaultRenderTarget cmd -> {
@@ -595,6 +601,10 @@ public class GlRenderDevice implements RenderDevice {
                 }
                 if (props.contains(RenderState.LINE_WIDTH)) {
                     GL45.glLineWidth(props.get(RenderState.LINE_WIDTH));
+                }
+                if (props.contains(RenderState.SCISSOR_TEST)) {
+                    if (props.get(RenderState.SCISSOR_TEST)) GL45.glEnable(GL45.GL_SCISSOR_TEST);
+                    else GL45.glDisable(GL45.GL_SCISSOR_TEST);
                 }
                 if (props.contains(RenderState.STENCIL_TEST)) {
                     if (props.get(RenderState.STENCIL_TEST)) GL45.glEnable(GL45.GL_STENCIL_TEST);
