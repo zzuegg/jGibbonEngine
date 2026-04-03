@@ -74,6 +74,14 @@ public interface RenderDevice extends AutoCloseable {
     // --- Bindless textures ---
     long getBindlessTextureHandle(Handle<TextureResource> texture);
 
+    /**
+     * Returns an integer index for the given texture, usable in shaders for bindless access.
+     * OpenGL: backed by ARB_bindless_texture. Vulkan: backed by descriptor indexing.
+     */
+    default int getTextureIndex(Handle<TextureResource> texture) {
+        throw new UnsupportedOperationException("Bindless textures not supported by this backend");
+    }
+
     // --- Capabilities ---
     <T> T queryCapability(DeviceCapability<T> capability);
 
