@@ -24,6 +24,55 @@
 
 ---
 
+## 2.5 Property System Philosophy
+
+The `PropertyKey<T>` / `PropertyMap` system is the universal configuration mechanism across the engine. Any typed key-value configuration should use properties:
+
+- **Materials** — already using PropertyKey (albedo, roughness, etc.)
+- **Render state** — depth test, blending, cull mode (Section 3)
+- **Window toolkit** — title, vsync, resizable (Section 10)
+- **Device capabilities** — already using typed DeviceCapability keys
+- **Future systems** — physics, audio, etc. should follow the same pattern
+
+This gives a consistent, extensible API surface across the entire engine.
+
+### 2.5.1 Scoped Property Keys (Type Safety)
+
+Property keys are scoped to prevent mixing keys from different domains at compile time. `PropertyKey` gains a scope type parameter:
+
+```java
+public class PropertyKey<S, T> { ... }
+
+// Scope marker interfaces
+public interface MaterialScope {}
+public interface RenderStateScope extends MaterialScope {}  // render state keys valid on materials too
+public interface WindowScope {}
+
+// Keys are scoped
+PropertyKey<RenderStateScope, Boolean> DEPTH_TEST = ...;
+PropertyKey<WindowScope, String> TITLE = ...;
+PropertyKey<MaterialScope, Float> ROUGHNESS = ...;
+
+// PropertyMap is scoped
+PropertyMap<MaterialScope> materialProps;  // accepts MaterialScope + RenderStateScope keys
+PropertyMap<WindowScope> windowProps;      // only accepts WindowScope keys
+```
+
+Trying to set a window property on a material is a compile-time error. RenderState keys extend MaterialScope so they can be used in both render state maps and material data.
+
+### 2.5.2 VSync Across Backends
+
+VSync is controlled via `WindowProperty.VSYNC` on both backends, but implemented differently:
+
+- **OpenGL (GLFW):** `glfwSwapInterval(1)` for on, `glfwSwapInterval(0)` for off
+- **Vulkan:** Swapchain recreation with different present mode:
+  - `VSYNC=true` → `VK_PRESENT_MODE_FIFO_KHR` (guaranteed available)
+  - `VSYNC=false` → `VK_PRESENT_MODE_IMMEDIATE_KHR` or `VK_PRESENT_MODE_MAILBOX_KHR`
+
+The window property abstraction hides this difference from the user.
+
+---
+
 ## 3. Property-Based Render State
 
 ### 3.1 Core Render State Keys
@@ -425,7 +474,65 @@ Screenshot tests are created BEFORE refactoring starts. They capture current cor
 - Update CommandRecorder
 - Migrate examples to new API
 
+### Phase 5.5: Window Toolkit Properties
+- Property-based window configuration (title, vsync, resizable, fullscreen, etc.)
+- Both GLFW and SDL3 backends implement property get/set
+
 ### Phase 6: Cleanup
 - Remove deprecated commands
 - Remove old API surface
 - Final screenshot test pass
+
+---
+
+## 10. Property-Based Window Toolkit
+
+### 10.1 Window Properties
+
+The window toolkit uses the same PropertyKey system for configuration:
+
+```java
+public interface WindowProperty {
+    PropertyKey<String>  TITLE          = PropertyKey.of("title", String.class);
+    PropertyKey<Boolean> VSYNC          = PropertyKey.of("vsync", Boolean.class);
+    PropertyKey<Boolean> RESIZABLE      = PropertyKey.of("resizable", Boolean.class);
+    PropertyKey<Boolean> FULLSCREEN     = PropertyKey.of("fullscreen", Boolean.class);
+    PropertyKey<Boolean> DECORATED      = PropertyKey.of("decorated", Boolean.class);
+    PropertyKey<Boolean> VISIBLE        = PropertyKey.of("visible", Boolean.class);
+    PropertyKey<Integer> SWAP_INTERVAL  = PropertyKey.of("swapInterval", Integer.class);
+    // Extensible — users/backends can add their own
+}
+```
+
+### 10.2 WindowHandle Property API
+
+WindowHandle gains get/set methods for properties:
+
+```java
+window.set(WindowProperty.TITLE, "My Game - FPS: 60");
+window.set(WindowProperty.VSYNC, true);
+window.set(WindowProperty.RESIZABLE, false);
+window.set(WindowProperty.FULLSCREEN, true);
+
+String title = window.get(WindowProperty.TITLE);
+boolean vsync = window.get(WindowProperty.VSYNC);
+```
+
+### 10.3 WindowDescriptor via Properties
+
+WindowDescriptor can be constructed from a PropertyMap:
+
+```java
+WindowDescriptor desc = WindowDescriptor.builder()
+    .set(WindowProperty.TITLE, "My Game")
+    .set(WindowProperty.RESIZABLE, true)
+    .set(WindowProperty.VSYNC, true)
+    .size(1280, 720)
+    .build();
+```
+
+### 10.4 Backend Implementation
+
+- **GLFW:** Maps properties to `glfwSetWindowTitle`, `glfwSwapInterval`, `glfwSetWindowAttrib`, etc.
+- **SDL3:** Maps properties to `SDL_SetWindowTitle`, `SDL_GL_SetSwapInterval`, `SDL_SetWindowResizable`, etc.
+- Unknown properties are stored but may not take effect — backends apply what they understand.
