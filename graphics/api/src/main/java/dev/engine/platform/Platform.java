@@ -1,6 +1,6 @@
-package dev.engine.graphics.platform;
+package dev.engine.platform;
 
-import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.memory.NativeMemory;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
@@ -29,6 +29,6 @@ public interface Platform {
     /** Creates a render device for the given window. */
     RenderDevice createRenderDevice(WindowHandle window, int width, int height);
 
-    /** Creates a {@link GpuMemory} instance of the given size. */
-    GpuMemory allocateMemory(long size);
+    /** Creates a {@link NativeMemory} instance of the given size. */
+    NativeMemory allocateMemory(long size);
 }

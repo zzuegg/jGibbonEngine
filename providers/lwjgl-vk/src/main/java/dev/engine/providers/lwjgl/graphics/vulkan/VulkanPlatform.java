@@ -1,8 +1,8 @@
 package dev.engine.providers.lwjgl.graphics.vulkan;
 
-import dev.engine.core.gpu.GpuMemory;
-import dev.engine.core.gpu.NativeGpuMemory;
-import dev.engine.graphics.platform.Platform;
+import dev.engine.core.memory.NativeMemory;
+import dev.engine.core.memory.SegmentNativeMemory;
+import dev.engine.platform.Platform;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.vulkan.VkRenderDevice;
 import dev.engine.graphics.vulkan.VulkanBackend;
@@ -47,7 +47,7 @@ public class VulkanPlatform implements Platform {
     }
 
     @Override
-    public GpuMemory allocateMemory(long size) {
-        return new NativeGpuMemory(Arena.global().allocate(size));
+    public NativeMemory allocateMemory(long size) {
+        return new SegmentNativeMemory(Arena.global().allocate(size));
     }
 }

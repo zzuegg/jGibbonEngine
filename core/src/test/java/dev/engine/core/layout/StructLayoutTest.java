@@ -1,7 +1,7 @@
 package dev.engine.core.layout;
 
-import dev.engine.core.gpu.GpuMemory;
-import dev.engine.core.gpu.NativeGpuMemory;
+import dev.engine.core.memory.NativeMemory;
+import dev.engine.core.memory.SegmentNativeMemory;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.math.Vec4;
 import org.junit.jupiter.api.Nested;
@@ -17,8 +17,8 @@ class StructLayoutTest {
     record ColorVertex(float x, float y, float z, float r, float g, float b, float a) {}
     record MixedVertex(float x, float y, float z, int id) {}
 
-    private GpuMemory allocate(long size) {
-        return new NativeGpuMemory(Arena.ofAuto().allocate(size, 16));
+    private NativeMemory allocate(long size) {
+        return new SegmentNativeMemory(Arena.ofAuto().allocate(size, 16));
     }
 
     @Nested

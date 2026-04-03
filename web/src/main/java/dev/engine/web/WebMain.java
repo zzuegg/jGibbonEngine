@@ -1,7 +1,9 @@
 package dev.engine.web;
 
+import dev.engine.core.material.MaterialData;
+import dev.engine.core.math.Vec3;
+import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.webgpu.WgpuBindings;
-import dev.engine.providers.teavm.webgpu.TeaVmSlangCompiler;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuBindings;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuInit;
 import org.teavm.jso.JSBody;
@@ -11,78 +13,17 @@ import org.teavm.jso.JSObject;
 /**
  * Entry point for the TeaVM-compiled web application.
  *
- * <p>Renders a colored triangle using the browser's native WebGPU API.
- * Shaders are compiled from Slang source via the Slang WASM compiler when
- * available, falling back to hardcoded WGSL otherwise.
+ * <p>Renders the TWO_CUBES_UNLIT scene (matching the desktop screenshot tests)
+ * using the engine's math types, material data, and transforms. Shaders are
+ * compiled from Slang via the WASM compiler at runtime.
  */
 public class WebMain {
 
-    // Slang shader source — same as graphics/common/src/main/resources/shaders/unlit.slang
-    // but self-contained (interfaces + param blocks inlined) so it compiles standalone.
-    // Simplest possible Slang shader to test WASM compiler
-    private static final String SLANG_SHADER =
-        "struct VOut { float4 pos : SV_Position; float3 col; };\n" +
-        "[shader(\"vertex\")]\n" +
-        "VOut vertexMain(float3 position : POSITION, float3 color : COLOR) {\n" +
-        "    VOut o; o.pos = float4(position, 1.0); o.col = color; return o;\n" +
-        "}\n" +
-        "[shader(\"fragment\")]\n" +
-        "float4 fragmentMain(VOut input) : SV_Target {\n" +
-        "    return float4(input.col, 1.0);\n" +
-        "}\n";
-
-    // Fallback hard-coded WGSL shaders (simple passthrough triangle)
-    private static final String FALLBACK_VERTEX_WGSL = """
-        struct VertexOutput {
-            @builtin(position) position: vec4f,
-            @location(0) color: vec3f,
-        }
-
-        @vertex
-        fn vs_main(@location(0) position: vec3f, @location(1) color: vec3f) -> VertexOutput {
-            var out: VertexOutput;
-            out.position = vec4f(position, 1.0);
-            out.color = color;
-            return out;
-        }
-        """;
-
-    private static final String FALLBACK_FRAGMENT_WGSL = """
-        struct VertexOutput {
-            @builtin(position) position: vec4f,
-            @location(0) color: vec3f,
-        }
-
-        @fragment
-        fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-            return vec4f(in.color, 1.0);
-        }
-        """;
-
-    // Interleaved vertex data: position (x,y,z) + color/normal (r,g,b) per vertex
-    private static final float[] TRIANGLE_VERTICES = {
-        //  x      y     z      r    g    b
-         0.0f,  0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // top - red
-        -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  // bottom-left - green
-         0.5f, -0.5f, 0.0f,  0.0f, 0.0f, 1.0f,  // bottom-right - blue
-    };
-
-    private static final int VERTEX_STRIDE = 6 * 4; // 6 floats * 4 bytes
-    private static final int VERTEX_COUNT = 3;
-
-    // Rendering state
     private static TeaVmWgpuBindings bindings;
     private static int deviceId;
     private static int queueId;
     private static int contextId;
-    private static long pipeline;
-    private static long vertexBuffer;
-    private static int vertexBufferSize;
-    private static boolean slangCompiled;
-
-    // Entry point names from Slang compilation
-    private static String vertexEntryName = "vs_main";
-    private static String fragmentEntryName = "fs_main";
+    private static WebRenderer renderer;
 
     @JSFunctor
     public interface FrameCallback extends JSObject {
@@ -107,6 +48,12 @@ public class WebMain {
     @JSBody(params = "msg", script = "console.log(msg);")
     private static native void consoleLog(String msg);
 
+    @JSBody(script = "return document.getElementById('canvas').width;")
+    private static native int getCanvasWidth();
+
+    @JSBody(script = "return document.getElementById('canvas').height;")
+    private static native int getCanvasHeight();
+
     public static void main(String[] args) {
         setStatus("Initializing WebGPU...");
 
@@ -130,114 +77,40 @@ public class WebMain {
         contextId = TeaVmWgpuBindings.configureCanvasContext("canvas", deviceId);
         String canvasFormat = TeaVmWgpuBindings.getPreferredCanvasFormat();
 
-        // Compile shaders — try Slang WASM runtime, fall back to hardcoded WGSL
-        String vertexWGSL;
-        String fragmentWGSL;
+        int width = getCanvasWidth();
+        int height = getCanvasHeight();
 
-        if (TeaVmSlangCompiler.isAvailable()) {
-            consoleLog("[Slang WASM] Compiler available, version: " + TeaVmSlangCompiler.getVersionString());
-            setStatus("Compiling Slang shaders to WGSL...");
-            try {
-                String[] wgsl = TeaVmSlangCompiler.compile(SLANG_SHADER, "vertexMain", "fragmentMain");
-                vertexWGSL = wgsl[0];
-                fragmentWGSL = wgsl[1];
-                vertexEntryName = "vertexMain";
-                fragmentEntryName = "fragmentMain";
-                slangCompiled = true;
-                consoleLog("[Slang WASM] Compilation succeeded!");
-            } catch (Exception e) {
-                consoleLog("[Slang WASM] Compilation failed: " + e.getMessage() + ", using fallback WGSL");
-                vertexWGSL = FALLBACK_VERTEX_WGSL;
-                fragmentWGSL = FALLBACK_FRAGMENT_WGSL;
-            }
+        setStatus("Compiling shaders and creating pipeline...");
+
+        // Create the WebRenderer
+        renderer = new WebRenderer(bindings, deviceId, queueId);
+        renderer.init(mapCanvasFormat(canvasFormat), width, height);
+        renderer.setupCamera(width, height);
+
+        // Set up the TWO_CUBES_UNLIT scene (same as CrossBackendScenes.TWO_CUBES_UNLIT)
+        renderer.addEntity(
+                Transform.at(-1.5f, 0, 0),
+                MaterialData.unlit(new Vec3(0.9f, 0.2f, 0.2f)));
+        renderer.addEntity(
+                Transform.at(1.5f, 0, 0),
+                MaterialData.unlit(new Vec3(0.2f, 0.9f, 0.2f)));
+
+        if (renderer.isSlangCompiled()) {
+            setStatus("Rendering TWO_CUBES_UNLIT (Slang -> WGSL)");
         } else {
-            consoleLog("[Slang WASM] Not available, using fallback WGSL shaders");
-            vertexWGSL = FALLBACK_VERTEX_WGSL;
-            fragmentWGSL = FALLBACK_FRAGMENT_WGSL;
-        }
-
-        // Create shader modules — one combined WGSL or two separate modules
-        // WebGPU allows vertex and fragment from different modules
-        long vertexShaderModule = bindings.deviceCreateShaderModule(deviceId, vertexWGSL);
-        long fragmentShaderModule = bindings.deviceCreateShaderModule(deviceId, fragmentWGSL);
-
-        // Create render pipeline
-        var pipelineDesc = new WgpuBindings.RenderPipelineDescriptor(
-                0,  // auto layout
-                vertexShaderModule, vertexEntryName,
-                fragmentShaderModule, fragmentEntryName,
-                new WgpuBindings.VertexBufferLayoutDesc(
-                        VERTEX_STRIDE,
-                        WgpuBindings.VERTEX_STEP_MODE_VERTEX,
-                        new WgpuBindings.VertexAttributeDesc[] {
-                                new WgpuBindings.VertexAttributeDesc(
-                                        WgpuBindings.VERTEX_FORMAT_FLOAT32X3, 0, 0),  // position
-                                new WgpuBindings.VertexAttributeDesc(
-                                        WgpuBindings.VERTEX_FORMAT_FLOAT32X3, 12, 1), // color/normal
-                        }
-                ),
-                WgpuBindings.PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                WgpuBindings.FRONT_FACE_CCW,
-                WgpuBindings.CULL_MODE_NONE,
-                0, 0, 0, 0, 0,     // no depth/stencil
-                null, null,         // no stencil face state
-                mapCanvasFormat(canvasFormat),
-                WgpuBindings.BLEND_FACTOR_ONE,
-                WgpuBindings.BLEND_FACTOR_ZERO,
-                WgpuBindings.BLEND_OP_ADD,
-                WgpuBindings.BLEND_FACTOR_ONE,
-                WgpuBindings.BLEND_FACTOR_ZERO,
-                WgpuBindings.BLEND_OP_ADD
-        );
-        pipeline = bindings.deviceCreateRenderPipeline(deviceId, pipelineDesc);
-
-        // Create and upload vertex buffer
-        vertexBufferSize = TRIANGLE_VERTICES.length * 4;
-        vertexBuffer = bindings.deviceCreateBuffer(deviceId, vertexBufferSize,
-                WgpuBindings.BUFFER_USAGE_VERTEX | WgpuBindings.BUFFER_USAGE_COPY_DST);
-        writeVertexData(queueId, (int) vertexBuffer, TRIANGLE_VERTICES);
-
-        if (slangCompiled) {
-            setStatus("Rendering (Slang -> WGSL)");
-        } else {
-            setStatus("Rendering (fallback WGSL)");
+            setStatus("Rendering TWO_CUBES_UNLIT (fallback WGSL)");
         }
 
         // Enter the render loop
         requestAnimationFrame(WebMain::renderFrame);
     }
 
-    @JSBody(params = {"queueId", "bufferId", "data"}, script = """
-        var queue = window._wgpu[queueId];
-        var buf = window._wgpu[bufferId];
-        var f32 = new Float32Array(data);
-        queue.writeBuffer(buf, 0, f32);
-    """)
-    private static native void writeVertexData(int queueId, int bufferId, float[] data);
-
     private static void renderFrame() {
-        // Get the current canvas texture view
+        int width = getCanvasWidth();
+        int height = getCanvasHeight();
         int textureViewId = TeaVmWgpuBindings.getCurrentTextureView(contextId);
 
-        // Create command encoder
-        long encoder = bindings.deviceCreateCommandEncoder(deviceId);
-
-        // Begin render pass
-        var colorAttachment = new WgpuBindings.ColorAttachment(
-                textureViewId, 0.05f, 0.05f, 0.1f, 1.0f);
-        var renderPassDesc = new WgpuBindings.RenderPassDescriptor(
-                new WgpuBindings.ColorAttachment[]{ colorAttachment }, null);
-        long renderPass = bindings.commandEncoderBeginRenderPass(encoder, renderPassDesc);
-
-        // Draw the triangle
-        bindings.renderPassSetPipeline(renderPass, pipeline);
-        bindings.renderPassSetVertexBuffer(renderPass, 0, vertexBuffer, 0, vertexBufferSize);
-        bindings.renderPassDraw(renderPass, VERTEX_COUNT, 1, 0, 0);
-        bindings.renderPassEnd(renderPass);
-
-        // Submit
-        long cmdBuf = bindings.commandEncoderFinish(encoder);
-        bindings.queueSubmit(queueId, cmdBuf);
+        renderer.renderFrame(textureViewId, width, height);
 
         // Release per-frame texture view
         TeaVmWgpuBindings.wgpuRelease(textureViewId);

@@ -1,5 +1,6 @@
 package dev.engine.core.gpu;
 
+import dev.engine.core.memory.NativeMemory;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;
@@ -8,7 +9,7 @@ import dev.engine.core.math.Vec4;
 import java.util.Map;
 
 /**
- * Writes typed values to a {@link GpuMemory} for GPU buffer upload.
+ * Writes typed values to a {@link NativeMemory} for GPU buffer upload.
  * Works with any buffer: UBOs, SSBOs, mapped streaming buffers, staging buffers.
  *
  * <p>Matrices are written in column-major order (GPU convention).
@@ -33,47 +34,47 @@ public final class BufferWriter {
 
     // --- Typed writes ---
 
-    public static void write(GpuMemory mem, long offset, float value) {
+    public static void write(NativeMemory mem, long offset, float value) {
         mem.putFloat(offset, value);
     }
 
-    public static void write(GpuMemory mem, long offset, int value) {
+    public static void write(NativeMemory mem, long offset, int value) {
         mem.putInt(offset, value);
     }
 
-    public static void write(GpuMemory mem, long offset, boolean value) {
+    public static void write(NativeMemory mem, long offset, boolean value) {
         mem.putInt(offset, value ? 1 : 0);
     }
 
-    public static void write(GpuMemory mem, long offset, Vec2 v) {
+    public static void write(NativeMemory mem, long offset, Vec2 v) {
         mem.putFloat(offset, v.x());
         mem.putFloat(offset + 4, v.y());
     }
 
-    public static void write(GpuMemory mem, long offset, Vec3 v) {
+    public static void write(NativeMemory mem, long offset, Vec3 v) {
         mem.putFloat(offset, v.x());
         mem.putFloat(offset + 4, v.y());
         mem.putFloat(offset + 8, v.z());
     }
 
-    public static void write(GpuMemory mem, long offset, Vec4 v) {
+    public static void write(NativeMemory mem, long offset, Vec4 v) {
         mem.putFloat(offset, v.x());
         mem.putFloat(offset + 4, v.y());
         mem.putFloat(offset + 8, v.z());
         mem.putFloat(offset + 12, v.w());
     }
 
-    public static void write(GpuMemory mem, long offset, Mat4 m) {
+    public static void write(NativeMemory mem, long offset, Mat4 m) {
         m.writeGpu(mem, offset);
     }
 
-    public static void writeTextureHandle(GpuMemory mem, long offset, long handle) {
+    public static void writeTextureHandle(NativeMemory mem, long offset, long handle) {
         mem.putLong(offset, handle);
     }
 
     // --- Dynamic dispatch by Object type ---
 
-    public static void write(GpuMemory mem, long offset, Object value) {
+    public static void write(NativeMemory mem, long offset, Object value) {
         switch (value) {
             case Float f -> write(mem, offset, f.floatValue());
             case Integer i -> write(mem, offset, i.intValue());

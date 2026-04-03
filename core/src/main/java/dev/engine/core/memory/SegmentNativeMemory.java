@@ -1,19 +1,19 @@
-package dev.engine.core.gpu;
+package dev.engine.core.memory;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 
 /**
- * Desktop implementation of {@link GpuMemory} backed by a {@code MemorySegment}.
+ * Desktop implementation of {@link NativeMemory} backed by a {@code MemorySegment}.
  *
  * <p>Used by all native backends (OpenGL, Vulkan, desktop WebGPU) where
  * the JVM has direct memory access via the Foreign Function & Memory API.
  */
-public class NativeGpuMemory implements GpuMemory {
+public class SegmentNativeMemory implements NativeMemory {
 
     private final MemorySegment segment;
 
-    public NativeGpuMemory(MemorySegment segment) {
+    public SegmentNativeMemory(MemorySegment segment) {
         this.segment = segment;
     }
 
@@ -80,8 +80,8 @@ public class NativeGpuMemory implements GpuMemory {
         MemorySegment.copy(data, 0, segment, ValueLayout.JAVA_INT, offset, data.length);
     }
 
-    @Override public void copyFrom(GpuMemory src) {
-        if (src instanceof NativeGpuMemory native_) {
+    @Override public void copyFrom(NativeMemory src) {
+        if (src instanceof SegmentNativeMemory native_) {
             segment.copyFrom(native_.segment);
         } else {
             // Fallback: byte-by-byte copy
@@ -92,7 +92,7 @@ public class NativeGpuMemory implements GpuMemory {
         }
     }
 
-    @Override public GpuMemory slice(long offset, long length) {
-        return new NativeGpuMemory(segment.asSlice(offset, length));
+    @Override public NativeMemory slice(long offset, long length) {
+        return new SegmentNativeMemory(segment.asSlice(offset, length));
     }
 }

@@ -1,7 +1,7 @@
 package dev.engine.core.layout;
 
 import dev.engine.core.gpu.BufferWriter;
-import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.memory.NativeMemory;
 import dev.engine.core.math.*;
 
 import java.lang.invoke.MethodHandle;
@@ -50,7 +50,7 @@ public final class StructLayout {
     public int size() { return size; }
     public LayoutMode mode() { return mode; }
 
-    public void write(GpuMemory memory, long offset, Object record) {
+    public void write(NativeMemory memory, long offset, Object record) {
         for (var writer : writers) {
             writer.write(memory, offset, record);
         }
@@ -197,6 +197,6 @@ public final class StructLayout {
 
     @FunctionalInterface
     private interface FieldWriter {
-        void write(GpuMemory memory, long baseOffset, Object record);
+        void write(NativeMemory memory, long baseOffset, Object record);
     }
 }

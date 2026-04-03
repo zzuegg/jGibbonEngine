@@ -130,10 +130,10 @@ public record Mat4(
     }
 
     /**
-     * Writes this matrix to a {@link dev.engine.core.gpu.GpuMemory} in column-major order (GPU layout).
+     * Writes this matrix to a {@link dev.engine.core.memory.NativeMemory} in column-major order (GPU layout).
      * GPU APIs (OpenGL, Vulkan) expect columns stored contiguously.
      */
-    public void writeGpu(dev.engine.core.gpu.GpuMemory mem, long offset) {
+    public void writeGpu(dev.engine.core.memory.NativeMemory mem, long offset) {
         mem.putFloat(offset,      m00);
         mem.putFloat(offset + 4,  m10);
         mem.putFloat(offset + 8,  m20);

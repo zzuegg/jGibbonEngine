@@ -3,7 +3,7 @@ package dev.engine.graphics.buffer;
 import dev.engine.core.handle.Handle;
 import dev.engine.graphics.BufferResource;
 
-import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.memory.NativeMemory;
 
 /**
  * A streaming buffer for per-frame data uploads.
@@ -26,11 +26,11 @@ public interface StreamingBuffer extends AutoCloseable {
     long frameSize();
 
     /**
-     * Begins writing for the current frame. Returns a {@link GpuMemory}
+     * Begins writing for the current frame. Returns a {@link NativeMemory}
      * pointing to the current frame's region. The memory is valid
      * until {@link #endWrite()} is called.
      */
-    GpuMemory beginWrite();
+    NativeMemory beginWrite();
 
     /** Finishes writing. The data becomes available to the GPU. */
     void endWrite();

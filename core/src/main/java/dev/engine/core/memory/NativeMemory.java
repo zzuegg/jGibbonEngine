@@ -1,12 +1,12 @@
-package dev.engine.core.gpu;
+package dev.engine.core.memory;
 
 /**
- * Platform-agnostic interface for reading and writing GPU-mapped memory.
+ * Platform-agnostic interface for reading and writing native memory.
  *
- * <p>Desktop: backed by {@code MemorySegment} (via {@link NativeGpuMemory}).
+ * <p>Desktop: backed by {@code MemorySegment} (via {@link SegmentNativeMemory}).
  * Web: backed by {@code ByteBuffer} or JS typed array.
  */
-public interface GpuMemory {
+public interface NativeMemory {
 
     void putFloat(long offset, float value);
     void putInt(long offset, int value);
@@ -31,8 +31,8 @@ public interface GpuMemory {
     void putIntArray(long offset, int[] data);
 
     /** Copy all bytes from {@code src} into this memory at offset 0. */
-    void copyFrom(GpuMemory src);
+    void copyFrom(NativeMemory src);
 
     /** Returns a view of a sub-region of this memory. */
-    GpuMemory slice(long offset, long length);
+    NativeMemory slice(long offset, long length);
 }

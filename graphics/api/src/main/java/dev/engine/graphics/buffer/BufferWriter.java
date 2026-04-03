@@ -1,10 +1,10 @@
 package dev.engine.graphics.buffer;
 
-import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.memory.NativeMemory;
 
 public interface BufferWriter extends AutoCloseable {
 
-    GpuMemory memory();
+    NativeMemory memory();
 
     @Override
     void close();

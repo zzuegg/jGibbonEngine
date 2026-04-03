@@ -15,8 +15,8 @@ import dev.engine.graphics.target.RenderTargetDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.core.mesh.VertexFormat;
 
-import dev.engine.core.gpu.GpuMemory;
-import dev.engine.core.gpu.NativeGpuMemory;
+import dev.engine.core.memory.NativeMemory;
+import dev.engine.core.memory.SegmentNativeMemory;
 
 import java.lang.foreign.Arena;
 import java.nio.ByteBuffer;
@@ -52,9 +52,9 @@ public class HeadlessRenderDevice implements RenderDevice {
     @Override public BufferWriter writeBuffer(Handle<BufferResource> h, long offset, long length) {
         var arena = Arena.ofConfined();
         var seg = arena.allocate(length);
-        var memory = new NativeGpuMemory(seg);
+        var memory = new SegmentNativeMemory(seg);
         return new BufferWriter() {
-            @Override public GpuMemory memory() { return memory; }
+            @Override public NativeMemory memory() { return memory; }
             @Override public void close() { arena.close(); }
         };
     }

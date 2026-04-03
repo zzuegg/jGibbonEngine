@@ -7,8 +7,8 @@ import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.buffer.StreamingBuffer;
 
-import dev.engine.core.gpu.GpuMemory;
-import dev.engine.core.gpu.NativeGpuMemory;
+import dev.engine.core.memory.NativeMemory;
+import dev.engine.core.memory.SegmentNativeMemory;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -30,7 +30,7 @@ public class WgpuStreamingBuffer implements StreamingBuffer {
 
     private Arena writeArena;
     private MemorySegment writeSegment;
-    private GpuMemory writeMemory;
+    private NativeMemory writeMemory;
 
     WgpuStreamingBuffer(WgpuRenderDevice device, long frameSize, int frameCount, BufferUsage usage) {
         this.device = device;
@@ -58,10 +58,10 @@ public class WgpuStreamingBuffer implements StreamingBuffer {
     }
 
     @Override
-    public GpuMemory beginWrite() {
+    public NativeMemory beginWrite() {
         writeArena = Arena.ofConfined();
         writeSegment = writeArena.allocate(frameSize);
-        writeMemory = new NativeGpuMemory(writeSegment);
+        writeMemory = new SegmentNativeMemory(writeSegment);
         return writeMemory;
     }
 

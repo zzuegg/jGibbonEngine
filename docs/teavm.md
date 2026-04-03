@@ -122,7 +122,56 @@ python3 -m http.server 8080
 
 ## Shaders in Browser
 
-The Slang compiler is not available in the browser. For the web target,
-shaders must be pre-compiled to WGSL or embedded as WGSL string literals
-in the Java source. The `WebMain` class uses hard-coded WGSL for the
-initial triangle demo.
+The Slang WASM compiler **is** available in the browser (see `docs/slang.md`
+for setup). `TeaVmSlangCompiler` wraps the Slang WASM module to compile
+`.slang` source to WGSL at runtime.
+
+### Self-Contained Shaders
+
+The WASM compiler cannot resolve `import` statements. Shaders compiled in
+the browser must inline all dependencies. Use `ParameterBlock<T>` for
+uniform blocks (maps to `@group(N) @binding(0)` in WGSL) rather than
+generic interfaces (`ICameraParams`, etc.) which require desktop-only
+Slang features.
+
+### WebRenderer Pipeline
+
+`WebRenderer` replaces the hardcoded triangle with the full engine pipeline:
+- Uses engine math types (Mat4, Vec3, Transform) for camera and scene setup
+- Uses `MaterialData` for material properties (COLOR for unlit)
+- Compiles the unlit shader via `TeaVmSlangCompiler` at runtime
+- Falls back to hand-written WGSL if Slang WASM is not loaded
+- Manages WebGPU resources (buffers, bind groups, depth texture) directly
+  through `WgpuBindings`, bypassing the desktop `Renderer`/`ShaderManager`
+  which depend on FFM and reflection
+
+### Matrix Upload Convention (WGSL)
+
+WGSL `mat4x4f` uses column-major storage. The engine's `Mat4` stores data
+in row-major order (`m00, m01, m02, m03` is row 0). When uploading to
+WebGPU uniform buffers, matrices must be transposed to column-major:
+
+```java
+// Column-major upload (matches Mat4.writeGpu() on desktop)
+float[] data = {
+    m.m00(), m.m10(), m.m20(), m.m30(), // column 0
+    m.m01(), m.m11(), m.m21(), m.m31(), // column 1
+    ...
+};
+```
+
+In hand-written WGSL, use `vec4f(pos, 1.0) * mvp` (row-vector convention)
+to match the Slang-generated multiplication order. This works because
+multiplying a row vector by the transposed matrix produces the same result
+as the standard `M * v` with the original matrix.
+
+### Bind Group Layout
+
+The unlit shader uses 3 bind groups:
+- Group 0, binding 0: Camera UBO (mat4x4f viewProjection, 64 bytes)
+- Group 1, binding 0: Object UBO (mat4x4f world, 64 bytes)
+- Group 2, binding 0: Material UBO (vec3f color, padded to 16 bytes)
+
+Each group has its own `BindGroupLayout`. Bind groups for object and
+material are recreated per draw call (WebGPU bind groups are cheap to
+create and cannot be mutated).

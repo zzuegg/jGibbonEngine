@@ -1,7 +1,7 @@
 package dev.engine.providers.teavm.webgpu;
 
-import dev.engine.core.gpu.GpuMemory;
-import dev.engine.graphics.platform.Platform;
+import dev.engine.core.memory.NativeMemory;
+import dev.engine.platform.Platform;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.webgpu.WgpuRenderDevice;
 import dev.engine.graphics.window.WindowHandle;
@@ -32,7 +32,7 @@ public class WebPlatform implements Platform {
     }
 
     @Override
-    public GpuMemory allocateMemory(long size) {
-        return new WebGpuMemory((int) size);
+    public NativeMemory allocateMemory(long size) {
+        return new ByteBufferNativeMemory((int) size);
     }
 }

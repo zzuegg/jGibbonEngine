@@ -1,5 +1,7 @@
 package dev.engine.core.gpu;
 
+import dev.engine.core.memory.NativeMemory;
+import dev.engine.core.memory.SegmentNativeMemory;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;
@@ -15,12 +17,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class BufferWriterTest {
 
     private Arena arena;
-    private GpuMemory memory;
+    private NativeMemory memory;
 
     @BeforeEach
     void setUp() {
         arena = Arena.ofConfined();
-        memory = new NativeGpuMemory(arena.allocate(256, 16));
+        memory = new SegmentNativeMemory(arena.allocate(256, 16));
     }
 
     @Nested

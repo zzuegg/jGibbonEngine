@@ -39,7 +39,7 @@ import dev.engine.graphics.renderer.Renderable;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.core.mesh.VertexFormat;
 
-import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.memory.NativeMemory;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;

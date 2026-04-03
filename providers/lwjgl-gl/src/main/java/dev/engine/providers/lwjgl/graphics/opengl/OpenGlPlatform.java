@@ -1,8 +1,8 @@
 package dev.engine.providers.lwjgl.graphics.opengl;
 
-import dev.engine.core.gpu.GpuMemory;
-import dev.engine.core.gpu.NativeGpuMemory;
-import dev.engine.graphics.platform.Platform;
+import dev.engine.core.memory.NativeMemory;
+import dev.engine.core.memory.SegmentNativeMemory;
+import dev.engine.platform.Platform;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.window.WindowHandle;
@@ -32,7 +32,7 @@ public class OpenGlPlatform implements Platform {
     }
 
     @Override
-    public GpuMemory allocateMemory(long size) {
-        return new NativeGpuMemory(Arena.global().allocate(size));
+    public NativeMemory allocateMemory(long size) {
+        return new SegmentNativeMemory(Arena.global().allocate(size));
     }
 }

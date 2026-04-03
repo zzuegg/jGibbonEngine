@@ -1,25 +1,25 @@
 package dev.engine.providers.teavm.webgpu;
 
-import dev.engine.core.gpu.GpuMemory;
+import dev.engine.core.memory.NativeMemory;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * Web implementation of {@link GpuMemory} backed by a {@code ByteBuffer}.
+ * Web implementation of {@link NativeMemory} backed by a {@code ByteBuffer}.
  *
  * <p>Used by the TeaVM WebGPU backend where {@code java.lang.foreign.MemorySegment}
  * is not available.
  */
-public class WebGpuMemory implements GpuMemory {
+public class ByteBufferNativeMemory implements NativeMemory {
 
     private final ByteBuffer buffer;
 
-    public WebGpuMemory(int size) {
+    public ByteBufferNativeMemory(int size) {
         this.buffer = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
     }
 
-    public WebGpuMemory(ByteBuffer buffer) {
+    public ByteBufferNativeMemory(ByteBuffer buffer) {
         this.buffer = buffer.order(ByteOrder.LITTLE_ENDIAN);
     }
 
@@ -90,9 +90,9 @@ public class WebGpuMemory implements GpuMemory {
         }
     }
 
-    @Override public void copyFrom(GpuMemory src) {
+    @Override public void copyFrom(NativeMemory src) {
         long len = Math.min(size(), src.size());
-        if (src instanceof WebGpuMemory webSrc) {
+        if (src instanceof ByteBufferNativeMemory webSrc) {
             var srcBuf = webSrc.buffer.duplicate();
             srcBuf.position(0).limit((int) len);
             buffer.position(0);
@@ -105,9 +105,9 @@ public class WebGpuMemory implements GpuMemory {
         }
     }
 
-    @Override public GpuMemory slice(long offset, long length) {
+    @Override public NativeMemory slice(long offset, long length) {
         var sliced = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN);
         sliced.position((int) offset).limit((int) (offset + length));
-        return new WebGpuMemory(sliced.slice().order(ByteOrder.LITTLE_ENDIAN));
+        return new ByteBufferNativeMemory(sliced.slice().order(ByteOrder.LITTLE_ENDIAN));
     }
 }

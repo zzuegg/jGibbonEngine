@@ -1,12 +1,13 @@
 package dev.engine.core.gpu;
 
+import dev.engine.core.memory.NativeMemory;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.math.Vec4;
 
 /**
- * Reads typed values from a {@link GpuMemory} (GPU buffer readback).
+ * Reads typed values from a {@link NativeMemory} (GPU buffer readback).
  * Works with any buffer: UBOs, SSBOs, mapped buffers, staging buffers.
  *
  * <p>Matrices are read from column-major layout (GPU convention)
@@ -16,32 +17,32 @@ public final class BufferReader {
 
     private BufferReader() {}
 
-    public static float readFloat(GpuMemory mem, long offset) {
+    public static float readFloat(NativeMemory mem, long offset) {
         return mem.getFloat(offset);
     }
 
-    public static int readInt(GpuMemory mem, long offset) {
+    public static int readInt(NativeMemory mem, long offset) {
         return mem.getInt(offset);
     }
 
-    public static boolean readBoolean(GpuMemory mem, long offset) {
+    public static boolean readBoolean(NativeMemory mem, long offset) {
         return mem.getInt(offset) != 0;
     }
 
-    public static Vec2 readVec2(GpuMemory mem, long offset) {
+    public static Vec2 readVec2(NativeMemory mem, long offset) {
         return new Vec2(
                 mem.getFloat(offset),
                 mem.getFloat(offset + 4));
     }
 
-    public static Vec3 readVec3(GpuMemory mem, long offset) {
+    public static Vec3 readVec3(NativeMemory mem, long offset) {
         return new Vec3(
                 mem.getFloat(offset),
                 mem.getFloat(offset + 4),
                 mem.getFloat(offset + 8));
     }
 
-    public static Vec4 readVec4(GpuMemory mem, long offset) {
+    public static Vec4 readVec4(NativeMemory mem, long offset) {
         return new Vec4(
                 mem.getFloat(offset),
                 mem.getFloat(offset + 4),
@@ -52,7 +53,7 @@ public final class BufferReader {
     /**
      * Reads a Mat4 from column-major GPU layout back into row-major Mat4.
      */
-    public static Mat4 readMat4(GpuMemory mem, long offset) {
+    public static Mat4 readMat4(NativeMemory mem, long offset) {
         // Column-major: col0(m00,m10,m20,m30), col1(m01,m11,m21,m31), ...
         float c00 = mem.getFloat(offset);
         float c01 = mem.getFloat(offset + 4);
@@ -78,7 +79,7 @@ public final class BufferReader {
                 c03, c13, c23, c33);
     }
 
-    public static long readTextureHandle(GpuMemory mem, long offset) {
+    public static long readTextureHandle(NativeMemory mem, long offset) {
         return mem.getLong(offset);
     }
 }
