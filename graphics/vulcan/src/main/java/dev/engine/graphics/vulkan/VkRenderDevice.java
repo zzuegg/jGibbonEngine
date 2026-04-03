@@ -10,6 +10,9 @@ import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.target.RenderTargetDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.core.mesh.VertexFormat;
+import dev.engine.graphics.renderstate.CullMode;
+import dev.engine.graphics.renderstate.FrontFace;
+import dev.engine.graphics.renderstate.RenderState;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
@@ -21,7 +24,9 @@ import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -77,6 +82,16 @@ public class VkRenderDevice implements RenderDevice {
     private final Map<Integer, VkTextureAllocation> textures = new HashMap<>();
     private final Map<Integer, Long> vkSamplers = new HashMap<>();
 
+    private record VkRenderTargetAllocation(
+        long renderPass,
+        long framebuffer,
+        int width, int height,
+        List<VkTextureAllocation> colorAttachments,
+        VkTextureAllocation depthAttachment,
+        List<Handle<TextureResource>> colorTextureHandles
+    ) {}
+    private final Map<Integer, VkRenderTargetAllocation> renderTargets = new HashMap<>();
+
     // Pending texture+sampler bindings for descriptor flush (unit -> imageView, unit -> sampler)
     private final long[] pendingTextureViews = new long[8];
     private final long[] pendingTextureSamplers = new long[8];
@@ -99,7 +114,7 @@ public class VkRenderDevice implements RenderDevice {
                     .applicationVersion(VK_MAKE_VERSION(0, 1, 0))
                     .pEngineName(stack.UTF8("Engine"))
                     .engineVersion(VK_MAKE_VERSION(0, 1, 0))
-                    .apiVersion(VK_API_VERSION_1_0);
+                    .apiVersion(VK13.VK_API_VERSION_1_3);
 
             // Required surface extensions (provided by windowing toolkit)
 
@@ -575,22 +590,291 @@ public class VkRenderDevice implements RenderDevice {
         return 0L; // Vulkan doesn't use GL-style bindless handles
     }
 
-    // --- Render target operations (stubs) ---
+    // --- Render target operations ---
 
     @Override
     public Handle<RenderTargetResource> createRenderTarget(RenderTargetDescriptor descriptor) {
-        return renderTargetPool.allocate();
+        try (var stack = stackPush()) {
+            var colorAttachments = new ArrayList<VkTextureAllocation>();
+            var colorTextureHandles = new ArrayList<Handle<TextureResource>>();
+
+            // Create color attachments
+            for (var colorFormat : descriptor.colorAttachments()) {
+                int vkFormat = mapTextureFormat(colorFormat);
+                int usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+                // Create VkImage
+                var imageInfo = VkImageCreateInfo.calloc(stack)
+                        .sType$Default()
+                        .imageType(VK_IMAGE_TYPE_2D)
+                        .format(vkFormat)
+                        .extent(e -> e.width(descriptor.width()).height(descriptor.height()).depth(1))
+                        .mipLevels(1)
+                        .arrayLayers(1)
+                        .samples(VK_SAMPLE_COUNT_1_BIT)
+                        .tiling(VK_IMAGE_TILING_OPTIMAL)
+                        .usage(usage)
+                        .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
+                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+                var pImage = stack.mallocLong(1);
+                int result = vkCreateImage(device, imageInfo, null, pImage);
+                if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT color image: " + result);
+                long image = pImage.get(0);
+
+                // Allocate DEVICE_LOCAL memory
+                var memReqs = VkMemoryRequirements.calloc(stack);
+                vkGetImageMemoryRequirements(device, image, memReqs);
+                int memType = findMemoryType(memReqs.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                var allocInfo = VkMemoryAllocateInfo.calloc(stack)
+                        .sType$Default()
+                        .allocationSize(memReqs.size())
+                        .memoryTypeIndex(memType);
+                var pMemory = stack.mallocLong(1);
+                result = vkAllocateMemory(device, allocInfo, null, pMemory);
+                if (result != VK_SUCCESS) throw new RuntimeException("Failed to allocate RT color memory: " + result);
+                long memory = pMemory.get(0);
+                vkBindImageMemory(device, image, memory, 0);
+
+                // Create VkImageView
+                var viewInfo = VkImageViewCreateInfo.calloc(stack)
+                        .sType$Default()
+                        .image(image)
+                        .viewType(VK_IMAGE_VIEW_TYPE_2D)
+                        .format(vkFormat)
+                        .subresourceRange(sr -> sr.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                                .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1));
+                var pView = stack.mallocLong(1);
+                result = vkCreateImageView(device, viewInfo, null, pView);
+                if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT color image view: " + result);
+                long imageView = pView.get(0);
+
+                // Transition to SHADER_READ_ONLY_OPTIMAL
+                transitionImageLayout(image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_IMAGE_ASPECT_COLOR_BIT, 1);
+
+                var texDesc = new TextureDescriptor(descriptor.width(), descriptor.height(), colorFormat);
+                var texAlloc = new VkTextureAllocation(image, memory, imageView, texDesc);
+                colorAttachments.add(texAlloc);
+
+                // Register as a texture so it can be bound with BindTexture
+                var texHandle = texturePool.allocate();
+                textures.put(texHandle.index(), texAlloc);
+                colorTextureHandles.add(texHandle);
+            }
+
+            // Create depth attachment if requested
+            VkTextureAllocation depthAttachment = null;
+            if (descriptor.depthFormat() != null) {
+                int vkDepthFormat = mapTextureFormat(descriptor.depthFormat());
+                int depthUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+                var imageInfo = VkImageCreateInfo.calloc(stack)
+                        .sType$Default()
+                        .imageType(VK_IMAGE_TYPE_2D)
+                        .format(vkDepthFormat)
+                        .extent(e -> e.width(descriptor.width()).height(descriptor.height()).depth(1))
+                        .mipLevels(1)
+                        .arrayLayers(1)
+                        .samples(VK_SAMPLE_COUNT_1_BIT)
+                        .tiling(VK_IMAGE_TILING_OPTIMAL)
+                        .usage(depthUsage)
+                        .sharingMode(VK_SHARING_MODE_EXCLUSIVE)
+                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED);
+                var pImage = stack.mallocLong(1);
+                int result = vkCreateImage(device, imageInfo, null, pImage);
+                if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT depth image: " + result);
+                long depthImage = pImage.get(0);
+
+                var memReqs = VkMemoryRequirements.calloc(stack);
+                vkGetImageMemoryRequirements(device, depthImage, memReqs);
+                int memType = findMemoryType(memReqs.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                var allocInfo = VkMemoryAllocateInfo.calloc(stack)
+                        .sType$Default()
+                        .allocationSize(memReqs.size())
+                        .memoryTypeIndex(memType);
+                var pMemory = stack.mallocLong(1);
+                result = vkAllocateMemory(device, allocInfo, null, pMemory);
+                if (result != VK_SUCCESS) throw new RuntimeException("Failed to allocate RT depth memory: " + result);
+                long depthMemory = pMemory.get(0);
+                vkBindImageMemory(device, depthImage, depthMemory, 0);
+
+                var viewInfo = VkImageViewCreateInfo.calloc(stack)
+                        .sType$Default()
+                        .image(depthImage)
+                        .viewType(VK_IMAGE_VIEW_TYPE_2D)
+                        .format(vkDepthFormat)
+                        .subresourceRange(sr -> sr.aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT)
+                                .baseMipLevel(0).levelCount(1).baseArrayLayer(0).layerCount(1));
+                var pView = stack.mallocLong(1);
+                result = vkCreateImageView(device, viewInfo, null, pView);
+                if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT depth image view: " + result);
+                long depthView = pView.get(0);
+
+                var depthDesc = new TextureDescriptor(descriptor.width(), descriptor.height(), descriptor.depthFormat());
+                depthAttachment = new VkTextureAllocation(depthImage, depthMemory, depthView, depthDesc);
+            }
+
+            // Create render pass
+            long rtRenderPass = createOffscreenRenderPass(descriptor, colorAttachments, depthAttachment);
+
+            // Create framebuffer
+            int attachmentCount = colorAttachments.size() + (depthAttachment != null ? 1 : 0);
+            var attachmentViews = stack.mallocLong(attachmentCount);
+            for (int i = 0; i < colorAttachments.size(); i++) {
+                attachmentViews.put(i, colorAttachments.get(i).imageView());
+            }
+            if (depthAttachment != null) {
+                attachmentViews.put(colorAttachments.size(), depthAttachment.imageView());
+            }
+
+            var fbInfo = VkFramebufferCreateInfo.calloc(stack)
+                    .sType$Default()
+                    .renderPass(rtRenderPass)
+                    .pAttachments(attachmentViews)
+                    .width(descriptor.width())
+                    .height(descriptor.height())
+                    .layers(1);
+            var pFramebuffer = stack.mallocLong(1);
+            int result = vkCreateFramebuffer(device, fbInfo, null, pFramebuffer);
+            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create RT framebuffer: " + result);
+            long framebuffer = pFramebuffer.get(0);
+
+            var handle = renderTargetPool.allocate();
+            renderTargets.put(handle.index(), new VkRenderTargetAllocation(
+                    rtRenderPass, framebuffer, descriptor.width(), descriptor.height(),
+                    List.copyOf(colorAttachments), depthAttachment, List.copyOf(colorTextureHandles)));
+
+            log.info("Created Vulkan render target {}x{} with {} color attachment(s){}",
+                    descriptor.width(), descriptor.height(), colorAttachments.size(),
+                    depthAttachment != null ? " + depth" : "");
+            return handle;
+        }
     }
 
     @Override
     public Handle<TextureResource> getRenderTargetColorTexture(Handle<RenderTargetResource> renderTarget, int index) {
-        return Handle.invalid();
+        var rtAlloc = renderTargets.get(renderTarget.index());
+        if (rtAlloc == null || index < 0 || index >= rtAlloc.colorTextureHandles().size()) {
+            return Handle.invalid();
+        }
+        return rtAlloc.colorTextureHandles().get(index);
     }
 
     @Override
     public void destroyRenderTarget(Handle<RenderTargetResource> handle) {
-        if (renderTargetPool.isValid(handle)) {
-            renderTargetPool.release(handle);
+        if (!renderTargetPool.isValid(handle)) return;
+        var rtAlloc = renderTargets.remove(handle.index());
+        if (rtAlloc != null) {
+            vkDestroyFramebuffer(device, rtAlloc.framebuffer(), null);
+            vkDestroyRenderPass(device, rtAlloc.renderPass(), null);
+
+            // Destroy color attachments and their registered texture handles
+            for (int i = 0; i < rtAlloc.colorAttachments().size(); i++) {
+                var colorAlloc = rtAlloc.colorAttachments().get(i);
+                var texHandle = rtAlloc.colorTextureHandles().get(i);
+                textures.remove(texHandle.index());
+                texturePool.release(texHandle);
+                vkDestroyImageView(device, colorAlloc.imageView(), null);
+                vkDestroyImage(device, colorAlloc.image(), null);
+                vkFreeMemory(device, colorAlloc.memory(), null);
+            }
+
+            // Destroy depth attachment
+            if (rtAlloc.depthAttachment() != null) {
+                var depthAlloc = rtAlloc.depthAttachment();
+                vkDestroyImageView(device, depthAlloc.imageView(), null);
+                vkDestroyImage(device, depthAlloc.image(), null);
+                vkFreeMemory(device, depthAlloc.memory(), null);
+            }
+        }
+        renderTargetPool.release(handle);
+    }
+
+    private long createOffscreenRenderPass(RenderTargetDescriptor descriptor,
+                                           List<VkTextureAllocation> colorAttachments,
+                                           VkTextureAllocation depthAttachment) {
+        try (var stack = stackPush()) {
+            int totalAttachments = colorAttachments.size() + (depthAttachment != null ? 1 : 0);
+            var attachments = VkAttachmentDescription.calloc(totalAttachments, stack);
+
+            // Color attachments: clear, store, final layout = SHADER_READ_ONLY (for sampling)
+            for (int i = 0; i < colorAttachments.size(); i++) {
+                int vkFormat = mapTextureFormat(descriptor.colorAttachments().get(i));
+                attachments.get(i)
+                        .format(vkFormat)
+                        .samples(VK_SAMPLE_COUNT_1_BIT)
+                        .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
+                        .storeOp(VK_ATTACHMENT_STORE_OP_STORE)
+                        .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
+                        .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                        .finalLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            }
+
+            // Depth attachment
+            VkAttachmentReference depthRef = null;
+            if (depthAttachment != null) {
+                int vkDepthFmt = mapTextureFormat(descriptor.depthFormat());
+                attachments.get(colorAttachments.size())
+                        .format(vkDepthFmt)
+                        .samples(VK_SAMPLE_COUNT_1_BIT)
+                        .loadOp(VK_ATTACHMENT_LOAD_OP_CLEAR)
+                        .storeOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                        .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
+                        .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                        .initialLayout(VK_IMAGE_LAYOUT_UNDEFINED)
+                        .finalLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+
+                depthRef = VkAttachmentReference.calloc(stack)
+                        .attachment(colorAttachments.size())
+                        .layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+            }
+
+            // Color attachment references for the subpass
+            var colorRefs = VkAttachmentReference.calloc(colorAttachments.size(), stack);
+            for (int i = 0; i < colorAttachments.size(); i++) {
+                colorRefs.get(i)
+                        .attachment(i)
+                        .layout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            }
+
+            var subpass = VkSubpassDescription.calloc(1, stack)
+                    .pipelineBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS)
+                    .colorAttachmentCount(colorAttachments.size())
+                    .pColorAttachments(colorRefs)
+                    .pDepthStencilAttachment(depthRef);
+
+            // Two dependencies: external -> subpass, subpass -> external (for shader read)
+            var dependencies = VkSubpassDependency.calloc(2, stack);
+            dependencies.get(0)
+                    .srcSubpass(VK_SUBPASS_EXTERNAL)
+                    .dstSubpass(0)
+                    .srcStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
+                    .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+                            | (depthAttachment != null ? VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT : 0))
+                    .srcAccessMask(VK_ACCESS_SHADER_READ_BIT)
+                    .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                            | (depthAttachment != null ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : 0))
+                    .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
+            dependencies.get(1)
+                    .srcSubpass(0)
+                    .dstSubpass(VK_SUBPASS_EXTERNAL)
+                    .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                    .dstStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
+                    .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                    .dstAccessMask(VK_ACCESS_SHADER_READ_BIT)
+                    .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
+
+            var renderPassInfo = VkRenderPassCreateInfo.calloc(stack)
+                    .sType$Default()
+                    .pAttachments(attachments)
+                    .pSubpasses(subpass)
+                    .pDependencies(dependencies);
+
+            var pRenderPass = stack.mallocLong(1);
+            int result = vkCreateRenderPass(device, renderPassInfo, null, pRenderPass);
+            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create offscreen render pass: " + result);
+            return pRenderPass.get(0);
         }
     }
 
@@ -1152,26 +1436,99 @@ public class VkRenderDevice implements RenderDevice {
                     // TODO: descriptor set binding
                 }
                 case dev.engine.graphics.command.RenderCommand.SetDepthTest sdt -> {
-                    // TODO: dynamic state or pipeline variant
+                    VK13.vkCmdSetDepthTestEnable(cmd, sdt.enabled());
+                    VK13.vkCmdSetDepthWriteEnable(cmd, sdt.enabled());
                 }
                 case dev.engine.graphics.command.RenderCommand.SetBlending sb -> {
-                    // TODO: dynamic state or pipeline variant
+                    // Blending enable/disable requires VK_EXT_extended_dynamic_state3
+                    // which is not widely available. Blending is baked into the pipeline.
+                    log.debug("SetBlending dynamic state not available in Vulkan; blending is pipeline-baked");
                 }
                 case dev.engine.graphics.command.RenderCommand.SetCullFace scf -> {
-                    // TODO: dynamic state or pipeline variant
+                    VK13.vkCmdSetCullMode(cmd, scf.enabled() ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE);
                 }
                 case dev.engine.graphics.command.RenderCommand.SetWireframe sw -> {
-                    // TODO: dynamic state or pipeline variant
+                    // Wireframe (polygon mode) requires VK_EXT_extended_dynamic_state3
+                    // which is rarely available. No-op for now.
+                    if (sw.enabled()) {
+                        log.debug("SetWireframe not available as dynamic state in Vulkan");
+                    }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindRenderTarget brt -> {
-                    // TODO: off-screen render targets
+                    var rtAlloc = renderTargets.get(brt.renderTarget().index());
+                    if (rtAlloc != null) {
+                        // End current render pass
+                        vkCmdEndRenderPass(cmd);
+
+                        try (var rtStack = stackPush()) {
+                            int clearCount = rtAlloc.colorAttachments().size()
+                                    + (rtAlloc.depthAttachment() != null ? 1 : 0);
+                            var clearValues = VkClearValue.calloc(clearCount, rtStack);
+                            for (int i = 0; i < rtAlloc.colorAttachments().size(); i++) {
+                                clearValues.get(i).color()
+                                        .float32(0, 0f).float32(1, 0f).float32(2, 0f).float32(3, 1f);
+                            }
+                            if (rtAlloc.depthAttachment() != null) {
+                                clearValues.get(rtAlloc.colorAttachments().size())
+                                        .depthStencil().depth(1.0f).stencil(0);
+                            }
+
+                            var rpBegin = VkRenderPassBeginInfo.calloc(rtStack)
+                                    .sType$Default()
+                                    .renderPass(rtAlloc.renderPass())
+                                    .framebuffer(rtAlloc.framebuffer())
+                                    .renderArea(a -> a
+                                            .offset(o -> o.set(0, 0))
+                                            .extent(e -> e.set(rtAlloc.width(), rtAlloc.height())))
+                                    .pClearValues(clearValues);
+                            vkCmdBeginRenderPass(cmd, rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+                        }
+                    }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindDefaultRenderTarget bdrt -> {
-                    // Already in the default render pass
+                    // End the current (off-screen) render pass and re-begin the swapchain one
+                    vkCmdEndRenderPass(cmd);
+
+                    try (var dfStack = stackPush()) {
+                        var clearValues = VkClearValue.calloc(2, dfStack);
+                        clearValues.get(0).color()
+                                .float32(0, 0.05f).float32(1, 0.05f).float32(2, 0.08f).float32(3, 1.0f);
+                        clearValues.get(1).depthStencil().depth(1.0f).stencil(0);
+
+                        var rpBegin = VkRenderPassBeginInfo.calloc(dfStack)
+                                .sType$Default()
+                                .renderPass(renderPass)
+                                .framebuffer(framebuffers.framebuffer(currentImageIndex))
+                                .renderArea(a -> a
+                                        .offset(o -> o.set(0, 0))
+                                        .extent(e -> e.set(swapchain.width(), swapchain.height())))
+                                .pClearValues(clearValues);
+                        vkCmdBeginRenderPass(cmd, rpBegin, VK_SUBPASS_CONTENTS_INLINE);
+                    }
                 }
                 case dev.engine.graphics.command.RenderCommand.SetRenderState state -> {
-                    // TODO: implement in Task 17
-                    log.warn("SetRenderState not yet implemented in Vulkan backend");
+                    var props = state.properties();
+                    if (props.contains(RenderState.DEPTH_TEST)) {
+                        VK13.vkCmdSetDepthTestEnable(cmd, props.get(RenderState.DEPTH_TEST));
+                    }
+                    if (props.contains(RenderState.DEPTH_WRITE)) {
+                        VK13.vkCmdSetDepthWriteEnable(cmd, props.get(RenderState.DEPTH_WRITE));
+                    }
+                    if (props.contains(RenderState.CULL_MODE)) {
+                        CullMode mode = props.get(RenderState.CULL_MODE);
+                        int vkMode = switch (mode.name()) {
+                            case "BACK"  -> VK_CULL_MODE_BACK_BIT;
+                            case "FRONT" -> VK_CULL_MODE_FRONT_BIT;
+                            default      -> VK_CULL_MODE_NONE;
+                        };
+                        VK13.vkCmdSetCullMode(cmd, vkMode);
+                    }
+                    if (props.contains(RenderState.FRONT_FACE)) {
+                        FrontFace ff = props.get(RenderState.FRONT_FACE);
+                        VK13.vkCmdSetFrontFace(cmd,
+                                "CCW".equals(ff.name()) ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE);
+                    }
+                    // BLEND_MODE, WIREFRAME, LINE_WIDTH: not yet available as dynamic state
                 }
                 case dev.engine.graphics.command.RenderCommand.PushConstants pc -> {
                     // TODO: implement in Task 18
@@ -1214,6 +1571,26 @@ public class VkRenderDevice implements RenderDevice {
     @Override
     public void close() {
         vkDeviceWaitIdle(device);
+
+        // Destroy remaining render targets (before textures, since RT owns some textures)
+        for (var rtAlloc : renderTargets.values()) {
+            vkDestroyFramebuffer(device, rtAlloc.framebuffer(), null);
+            vkDestroyRenderPass(device, rtAlloc.renderPass(), null);
+            for (var texHandle : rtAlloc.colorTextureHandles()) {
+                textures.remove(texHandle.index());
+            }
+            for (var colorAlloc : rtAlloc.colorAttachments()) {
+                vkDestroyImageView(device, colorAlloc.imageView(), null);
+                vkDestroyImage(device, colorAlloc.image(), null);
+                vkFreeMemory(device, colorAlloc.memory(), null);
+            }
+            if (rtAlloc.depthAttachment() != null) {
+                vkDestroyImageView(device, rtAlloc.depthAttachment().imageView(), null);
+                vkDestroyImage(device, rtAlloc.depthAttachment().image(), null);
+                vkFreeMemory(device, rtAlloc.depthAttachment().memory(), null);
+            }
+        }
+        renderTargets.clear();
 
         // Destroy remaining textures
         for (var alloc : textures.values()) {
