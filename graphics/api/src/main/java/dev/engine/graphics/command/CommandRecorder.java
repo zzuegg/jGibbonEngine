@@ -1,7 +1,11 @@
 package dev.engine.graphics.command;
 
 import dev.engine.core.handle.Handle;
+import dev.engine.core.property.PropertyMap;
 import dev.engine.graphics.*;
+import dev.engine.graphics.renderstate.BarrierScope;
+
+import java.nio.ByteBuffer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +41,19 @@ public class CommandRecorder {
     public void setBlending(boolean enabled) { commands.add(new RenderCommand.SetBlending(enabled)); }
     public void setCullFace(boolean enabled) { commands.add(new RenderCommand.SetCullFace(enabled)); }
     public void setWireframe(boolean enabled) { commands.add(new RenderCommand.SetWireframe(enabled)); }
+
+    // --- Render state (property-based) ---
+    public void setRenderState(PropertyMap properties) { commands.add(new RenderCommand.SetRenderState(properties)); }
+
+    // --- Push constants ---
+    public void pushConstants(ByteBuffer data) { commands.add(new RenderCommand.PushConstants(data)); }
+
+    // --- Compute ---
+    public void bindComputePipeline(Handle<PipelineResource> pipeline) { commands.add(new RenderCommand.BindComputePipeline(pipeline)); }
+    public void dispatch(int groupsX, int groupsY, int groupsZ) { commands.add(new RenderCommand.Dispatch(groupsX, groupsY, groupsZ)); }
+
+    // --- Synchronization ---
+    public void memoryBarrier(BarrierScope scope) { commands.add(new RenderCommand.MemoryBarrier(scope)); }
 
     // --- Framebuffer ops ---
     public void clear(float r, float g, float b, float a) { commands.add(new RenderCommand.Clear(r, g, b, a)); }

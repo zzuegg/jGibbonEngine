@@ -1,9 +1,14 @@
 package dev.engine.graphics.command;
 
 import dev.engine.core.handle.Handle;
+import dev.engine.core.handle.HandlePool;
+import dev.engine.core.property.PropertyMap;
 import dev.engine.graphics.BufferResource;
 import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.VertexInputResource;
+import dev.engine.graphics.renderstate.BarrierScope;
+import dev.engine.graphics.renderstate.BlendMode;
+import dev.engine.graphics.renderstate.RenderState;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -66,6 +71,48 @@ class CommandListTest {
         ctx.scissor(10, 20, 100, 200);
         var list = ctx.finish();
         assertEquals(5, list.commands().size());
+    }
+
+    @Test void setRenderStateCommand() {
+        var state = PropertyMap.builder()
+            .set(RenderState.DEPTH_TEST, true)
+            .set(RenderState.BLEND_MODE, BlendMode.ALPHA)
+            .build();
+        var recorder = new CommandRecorder();
+        recorder.setRenderState(state);
+        var list = recorder.finish();
+        assertInstanceOf(RenderCommand.SetRenderState.class, list.commands().getFirst());
+    }
+
+    @Test void dispatchCommand() {
+        var recorder = new CommandRecorder();
+        recorder.dispatch(8, 8, 1);
+        var list = recorder.finish();
+        var cmd = (RenderCommand.Dispatch) list.commands().getFirst();
+        assertEquals(8, cmd.groupsX());
+        assertEquals(1, cmd.groupsZ());
+    }
+
+    @Test void memoryBarrierCommand() {
+        var recorder = new CommandRecorder();
+        recorder.memoryBarrier(BarrierScope.STORAGE_BUFFER);
+        var list = recorder.finish();
+        assertInstanceOf(RenderCommand.MemoryBarrier.class, list.commands().getFirst());
+    }
+
+    @Test void pushConstantsCommand() {
+        var recorder = new CommandRecorder();
+        recorder.pushConstants(java.nio.ByteBuffer.allocate(64));
+        var list = recorder.finish();
+        assertInstanceOf(RenderCommand.PushConstants.class, list.commands().getFirst());
+    }
+
+    @Test void bindComputePipelineCommand() {
+        var pool = new HandlePool<PipelineResource>();
+        var recorder = new CommandRecorder();
+        recorder.bindComputePipeline(pool.allocate());
+        var list = recorder.finish();
+        assertInstanceOf(RenderCommand.BindComputePipeline.class, list.commands().getFirst());
     }
 
     @Test void uniformAndTextureBindingRecorded() {

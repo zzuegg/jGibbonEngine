@@ -1,7 +1,11 @@
 package dev.engine.graphics.command;
 
 import dev.engine.core.handle.Handle;
+import dev.engine.core.property.PropertyMap;
 import dev.engine.graphics.*;
+import dev.engine.graphics.renderstate.BarrierScope;
+
+import java.nio.ByteBuffer;
 
 /**
  * All possible GPU commands as pure data records.
@@ -32,6 +36,19 @@ public sealed interface RenderCommand {
     record SetBlending(boolean enabled) implements RenderCommand {}
     record SetCullFace(boolean enabled) implements RenderCommand {}
     record SetWireframe(boolean enabled) implements RenderCommand {}
+
+    // --- Render state (property-based) ---
+    record SetRenderState(PropertyMap properties) implements RenderCommand {}
+
+    // --- Push constants ---
+    record PushConstants(ByteBuffer data) implements RenderCommand {}
+
+    // --- Compute ---
+    record BindComputePipeline(Handle<PipelineResource> pipeline) implements RenderCommand {}
+    record Dispatch(int groupsX, int groupsY, int groupsZ) implements RenderCommand {}
+
+    // --- Synchronization ---
+    record MemoryBarrier(BarrierScope scope) implements RenderCommand {}
 
     // --- Framebuffer ops ---
     record Clear(float r, float g, float b, float a) implements RenderCommand {}
