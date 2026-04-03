@@ -122,6 +122,12 @@ public class WgpuRenderDevice implements RenderDevice {
     // ── Default offscreen render target (lazy, resized on viewport) ──
 
     private Handle<RenderTargetResource> defaultRenderTarget;
+
+    /** Surface handle for canvas presentation (0 = headless/offscreen). */
+    private long surfaceHandle;
+
+    /** Optional canvas texture view override — when set, the default RT's color attachment uses this instead. */
+    private long canvasTextureViewOverride = 0;
     private int defaultRtWidth;
     private int defaultRtHeight;
 
@@ -221,7 +227,15 @@ public class WgpuRenderDevice implements RenderDevice {
             }
 
             wgpuQueue = gpu.deviceGetQueue(wgpuDevice);
-            log.info("WebGPU device created (offscreen mode)");
+
+            // Configure presentation surface if available
+            surfaceHandle = gpu.configureSurface(wgpuDevice, window.nativeHandle(),
+                    window.width(), window.height());
+            if (surfaceHandle != 0) {
+                log.info("WebGPU device created with presentation surface");
+            } else {
+                log.info("WebGPU device created (offscreen mode)");
+            }
         } else {
             wgpuInstance = 0;
             wgpuAdapter = 0;
@@ -846,6 +860,11 @@ public class WgpuRenderDevice implements RenderDevice {
 
         commandEncoder = gpu.deviceCreateCommandEncoder(wgpuDevice);
 
+        // Acquire surface texture view for canvas presentation
+        if (gpu.hasSurface() && surfaceHandle != 0) {
+            canvasTextureViewOverride = gpu.getSurfaceTextureView(surfaceHandle);
+        }
+
         // Reset render pass
         renderPassEncoder = 0;
         currentRenderTarget = defaultRenderTarget;
@@ -879,6 +898,12 @@ public class WgpuRenderDevice implements RenderDevice {
         if (currentBindGroup != 0) {
             gpu.bindGroupRelease(currentBindGroup);
             currentBindGroup = 0;
+        }
+
+        // Release surface texture view — browser presents automatically after submit
+        if (canvasTextureViewOverride != 0) {
+            gpu.releaseSurfaceTextureView(canvasTextureViewOverride);
+            canvasTextureViewOverride = 0;
         }
     }
 
@@ -1117,8 +1142,15 @@ public class WgpuRenderDevice implements RenderDevice {
         // Build color attachments
         var colorAttachments = new WgpuBindings.ColorAttachment[rt.colorTextures().size()];
         for (int i = 0; i < rt.colorTextures().size(); i++) {
-            var colorTex = textures.get(rt.colorTextures().get(i));
-            colorAttachments[i] = new WgpuBindings.ColorAttachment(colorTex.view(), r, g, b, a);
+            // Use canvas texture view if available and rendering to default RT
+            long colorView;
+            if (canvasTextureViewOverride != 0 && currentRenderTarget == defaultRenderTarget && i == 0) {
+                colorView = canvasTextureViewOverride;
+            } else {
+                var colorTex = textures.get(rt.colorTextures().get(i));
+                colorView = colorTex.view();
+            }
+            colorAttachments[i] = new WgpuBindings.ColorAttachment(colorView, r, g, b, a);
         }
 
         // Build depth/stencil attachment
@@ -1487,6 +1519,14 @@ public class WgpuRenderDevice implements RenderDevice {
         if (format == TextureFormat.R16F) return 2;
         if (format == TextureFormat.R32F || format == TextureFormat.R32UI || format == TextureFormat.R32I) return 4;
         return 4;
+    }
+
+    /**
+     * Sets a canvas texture view to use as the color attachment for the default render target.
+     * Call before renderFrame() each frame. Set to 0 to use the internal offscreen RT.
+     */
+    public void setCanvasTextureView(long textureView) {
+        this.canvasTextureViewOverride = textureView;
     }
 
     private static int alignTo256(int value) {

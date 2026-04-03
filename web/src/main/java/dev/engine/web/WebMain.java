@@ -122,8 +122,8 @@ public class WebMain {
     }
 
     private static void renderFrame() {
-        // Full engine render — processes scene transactions, compiles shaders,
-        // uploads UBOs, records commands, submits to GPU
+        // Full engine render — the WgpuRenderDevice handles canvas presentation
+        // via the WindowHandle's canvas context
         renderer.renderFrame();
     }
 }

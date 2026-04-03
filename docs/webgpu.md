@@ -297,12 +297,48 @@ before passing them to `ShaderManager.getShaderWithMaterial()` and
 `uploadMaterialData()`. Render state keys control pipeline state, not shader
 uniforms.
 
-## Offscreen Rendering (Surface Deferred)
+## Surface / Canvas Presentation
 
-`WgpuRenderDevice` currently uses offscreen-only rendering. Surface creation is
-deferred to avoid wgpu-native v24 lifecycle issues on Wayland.
+`WgpuRenderDevice` supports both offscreen-only rendering and canvas presentation
+through the `WgpuBindings` surface API. The surface methods have default no-op
+implementations, so headless/desktop backends work unchanged.
 
-### The "SurfaceOutput must be dropped" Problem
+### How It Works
+
+The `WgpuBindings` interface defines four surface methods with safe defaults:
+- `configureSurface(device, windowHandle, w, h)` — returns 0 (no surface)
+- `getSurfaceTextureView(surface)` — returns 0
+- `releaseSurfaceTextureView(textureView)` — no-op
+- `hasSurface()` — returns false
+
+When a binding (e.g., `TeaVmWgpuBindings`) implements these, the render device
+automatically renders to the canvas/surface instead of the offscreen RT:
+
+1. **Constructor:** calls `configureSurface()` — stores the surface handle
+2. **beginFrame():** if surface exists, acquires a texture view via `getSurfaceTextureView()`
+3. **beginRenderPassWithClear():** if `canvasTextureViewOverride != 0` and rendering
+   to the default RT, uses the canvas texture view as the color attachment (index 0)
+4. **endFrame():** after GPU submit, releases the surface texture view — the browser
+   presents automatically
+
+This approach avoids a copy: the default render target's depth/stencil attachment
+is still used, but color goes directly to the canvas texture.
+
+### TeaVM / Browser Implementation
+
+`TeaVmWgpuBindings` implements the surface API using `configureCanvasContext()`
+and `getCurrentTextureView()` JS interop. The canvas ID is hardcoded to `"canvas"`.
+The browser's `requestAnimationFrame` loop drives rendering, and the WebGPU spec
+guarantees that submitted commands rendering to the canvas texture are presented
+after the current frame.
+
+### Desktop / jWebGPU
+
+`JWebGpuBindings` inherits the default no-op surface methods. Rendering goes to
+the offscreen RT only, which is correct for screenshot tests and headless use.
+Desktop surface support (wgpu-native) is deferred due to Wayland lifecycle issues.
+
+### The "SurfaceOutput must be dropped" Problem (Desktop)
 
 On wgpu-native v24 with Wayland, calling `wgpuSurfaceConfigure` after
 `wgpuSurfaceGetCapabilities` (used for format querying) causes:
@@ -313,26 +349,6 @@ Validation Error: `SurfaceOutput` must be dropped before a new `Surface` is made
 This appears to be a wgpu-native internal state issue where the capabilities query
 creates state that isn't properly cleaned up before surface configuration. The error
 does not occur on X11.
-
-### Current Approach
-
-1. Constructor creates Instance, Adapter, Device, Queue — but **no Surface**
-2. Default render target uses RGBA8 format (standard for readback)
-3. `beginFrame()` creates a command encoder without acquiring a surface texture
-4. `endFrame()` submits commands without copy-to-surface or present
-5. `readFramebuffer()` reads directly from the offscreen render target
-
-The GLFW window is still created (for API compatibility with GL/VK backends) but
-is not used for presentation. This is sufficient for screenshot tests and headless
-rendering.
-
-### Future: Surface-Based Presentation
-
-When windowed display is needed, surface creation can be re-enabled. The key pieces
-are preserved:
-- `copyTextureToSurface()` method exists for offscreen RT to surface copy
-- `close()` handles surface cleanup with null guards
-- Surface creation code (X11/Wayland detection) can be restored from git history
 
 To fix the Wayland issue, try:
 1. Calling `wgpuSurfaceCapabilitiesFreeMembers` before `surfaceConfigure`

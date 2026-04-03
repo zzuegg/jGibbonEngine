@@ -48,6 +48,29 @@ public class TeaVmWgpuBindings implements WgpuBindings {
     @JSBody(params = "id", script = "delete window._wgpu[id];")
     public static native void wgpuRelease(int id);
 
+    // ===== Surface / Presentation =====
+
+    @Override
+    public long configureSurface(long device, long windowHandle, int width, int height) {
+        // windowHandle is not used on web — canvas is found by ID "canvas"
+        return configureCanvasContext("canvas", (int) device);
+    }
+
+    @Override
+    public long getSurfaceTextureView(long surface) {
+        return getCurrentTextureView((int) surface);
+    }
+
+    @Override
+    public void releaseSurfaceTextureView(long textureView) {
+        wgpuRelease((int) textureView);
+    }
+
+    @Override
+    public boolean hasSurface() {
+        return true;
+    }
+
     // ===== Lifecycle =====
 
     @Override
@@ -580,7 +603,10 @@ public class TeaVmWgpuBindings implements WgpuBindings {
                 view: window._wgpu[depthViewId],
                 depthClearValue: depthClear,
                 depthLoadOp: 'clear',
-                depthStoreOp: 'store'
+                depthStoreOp: 'store',
+                stencilClearValue: 0,
+                stencilLoadOp: 'clear',
+                stencilStoreOp: 'store'
             };
         }
         var pass = enc.beginRenderPass(desc);

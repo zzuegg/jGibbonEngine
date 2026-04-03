@@ -30,6 +30,31 @@ public interface WgpuBindings {
      */
     boolean isAvailable();
 
+    // ===== Surface / Presentation =====
+
+    /**
+     * Configures a presentation surface for the given window.
+     * Desktop: creates a wgpu surface. Web: configures the canvas context.
+     * Returns a surface/context handle, or 0 if not supported (headless).
+     */
+    default long configureSurface(long device, long windowHandle, int width, int height) { return 0; }
+
+    /**
+     * Gets the current surface texture view for rendering.
+     * Returns 0 if no surface is configured (offscreen/headless).
+     */
+    default long getSurfaceTextureView(long surface) { return 0; }
+
+    /**
+     * Releases a surface texture view obtained from getSurfaceTextureView.
+     */
+    default void releaseSurfaceTextureView(long textureView) {}
+
+    /**
+     * Returns true if a presentation surface is available.
+     */
+    default boolean hasSurface() { return false; }
+
     // ===== Instance =====
 
     /** Creates a WebGPU instance. */
