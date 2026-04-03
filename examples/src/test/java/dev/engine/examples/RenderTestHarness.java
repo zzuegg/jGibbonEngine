@@ -5,6 +5,7 @@ import dev.engine.graphics.ScreenshotHelper;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.vulkan.VkRenderDevice;
+import dev.engine.graphics.webgpu.WgpuRenderDevice;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.graphics.window.WindowDescriptor;
 import org.lwjgl.glfw.GLFWVulkan;
@@ -79,6 +80,7 @@ public class RenderTestHarness {
     /**
      * Renders on both backends, compares with the given tolerance, and saves screenshots.
      * Use this for cross-backend comparison tests with explicit tolerance control.
+     * WebGPU is included when available but does not fail tests if missing.
      */
     public void assertCrossBackend(RenderTestScene scene, String name, Tolerance tolerance) {
         byte[] gl = renderOpenGl(scene);
@@ -88,10 +90,22 @@ public class RenderTestHarness {
 
         double diffPct = ScreenshotHelper.diffPercentage(gl, vk, tolerance.maxChannelDiff());
         assertTrue(diffPct < tolerance.maxDiffPercent(),
-                "Cross-backend '" + name + "': backends differ by "
+                "Cross-backend '" + name + "': GL/VK differ by "
                         + String.format("%.1f%%", diffPct)
                         + " (max " + tolerance.maxDiffPercent() + "%). "
                         + "Screenshots in build/screenshots/opengl/" + name + ".png and build/screenshots/vulkan/" + name + ".png");
+
+        // WebGPU comparison (optional — doesn't fail if unavailable)
+        byte[] wgpu = renderWebGpu(scene);
+        if (wgpu != null) {
+            saveScreenshot(wgpu, "webgpu", name);
+            double glWgpuDiff = ScreenshotHelper.diffPercentage(gl, wgpu, tolerance.maxChannelDiff());
+            assertTrue(glWgpuDiff < tolerance.maxDiffPercent(),
+                    "Cross-backend '" + name + "': GL/WebGPU differ by "
+                            + String.format("%.1f%%", glWgpuDiff)
+                            + " (max " + tolerance.maxDiffPercent() + "%). "
+                            + "Screenshots in build/screenshots/opengl/" + name + ".png and build/screenshots/webgpu/" + name + ".png");
+        }
     }
 
     /** Renders on OpenGL and asserts it matches the named reference screenshot. */
@@ -106,6 +120,17 @@ public class RenderTestHarness {
         byte[] vk = renderVulkan(scene);
         saveScreenshot(vk, "vulkan", referenceName);
         assertMatchesReference(vk, referenceName, "vulkan", "Vulkan");
+    }
+
+    /** Renders on WebGPU and asserts it matches the named reference screenshot. Skips if wgpu-native unavailable. */
+    public void assertWebGpuMatchesReference(RenderTestScene scene, String referenceName) throws IOException {
+        byte[] wgpu = renderWebGpu(scene);
+        if (wgpu == null) {
+            System.out.println("WebGPU not available — skipping");
+            return;
+        }
+        saveScreenshot(wgpu, "webgpu", referenceName);
+        assertMatchesReference(wgpu, referenceName, "webgpu", "WebGPU");
     }
 
     /** Renders on both backends and asserts both match each other AND the reference. */
@@ -160,6 +185,21 @@ public class RenderTestHarness {
                     GLFWVulkan.glfwGetRequiredInstanceExtensions(),
                     instance -> GlfwWindowToolkit.createVulkanSurface(instance, window.nativeHandle()),
                     width, height);
+            return renderWith(device, scene);
+        } finally {
+            toolkit.close();
+        }
+    }
+
+    /** Renders the scene on WebGPU with a GLFW window + surface. Returns null if wgpu-native is not available. */
+    public byte[] renderWebGpu(RenderTestScene scene) {
+        if (!WgpuRenderDevice.isAvailable()) {
+            return null;
+        }
+        var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
+        try {
+            var window = toolkit.createWindow(new WindowDescriptor("WGPU Test", width, height));
+            var device = new WgpuRenderDevice(window);
             return renderWith(device, scene);
         } finally {
             toolkit.close();

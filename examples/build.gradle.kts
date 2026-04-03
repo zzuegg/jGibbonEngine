@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":graphics:common"))
     implementation(project(":graphics:opengl"))
     implementation(project(":graphics:vulcan"))
+    implementation(project(":graphics:webgpu"))
     implementation(project(":bindings:slang"))
     implementation(project(":windowing:glfw"))
     implementation(platform(libs.lwjgl.bom))

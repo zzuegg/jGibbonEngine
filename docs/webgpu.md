@@ -1,8 +1,93 @@
-# WebGPU / wgpu-native Integration Notes
+# WebGPU Integration Notes
 
-## Library Loading
+## jWebGPU (Current Backend)
 
-wgpu-native is auto-downloaded via `NativeLibraryLoader` using `WgpuSpec.java`.
+The WebGPU backend uses jWebGPU (`com.github.xpenatan.jWebGPU:webgpu-core:0.1.15`
+and `webgpu-desktop:0.1.15`) which bundles wgpu-native as a JNI library.
+
+### Critical: WGPUShaderSourceWGSL sType Must Be Set Manually
+
+`WGPUShaderSourceWGSL.obtain()` does NOT initialize the `sType` field in its embedded
+`WGPUChainedStruct`. Without this, `createShaderModule` crashes with:
+```
+thread panicked at src/conv.rs:680:5: Shader not provided.
+```
+
+**Fix:** Always set the sType manually:
+```java
+var wgslDesc = WGPUShaderSourceWGSL.obtain();
+wgslDesc.setCode(wgslSource);
+wgslDesc.getChain().setSType(WGPUSType.ShaderSourceWGSL);  // REQUIRED!
+```
+
+### obtain() vs new
+
+- `obtain()` returns a pooled/static instance (reused across calls). Safe for
+  short-lived descriptors that are consumed immediately (pass descriptors, etc.)
+- `new Foo()` creates a fresh instance. Use for objects that must coexist
+  (e.g., two `WGPUShaderModule` instances for vertex + fragment shaders)
+- For pipeline-owned objects like `WGPURenderPipeline`, `WGPUBindGroup`, etc.,
+  always use `new` since the native backend takes ownership
+
+### WGPUTextureViewDescriptor Fields Must Be Set
+
+`WGPUTextureViewDescriptor.obtain()` does NOT initialize `mipLevelCount` (defaults to 0).
+wgpu-native panics with "invalid mipLevelCount" if this is 0. Always set:
+```java
+viewDesc.setMipLevelCount(1);
+viewDesc.setBaseMipLevel(0);
+viewDesc.setBaseArrayLayer(0);
+viewDesc.setArrayLayerCount(1);
+viewDesc.setDimension(WGPUTextureViewDimension._2D);
+viewDesc.setFormat(format);
+viewDesc.setAspect(WGPUTextureAspect.All);
+```
+
+### WGPURenderPassColorAttachment Pattern
+
+The render pass color attachment must follow this exact pattern (from official demos):
+```java
+var colorAttachment = WGPURenderPassColorAttachment.obtain();
+colorAttachment.setView(textureView);
+colorAttachment.setResolveTarget(WGPUTextureView.NULL);  // explicit NULL
+colorAttachment.setLoadOp(WGPULoadOp.Clear);
+colorAttachment.setStoreOp(WGPUStoreOp.Store);
+colorAttachment.getClearValue().setColor(r, g, b, a);
+
+var colorVec = WGPUVectorRenderPassColorAttachment.obtain();
+colorVec.push_back(colorAttachment);
+
+var rpDesc = WGPURenderPassDescriptor.obtain();
+rpDesc.setColorAttachments(colorVec);
+rpDesc.setDepthStencilAttachment(WGPURenderPassDepthStencilAttachment.NULL);
+rpDesc.setTimestampWrites(WGPURenderPassTimestampWrites.NULL);
+```
+
+Do NOT call `reset()` on the color attachment - it may clear fields unexpectedly.
+Do NOT set `setDepthSlice()` - let it default.
+
+### Buffer Usage Flags (Bitmask via CUSTOM)
+
+jWebGPU uses Java enums for buffer usage, but they need OR-combining. Use:
+```java
+int usage = WGPUBufferUsage.Uniform.getValue() | WGPUBufferUsage.CopyDst.getValue();
+bufDesc.setUsage(WGPUBufferUsage.CUSTOM.setValue(usage));
+```
+
+### No getBindGroupLayout on WGPURenderPipeline
+
+jWebGPU 0.1.15 does not expose `wgpuRenderPipelineGetBindGroupLayout`. Build
+explicit bind group layouts by parsing WGSL source for `@binding(N) @group(0)`
+declarations, then create a `WGPUPipelineLayout` with those layouts.
+
+## Previous Custom FFM Backend
+
+The notes below document the previous custom FFM (Foreign Function & Memory) binding
+approach, kept for reference.
+
+### Library Loading (FFM)
+
+wgpu-native was auto-downloaded via `NativeLibraryLoader` using `WgpuSpec.java`.
 The library caches to `~/.engine/natives/wgpu-native/<version>/<platform>/`.
 
 Release archives from https://github.com/gfx-rs/wgpu-native/releases contain:
@@ -212,57 +297,52 @@ before passing them to `ShaderManager.getShaderWithMaterial()` and
 `uploadMaterialData()`. Render state keys control pipeline state, not shader
 uniforms.
 
-## Surface-Based Rendering (GLFW Window)
+## Offscreen Rendering (Surface Deferred)
 
-`WgpuRenderDevice` now follows the same pattern as GL and VK backends: it takes
-a `WindowHandle` from GLFW and creates a `WGPUSurface` for presentation.
+`WgpuRenderDevice` currently uses offscreen-only rendering. Surface creation is
+deferred to avoid wgpu-native v24 lifecycle issues on Wayland.
 
-### Architecture
+### The "SurfaceOutput must be dropped" Problem
 
-1. Constructor detects the platform (X11 or Wayland) and creates the appropriate surface
-2. Surface is configured with BGRA8Unorm format (standard for swap chains)
-3. Each frame: acquire surface texture, render to offscreen RT, copy to surface, present
-4. Readback reads from the offscreen BGRA8 RT and swaps B/R channels to produce RGBA
+On wgpu-native v24 with Wayland, calling `wgpuSurfaceConfigure` after
+`wgpuSurfaceGetCapabilities` (used for format querying) causes:
+```
+Validation Error: `SurfaceOutput` must be dropped before a new `Surface` is made
+```
 
-### Surface Creation (X11 and Wayland)
+This appears to be a wgpu-native internal state issue where the capabilities query
+creates state that isn't properly cleaned up before surface configuration. The error
+does not occur on X11.
 
-The constructor detects the GLFW platform via `GLFW.glfwGetPlatform()` and creates
-the appropriate surface:
+### Current Approach
 
-- **X11**: Uses `WGPUSurfaceSourceXlibWindow` (SType `0x00020003`) with
-  `GLFWNativeX11.glfwGetX11Display()` / `glfwGetX11Window()`.
-- **Wayland**: Uses `WGPUSurfaceSourceWaylandSurface` (SType `0x00020004`) with
-  `GLFWNativeWayland.glfwGetWaylandDisplay()` / `glfwGetWaylandWindow()`.
+1. Constructor creates Instance, Adapter, Device, Queue — but **no Surface**
+2. Default render target uses RGBA8 format (standard for readback)
+3. `beginFrame()` creates a command encoder without acquiring a surface texture
+4. `endFrame()` submits commands without copy-to-surface or present
+5. `readFramebuffer()` reads directly from the offscreen render target
 
-On Wayland systems without XWayland, the old X11-only code would crash with
-"Unsupported Surface". The platform detection handles this automatically.
+The GLFW window is still created (for API compatibility with GL/VK backends) but
+is not used for presentation. This is sufficient for screenshot tests and headless
+rendering.
 
-### Default Render Target
+### Future: Surface-Based Presentation
 
-The offscreen render target uses **BGRA8** format (not RGBA8) to match the surface
-texture format. This enables direct texture-to-texture copy for presentation.
-`readFramebuffer()` swaps B and R channels when returning RGBA pixel data.
+When windowed display is needed, surface creation can be re-enabled. The key pieces
+are preserved:
+- `copyTextureToSurface()` method exists for offscreen RT to surface copy
+- `close()` handles surface cleanup with null guards
+- Surface creation code (X11/Wayland detection) can be restored from git history
 
-### Key Behaviors
+To fix the Wayland issue, try:
+1. Calling `wgpuSurfaceCapabilitiesFreeMembers` before `surfaceConfigure`
+2. Using a separate adapter request with surface-compatible options
+3. Testing with newer wgpu-native releases (v25+)
 
-- `ensureDefaultRenderTarget(w, h)` creates an offscreen RT matching the surface format + DEPTH32F
-- `beginFrame()` acquires the surface texture and creates a texture view
-- `endFrame()` copies offscreen RT to surface texture, then presents
-- `readFramebuffer()` reads from the offscreen RT with BGRA-to-RGBA conversion
-- `close()` releases the surface before releasing device/adapter/instance
-
-## Surface Format: Query Capabilities, Don't Hardcode
+### Surface Format Notes
 
 **Never hardcode BGRA8 as the surface format.** The preferred format varies by platform
-and GPU driver. Hardcoding BGRA8 causes `Validation Error` on systems that only support
-RGBA8 (or vice versa).
-
-Use `wgpuSurfaceGetCapabilities` to query supported formats, then pick the first one
-(which is the preferred format per the WebGPU spec). The helper
-`WgpuNative.surfaceGetPreferredFormat(surface, adapter, arena)` does this.
-
-The offscreen render target must also use the matching format so that texture-to-texture
-copy to the surface works without format conversion.
+and GPU driver. Use `wgpuSurfaceGetCapabilities` to query supported formats.
 
 **Important:** `wgpuSurfaceCapabilitiesFreeMembers` takes the struct **by value** (64 bytes),
 not by pointer. In the FFM binding, the `FunctionDescriptor` must use `SURFACE_CAPABILITIES_LAYOUT`
