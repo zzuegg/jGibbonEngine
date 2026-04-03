@@ -30,6 +30,7 @@ import dev.engine.graphics.sync.GpuFence;
 import dev.engine.graphics.sampler.FilterMode;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.sampler.WrapMode;
+import dev.engine.graphics.renderstate.*;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureFormat;
 import org.lwjgl.glfw.GLFW;
@@ -489,9 +490,32 @@ public class GlRenderDevice implements RenderDevice {
             case RenderCommand.Scissor cmd -> {
                 GL45.glScissor(cmd.x(), cmd.y(), cmd.width(), cmd.height());
             }
-            case RenderCommand.SetRenderState state -> {
-                // TODO: implement in Task 17
-                log.warn("SetRenderState not yet implemented in OpenGL backend");
+            case RenderCommand.SetRenderState(var props) -> {
+                if (props.contains(RenderState.DEPTH_TEST)) {
+                    if (props.get(RenderState.DEPTH_TEST)) GL45.glEnable(GL45.GL_DEPTH_TEST);
+                    else GL45.glDisable(GL45.GL_DEPTH_TEST);
+                }
+                if (props.contains(RenderState.DEPTH_WRITE)) {
+                    GL45.glDepthMask(props.get(RenderState.DEPTH_WRITE));
+                }
+                if (props.contains(RenderState.DEPTH_FUNC)) {
+                    GL45.glDepthFunc(mapCompareFunc(props.get(RenderState.DEPTH_FUNC)));
+                }
+                if (props.contains(RenderState.BLEND_MODE)) {
+                    applyBlendMode(props.get(RenderState.BLEND_MODE));
+                }
+                if (props.contains(RenderState.CULL_MODE)) {
+                    applyCullMode(props.get(RenderState.CULL_MODE));
+                }
+                if (props.contains(RenderState.FRONT_FACE)) {
+                    GL45.glFrontFace(props.get(RenderState.FRONT_FACE) == FrontFace.CCW ? GL45.GL_CCW : GL45.GL_CW);
+                }
+                if (props.contains(RenderState.WIREFRAME)) {
+                    GL45.glPolygonMode(GL45.GL_FRONT_AND_BACK, props.get(RenderState.WIREFRAME) ? GL45.GL_LINE : GL45.GL_FILL);
+                }
+                if (props.contains(RenderState.LINE_WIDTH)) {
+                    GL45.glLineWidth(props.get(RenderState.LINE_WIDTH));
+                }
             }
             case RenderCommand.PushConstants pc -> {
                 // TODO: implement in Task 18
@@ -629,5 +653,43 @@ public class GlRenderDevice implements RenderDevice {
         if (pattern == AccessPattern.DYNAMIC) return GL45.GL_DYNAMIC_DRAW;
         if (pattern == AccessPattern.STREAM) return GL45.GL_STREAM_DRAW;
         return GL45.GL_STATIC_DRAW;
+    }
+
+    private static int mapCompareFunc(CompareFunc func) {
+        if (func == CompareFunc.LESS) return GL45.GL_LESS;
+        if (func == CompareFunc.LEQUAL) return GL45.GL_LEQUAL;
+        if (func == CompareFunc.GREATER) return GL45.GL_GREATER;
+        if (func == CompareFunc.GEQUAL) return GL45.GL_GEQUAL;
+        if (func == CompareFunc.EQUAL) return GL45.GL_EQUAL;
+        if (func == CompareFunc.NOT_EQUAL) return GL45.GL_NOTEQUAL;
+        if (func == CompareFunc.ALWAYS) return GL45.GL_ALWAYS;
+        if (func == CompareFunc.NEVER) return GL45.GL_NEVER;
+        return GL45.GL_LESS;
+    }
+
+    private static void applyBlendMode(BlendMode mode) {
+        if (mode == BlendMode.NONE) {
+            GL45.glDisable(GL45.GL_BLEND);
+        } else {
+            GL45.glEnable(GL45.GL_BLEND);
+            if (mode == BlendMode.ALPHA) {
+                GL45.glBlendFunc(GL45.GL_SRC_ALPHA, GL45.GL_ONE_MINUS_SRC_ALPHA);
+            } else if (mode == BlendMode.ADDITIVE) {
+                GL45.glBlendFunc(GL45.GL_SRC_ALPHA, GL45.GL_ONE);
+            } else if (mode == BlendMode.MULTIPLY) {
+                GL45.glBlendFunc(GL45.GL_DST_COLOR, GL45.GL_ZERO);
+            } else if (mode == BlendMode.PREMULTIPLIED) {
+                GL45.glBlendFunc(GL45.GL_ONE, GL45.GL_ONE_MINUS_SRC_ALPHA);
+            }
+        }
+    }
+
+    private static void applyCullMode(CullMode mode) {
+        if (mode == CullMode.NONE) {
+            GL45.glDisable(GL45.GL_CULL_FACE);
+        } else {
+            GL45.glEnable(GL45.GL_CULL_FACE);
+            GL45.glCullFace(mode == CullMode.FRONT ? GL45.GL_FRONT : GL45.GL_BACK);
+        }
     }
 }
