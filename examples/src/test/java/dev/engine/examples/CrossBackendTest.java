@@ -30,4 +30,17 @@ class CrossBackendTest {
         harness.assertCrossBackend(ScreenshotTestSuite.PBR_MATERIALS, "pbr_materials",
             RenderTestHarness.Tolerance.loose());
     }
+
+    @Test void renderToTexture() {
+        harness.assertCrossBackend(ScreenshotTestSuite.RENDER_TO_TEXTURE, "render_to_texture",
+            RenderTestHarness.Tolerance.loose());
+    }
+
+    @Test void mixedRenderStates() {
+        harness.assertCrossBackend(ScreenshotTestSuite.MIXED_RENDER_STATES, "mixed_render_states",
+            RenderTestHarness.Tolerance.loose());
+    }
+
+    // Wireframe is not cross-backend comparable — Vulkan doesn't support dynamic polygon mode.
+    // Per-backend wireframe tests exist in OpenGlRenderTest and VulkanRenderTest.
 }

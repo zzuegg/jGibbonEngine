@@ -26,4 +26,16 @@ class VulkanRenderTest {
     @Test void pbrMaterials() throws IOException {
         harness.assertVulkanMatchesReference(ScreenshotTestSuite.PBR_MATERIALS, "pbr_materials");
     }
+
+    @Test void renderToTexture() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.RENDER_TO_TEXTURE, "render_to_texture");
+    }
+
+    @Test void mixedRenderStates() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.MIXED_RENDER_STATES, "mixed_render_states");
+    }
+
+    @Test void forcedWireframe() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.FORCED_WIREFRAME, "forced_wireframe");
+    }
 }

@@ -75,6 +75,63 @@ public final class ScreenshotTestSuite {
         quad.add(Transform.IDENTITY);
     };
 
+    /** Render-to-texture — creates an RT, clears it, then renders the scene normally. */
+    static final RenderTestScene RENDER_TO_TEXTURE = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        var cube = renderer.scene().createEntity();
+        cube.add(PrimitiveMeshes.cube());
+        cube.add(MaterialData.unlit(new Vec3(0.3f, 0.7f, 0.3f)));
+        cube.add(Transform.at(0, 0, 0));
+    };
+
+    /** Multiple materials with different cull modes in a single scene. */
+    static final RenderTestScene MIXED_RENDER_STATES = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 3, 8), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Opaque cube with back-face culling (default)
+        var opaque = renderer.scene().createEntity();
+        opaque.add(PrimitiveMeshes.cube());
+        opaque.add(MaterialData.unlit(new Vec3(0.8f, 0.2f, 0.2f)));
+        opaque.add(Transform.at(-2, 0, 0));
+
+        // Cube with front-face culling (shows inside)
+        var frontCull = renderer.scene().createEntity();
+        frontCull.add(PrimitiveMeshes.cube());
+        frontCull.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f))
+            .set(RenderState.CULL_MODE, CullMode.FRONT));
+        frontCull.add(Transform.at(2, 0, 0));
+
+        // Cube with no culling (both faces visible)
+        var noCull = renderer.scene().createEntity();
+        noCull.add(PrimitiveMeshes.cube());
+        noCull.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f))
+            .set(RenderState.CULL_MODE, CullMode.NONE));
+        noCull.add(Transform.at(0, 0, -2));
+    };
+
+    /** Wireframe mode via forced property — all geometry rendered as wireframe. */
+    static final RenderTestScene FORCED_WIREFRAME = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Force wireframe on everything
+        renderer.forceProperty(RenderState.WIREFRAME, true);
+
+        var sphere = renderer.scene().createEntity();
+        sphere.add(PrimitiveMeshes.sphere());
+        sphere.add(MaterialData.unlit(new Vec3(1f, 1f, 1f)));
+        sphere.add(Transform.IDENTITY);
+    };
+
     /** PBR material test — rough vs metallic spheres. */
     static final RenderTestScene PBR_MATERIALS = (renderer, w, h) -> {
         var cam = renderer.createCamera();

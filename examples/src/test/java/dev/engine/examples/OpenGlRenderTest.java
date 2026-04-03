@@ -26,4 +26,16 @@ class OpenGlRenderTest {
     @Test void pbrMaterials() throws IOException {
         harness.assertOpenGlMatchesReference(ScreenshotTestSuite.PBR_MATERIALS, "pbr_materials");
     }
+
+    @Test void renderToTexture() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.RENDER_TO_TEXTURE, "render_to_texture");
+    }
+
+    @Test void mixedRenderStates() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.MIXED_RENDER_STATES, "mixed_render_states");
+    }
+
+    @Test void forcedWireframe() throws IOException {
+        harness.assertOpenGlMatchesReference(ScreenshotTestSuite.FORCED_WIREFRAME, "forced_wireframe");
+    }
 }
