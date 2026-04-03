@@ -5,6 +5,7 @@ import dev.engine.core.handle.HandlePool;
 import dev.engine.core.property.PropertyMap;
 import dev.engine.graphics.BufferResource;
 import dev.engine.graphics.PipelineResource;
+import dev.engine.graphics.TextureResource;
 import dev.engine.graphics.VertexInputResource;
 import dev.engine.graphics.renderstate.BarrierScope;
 import dev.engine.graphics.renderstate.BlendMode;
@@ -157,6 +158,38 @@ class CommandListTest {
         var cmd = (RenderCommand.DrawIndexedInstanced) list.commands().getFirst();
         assertEquals(36, cmd.indexCount());
         assertEquals(50, cmd.instanceCount());
+    }
+
+    @Test void copyBufferCommand() {
+        var pool = new HandlePool<BufferResource>();
+        var src = pool.allocate();
+        var dst = pool.allocate();
+        var recorder = new CommandRecorder();
+        recorder.copyBuffer(src, dst, 0, 0, 1024);
+        var list = recorder.finish();
+        var cmd = (RenderCommand.CopyBuffer) list.commands().getFirst();
+        assertEquals(1024, cmd.size());
+    }
+
+    @Test void copyTextureCommand() {
+        var pool = new HandlePool<TextureResource>();
+        var src = pool.allocate();
+        var dst = pool.allocate();
+        var recorder = new CommandRecorder();
+        recorder.copyTexture(src, dst, 0, 0, 0, 0, 256, 256);
+        var list = recorder.finish();
+        assertInstanceOf(RenderCommand.CopyTexture.class, list.commands().getFirst());
+    }
+
+    @Test void blitTextureCommand() {
+        var pool = new HandlePool<TextureResource>();
+        var src = pool.allocate();
+        var dst = pool.allocate();
+        var recorder = new CommandRecorder();
+        recorder.blitTexture(src, dst, 0, 0, 512, 512, 0, 0, 256, 256, true);
+        var list = recorder.finish();
+        var cmd = (RenderCommand.BlitTexture) list.commands().getFirst();
+        assertTrue(cmd.linearFilter());
     }
 
     @Test void uniformAndTextureBindingRecorded() {

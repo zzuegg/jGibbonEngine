@@ -58,4 +58,12 @@ public sealed interface RenderCommand {
     record Clear(float r, float g, float b, float a) implements RenderCommand {}
     record Viewport(int x, int y, int width, int height) implements RenderCommand {}
     record Scissor(int x, int y, int width, int height) implements RenderCommand {}
+
+    // --- Transfer commands ---
+    record CopyBuffer(Handle<BufferResource> src, Handle<BufferResource> dst, long srcOffset, long dstOffset, long size) implements RenderCommand {}
+    record CopyTexture(Handle<TextureResource> src, Handle<TextureResource> dst,
+        int srcX, int srcY, int dstX, int dstY, int width, int height, int srcMipLevel, int dstMipLevel) implements RenderCommand {}
+    record BlitTexture(Handle<TextureResource> src, Handle<TextureResource> dst,
+        int srcX0, int srcY0, int srcX1, int srcY1,
+        int dstX0, int dstY0, int dstX1, int dstY1, boolean linearFilter) implements RenderCommand {}
 }

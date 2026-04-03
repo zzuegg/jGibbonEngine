@@ -591,6 +591,33 @@ public class GlRenderDevice implements RenderDevice {
             case RenderCommand.Dispatch(int gx, int gy, int gz) -> {
                 GL45.glDispatchCompute(gx, gy, gz);
             }
+            case RenderCommand.CopyBuffer(var src, var dst, long srcOff, long dstOff, long size) -> {
+                int srcBuf = buffers.get(src).glName();
+                int dstBuf = buffers.get(dst).glName();
+                GL45.glCopyNamedBufferSubData(srcBuf, dstBuf, srcOff, dstOff, size);
+            }
+            case RenderCommand.CopyTexture(var src, var dst, int sx, int sy, int dx, int dy, int w, int h, int srcMip, int dstMip) -> {
+                int srcTex = textures.get(src).glName();
+                int dstTex = textures.get(dst).glName();
+                GL45.glCopyImageSubData(srcTex, GL45.GL_TEXTURE_2D, srcMip, sx, sy, 0,
+                                        dstTex, GL45.GL_TEXTURE_2D, dstMip, dx, dy, 0, w, h, 1);
+            }
+            case RenderCommand.BlitTexture(var src, var dst,
+                    int sx0, int sy0, int sx1, int sy1,
+                    int dx0, int dy0, int dx1, int dy1, boolean linear) -> {
+                // BlitFramebuffer requires FBO binding — create temp FBOs
+                int srcFbo = GL45.glCreateFramebuffers();
+                int dstFbo = GL45.glCreateFramebuffers();
+                int srcTex = textures.get(src).glName();
+                int dstTex = textures.get(dst).glName();
+                GL45.glNamedFramebufferTexture(srcFbo, GL45.GL_COLOR_ATTACHMENT0, srcTex, 0);
+                GL45.glNamedFramebufferTexture(dstFbo, GL45.GL_COLOR_ATTACHMENT0, dstTex, 0);
+                GL45.glBlitNamedFramebuffer(srcFbo, dstFbo,
+                    sx0, sy0, sx1, sy1, dx0, dy0, dx1, dy1,
+                    GL45.GL_COLOR_BUFFER_BIT, linear ? GL45.GL_LINEAR : GL45.GL_NEAREST);
+                GL45.glDeleteFramebuffers(srcFbo);
+                GL45.glDeleteFramebuffers(dstFbo);
+            }
             case RenderCommand.MemoryBarrier(var scope) -> {
                 int bits;
                 if (scope == dev.engine.graphics.renderstate.BarrierScope.STORAGE_BUFFER) {

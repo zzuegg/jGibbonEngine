@@ -63,6 +63,24 @@ public class CommandRecorder {
     public void viewport(int x, int y, int width, int height) { commands.add(new RenderCommand.Viewport(x, y, width, height)); }
     public void scissor(int x, int y, int width, int height) { commands.add(new RenderCommand.Scissor(x, y, width, height)); }
 
+    // --- Transfer commands ---
+    public void copyBuffer(Handle<BufferResource> src, Handle<BufferResource> dst, long srcOffset, long dstOffset, long size) {
+        commands.add(new RenderCommand.CopyBuffer(src, dst, srcOffset, dstOffset, size));
+    }
+    public void copyTexture(Handle<TextureResource> src, Handle<TextureResource> dst,
+            int srcX, int srcY, int dstX, int dstY, int width, int height) {
+        commands.add(new RenderCommand.CopyTexture(src, dst, srcX, srcY, dstX, dstY, width, height, 0, 0));
+    }
+    public void copyTexture(Handle<TextureResource> src, Handle<TextureResource> dst,
+            int srcX, int srcY, int dstX, int dstY, int width, int height, int srcMipLevel, int dstMipLevel) {
+        commands.add(new RenderCommand.CopyTexture(src, dst, srcX, srcY, dstX, dstY, width, height, srcMipLevel, dstMipLevel));
+    }
+    public void blitTexture(Handle<TextureResource> src, Handle<TextureResource> dst,
+            int srcX0, int srcY0, int srcX1, int srcY1,
+            int dstX0, int dstY0, int dstX1, int dstY1, boolean linearFilter) {
+        commands.add(new RenderCommand.BlitTexture(src, dst, srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, linearFilter));
+    }
+
     /** Finishes recording and returns an immutable CommandList. */
     public CommandList finish() {
         return new CommandList(new ArrayList<>(commands));

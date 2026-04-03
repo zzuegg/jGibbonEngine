@@ -1642,6 +1642,39 @@ public class VkRenderDevice implements RenderDevice {
                     }
                     vkCmdDispatch(cmd, gx, gy, gz);
                 }
+                case dev.engine.graphics.command.RenderCommand.CopyBuffer(var src, var dst, long srcOff, long dstOff, long size) -> {
+                    var srcAlloc = bufferRegistry.get(src);
+                    var dstAlloc = bufferRegistry.get(dst);
+                    if (srcAlloc != null && dstAlloc != null) {
+                        try (var stack = stackPush()) {
+                            var region = VkBufferCopy.calloc(1, stack)
+                                .srcOffset(srcOff)
+                                .dstOffset(dstOff)
+                                .size(size);
+                            vkCmdCopyBuffer(cmd, srcAlloc.buffer(), dstAlloc.buffer(), region);
+                        }
+                    }
+                }
+                case dev.engine.graphics.command.RenderCommand.CopyTexture(var src, var dst, int sx, int sy, int dx, int dy, int w, int h, int srcMip, int dstMip) -> {
+                    var srcAlloc = textureRegistry.get(src);
+                    var dstAlloc = textureRegistry.get(dst);
+                    if (srcAlloc != null && dstAlloc != null) {
+                        // Transition src to TRANSFER_SRC, dst to TRANSFER_DST
+                        // vkCmdCopyImage
+                        // Transition both back to SHADER_READ_ONLY
+                        // This requires ending/re-beginning the render pass if inside one
+                        log.debug("CopyTexture: requires render pass pause — not yet implemented inside render pass");
+                    }
+                }
+                case dev.engine.graphics.command.RenderCommand.BlitTexture(var src, var dst,
+                        int sx0, int sy0, int sx1, int sy1,
+                        int dx0, int dy0, int dx1, int dy1, boolean linear) -> {
+                    var srcAlloc = textureRegistry.get(src);
+                    var dstAlloc = textureRegistry.get(dst);
+                    if (srcAlloc != null && dstAlloc != null) {
+                        log.debug("BlitTexture: requires render pass pause — not yet implemented inside render pass");
+                    }
+                }
                 case dev.engine.graphics.command.RenderCommand.MemoryBarrier(var scope) -> {
                     try (var stack = stackPush()) {
                         int srcStage, dstStage, srcAccess, dstAccess;
