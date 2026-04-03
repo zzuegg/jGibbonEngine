@@ -3,6 +3,7 @@ package dev.engine.providers.teavm.webgpu;
 import dev.engine.core.memory.NativeMemory;
 import dev.engine.platform.Platform;
 import dev.engine.graphics.RenderDevice;
+import dev.engine.graphics.shader.ShaderCompiler;
 import dev.engine.graphics.webgpu.WgpuRenderDevice;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
@@ -29,6 +30,11 @@ public class WebPlatform implements Platform {
     @Override
     public RenderDevice createRenderDevice(WindowHandle window, int width, int height) {
         return new WgpuRenderDevice(window, new TeaVmWgpuBindings());
+    }
+
+    @Override
+    public ShaderCompiler createShaderCompiler() {
+        return new TeaVmShaderCompiler();
     }
 
     @Override

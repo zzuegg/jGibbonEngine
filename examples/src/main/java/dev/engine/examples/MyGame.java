@@ -4,6 +4,7 @@ import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.Entity;
 import dev.engine.core.scene.component.Transform;
+import dev.engine.bindings.slang.SlangShaderCompiler;
 import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
@@ -71,6 +72,7 @@ public class MyGame extends BaseApplication {
                 .maxFrames(Integer.getInteger("engine.maxFrames", 0))
                 .build();
 
+        var compiler = new SlangShaderCompiler();
         var factory = switch (backend) {
             case "vulkan" -> {
                 var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
@@ -81,9 +83,9 @@ public class MyGame extends BaseApplication {
                     public long createSurface(long instance, long windowHandle) {
                         return GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
                     }
-                }, new LwjglVkBindings());
+                }, new LwjglVkBindings(), compiler);
             }
-            default -> OpenGlBackend.factory(new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
+            default -> OpenGlBackend.factory(new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings(), compiler);
         };
 
         new MyGame().launch(config, factory);

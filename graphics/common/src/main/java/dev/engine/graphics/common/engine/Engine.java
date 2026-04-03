@@ -15,7 +15,9 @@ import dev.engine.core.scene.AbstractScene;
 import dev.engine.core.scene.Scene;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.common.HeadlessRenderDevice;
+import dev.engine.graphics.common.NoOpShaderCompiler;
 import dev.engine.graphics.common.Renderer;
+import dev.engine.graphics.shader.ShaderCompiler;
 import dev.engine.core.mesh.ObjLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,10 +60,14 @@ public class Engine {
     private double totalTime = 0;
 
     public Engine(EngineConfig config) {
-        this(config, config.headless() ? new HeadlessRenderDevice() : null);
+        this(config, config.headless() ? new HeadlessRenderDevice() : null, new NoOpShaderCompiler());
     }
 
     public Engine(EngineConfig config, RenderDevice device) {
+        this(config, device, new NoOpShaderCompiler());
+    }
+
+    public Engine(EngineConfig config, RenderDevice device, ShaderCompiler compiler) {
         this.config = config;
 
         // Scene
@@ -80,7 +86,7 @@ public class Engine {
 
         // Renderer — connected to asset manager for shader hot-reload
         if (device == null) device = new HeadlessRenderDevice();
-        this.renderer = new Renderer(device, scene);
+        this.renderer = new Renderer(device, scene, compiler);
         this.renderer.shaderManager().setAssetManager(assets);
 
         // Module manager

@@ -40,6 +40,7 @@ import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.core.mesh.VertexFormat;
 
 import dev.engine.core.memory.NativeMemory;
+import dev.engine.graphics.shader.ShaderCompiler;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -111,11 +112,11 @@ public class Renderer implements AutoCloseable {
     private int viewportHeight = 600;
 
 
-    public Renderer(RenderDevice device) {
-        this(device, new Scene());
+    public Renderer(RenderDevice device, ShaderCompiler compiler) {
+        this(device, new Scene(), compiler);
     }
 
-    public Renderer(RenderDevice device, AbstractScene scene) {
+    public Renderer(RenderDevice device, AbstractScene scene, ShaderCompiler compiler) {
         this.device = device;
         this.scene = scene;
         this.meshRenderer = new MeshRenderer();
@@ -126,7 +127,7 @@ public class Renderer implements AutoCloseable {
         globalParams.register("Camera", CameraParams.class, 1);
         globalParams.register("Object", ObjectParams.class, 2);
 
-        this.shaderManager = new ShaderManager(device, globalParams);
+        this.shaderManager = new ShaderManager(device, globalParams, compiler);
 
         // Create GPU buffers for each registered global using STD140 layout
         // (UBOs require std140 alignment for cross-backend compatibility)
@@ -153,7 +154,7 @@ public class Renderer implements AutoCloseable {
      * Creates a headless renderer with a stub backend for testing.
      */
     public static Renderer createHeadless() {
-        return new Renderer(new HeadlessRenderDevice());
+        return new Renderer(new HeadlessRenderDevice(), new NoOpShaderCompiler());
     }
 
     // --- Scene access ---

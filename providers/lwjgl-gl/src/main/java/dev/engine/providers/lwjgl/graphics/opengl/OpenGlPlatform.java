@@ -1,10 +1,12 @@
 package dev.engine.providers.lwjgl.graphics.opengl;
 
+import dev.engine.bindings.slang.SlangShaderCompiler;
 import dev.engine.core.memory.NativeMemory;
 import dev.engine.core.memory.SegmentNativeMemory;
 import dev.engine.platform.Platform;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.opengl.GlRenderDevice;
+import dev.engine.graphics.shader.ShaderCompiler;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
@@ -29,6 +31,11 @@ public class OpenGlPlatform implements Platform {
     @Override
     public RenderDevice createRenderDevice(WindowHandle window, int width, int height) {
         return new GlRenderDevice(window, new LwjglGlBindings());
+    }
+
+    @Override
+    public ShaderCompiler createShaderCompiler() {
+        return new SlangShaderCompiler();
     }
 
     @Override

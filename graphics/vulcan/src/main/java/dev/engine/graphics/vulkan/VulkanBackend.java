@@ -1,6 +1,7 @@
 package dev.engine.graphics.vulkan;
 
 import dev.engine.graphics.common.engine.BaseApplication;
+import dev.engine.graphics.shader.ShaderCompiler;
 import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowToolkit;
 
@@ -32,6 +33,14 @@ public final class VulkanBackend {
             WindowToolkit toolkit,
             SurfaceCreator surfaceCreator,
             VkBindings vk) {
+        return factory(toolkit, surfaceCreator, vk, null);
+    }
+
+    public static BaseApplication.BackendFactory factory(
+            WindowToolkit toolkit,
+            SurfaceCreator surfaceCreator,
+            VkBindings vk,
+            ShaderCompiler compiler) {
         return config -> {
             var window = toolkit.createWindow(
                     new WindowDescriptor(config.windowTitle(), config.windowWidth(), config.windowHeight()));
@@ -40,6 +49,9 @@ public final class VulkanBackend {
             var device = new VkRenderDevice(vk, extensions,
                     instance -> surfaceCreator.createSurface(instance, windowHandle),
                     window.width(), window.height());
+            if (compiler != null) {
+                return new BaseApplication.BackendInstance(toolkit, window, device, compiler);
+            }
             return new BaseApplication.BackendInstance(toolkit, window, device);
         };
     }

@@ -9,7 +9,9 @@ import dev.engine.core.profiler.RenderStats;
 import dev.engine.core.scene.AbstractScene;
 import dev.engine.core.scene.camera.Camera;
 import dev.engine.graphics.RenderDevice;
+import dev.engine.graphics.common.NoOpShaderCompiler;
 import dev.engine.graphics.common.Renderer;
+import dev.engine.graphics.shader.ShaderCompiler;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
 import org.slf4j.Logger;
@@ -56,7 +58,7 @@ public abstract class BaseApplication {
             var backend = factory.create(config);
             this.toolkit = backend.toolkit();
             this.window = backend.window();
-            runInternal(config, backend.device());
+            runInternal(config, backend.device(), backend.compiler());
         } catch (Exception e) {
             log.error("Failed to launch application", e);
             throw new RuntimeException(e);
@@ -68,7 +70,12 @@ public abstract class BaseApplication {
         BackendInstance create(EngineConfig config);
     }
 
-    public record BackendInstance(WindowToolkit toolkit, WindowHandle window, RenderDevice device) {}
+    public record BackendInstance(WindowToolkit toolkit, WindowHandle window, RenderDevice device, ShaderCompiler compiler) {
+        /** Backward-compatible constructor without compiler. */
+        public BackendInstance(WindowToolkit toolkit, WindowHandle window, RenderDevice device) {
+            this(toolkit, window, device, new NoOpShaderCompiler());
+        }
+    }
 
     /**
      * Starts the application with explicit toolkit and render device.
@@ -79,11 +86,19 @@ public abstract class BaseApplication {
         this.window = toolkit.createWindow(
                 new dev.engine.graphics.window.WindowDescriptor(
                         config.windowTitle(), config.windowWidth(), config.windowHeight()));
-        runInternal(config, device);
+        runInternal(config, device, new NoOpShaderCompiler());
     }
 
-    private void runInternal(EngineConfig config, RenderDevice device) {
-        this.engine = new Engine(config, device);
+    public void run(EngineConfig config, WindowToolkit toolkit, RenderDevice device, ShaderCompiler compiler) {
+        this.toolkit = toolkit;
+        this.window = toolkit.createWindow(
+                new dev.engine.graphics.window.WindowDescriptor(
+                        config.windowTitle(), config.windowWidth(), config.windowHeight()));
+        runInternal(config, device, compiler);
+    }
+
+    private void runInternal(EngineConfig config, RenderDevice device, ShaderCompiler compiler) {
+        this.engine = new Engine(config, device, compiler);
         this.input = new InputState();
 
         // Default camera

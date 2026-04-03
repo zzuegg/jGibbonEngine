@@ -1,5 +1,6 @@
 package dev.engine.examples;
 
+import dev.engine.bindings.slang.SlangShaderCompiler;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.ScreenshotHelper;
 import dev.engine.graphics.common.Renderer;
@@ -214,7 +215,7 @@ public class RenderTestHarness {
     }
 
     private byte[] renderWith(RenderDevice device, RenderTestScene scene) {
-        var renderer = new Renderer(device);
+        var renderer = new Renderer(device, new SlangShaderCompiler());
         renderer.setViewport(width, height);
         scene.setup(renderer, width, height);
 

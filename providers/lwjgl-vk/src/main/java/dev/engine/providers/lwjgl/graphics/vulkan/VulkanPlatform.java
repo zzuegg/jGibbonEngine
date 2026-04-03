@@ -1,9 +1,11 @@
 package dev.engine.providers.lwjgl.graphics.vulkan;
 
+import dev.engine.bindings.slang.SlangShaderCompiler;
 import dev.engine.core.memory.NativeMemory;
 import dev.engine.core.memory.SegmentNativeMemory;
 import dev.engine.platform.Platform;
 import dev.engine.graphics.RenderDevice;
+import dev.engine.graphics.shader.ShaderCompiler;
 import dev.engine.graphics.vulkan.VkRenderDevice;
 import dev.engine.graphics.vulkan.VulkanBackend;
 import dev.engine.graphics.window.WindowHandle;
@@ -44,6 +46,11 @@ public class VulkanPlatform implements Platform {
                 new LwjglVkBindings(), extensions,
                 instance -> surfaceCreator.createSurface(instance, windowHandle),
                 width, height);
+    }
+
+    @Override
+    public ShaderCompiler createShaderCompiler() {
+        return new SlangShaderCompiler();
     }
 
     @Override

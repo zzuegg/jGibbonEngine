@@ -3,6 +3,7 @@ package dev.engine.examples;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.HierarchicalScene;
+import dev.engine.bindings.slang.SlangShaderCompiler;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
@@ -43,7 +44,7 @@ public class HighLevelSceneExample {
         // Create window + renderer
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Engine - High Level", 1024, 768));
-        var renderer = new Renderer(new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()));
+        var renderer = new Renderer(new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()), new SlangShaderCompiler());
         window.show();
 
         // Create default pipeline

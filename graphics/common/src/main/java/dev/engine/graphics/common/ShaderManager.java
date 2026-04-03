@@ -1,8 +1,5 @@
 package dev.engine.graphics.common;
 
-import dev.engine.bindings.slang.SlangCompilerNative;
-import dev.engine.bindings.slang.SlangNative;
-import dev.engine.bindings.slang.SlangReflection;
 import dev.engine.core.asset.AssetManager;
 import dev.engine.core.asset.SlangShaderSource;
 import dev.engine.graphics.DeviceCapability;
@@ -16,6 +13,7 @@ import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderBinary;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
+import dev.engine.graphics.shader.ShaderCompiler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,32 +37,32 @@ public class ShaderManager {
     private final RenderDevice device;
     private final Map<String, CompiledShader> shaderCache = new ConcurrentHashMap<>();
     private final GlobalParamsRegistry globalParams;
-    private final int slangTarget; // SlangNative.SLANG_GLSL or SLANG_SPIRV
+    private final int slangTarget; // ShaderCompiler.TARGET_GLSL / TARGET_SPIRV / TARGET_WGSL
     private AssetManager assetManager;
-    private final SlangCompilerNative nativeCompiler;
+    private final ShaderCompiler compiler;
 
-    public ShaderManager(RenderDevice device, GlobalParamsRegistry globalParams) {
+    public ShaderManager(RenderDevice device, GlobalParamsRegistry globalParams, ShaderCompiler compiler) {
         this.device = device;
         this.globalParams = globalParams;
+        this.compiler = compiler;
 
         // Detect target format from backend
         var backend = device.queryCapability(DeviceCapability.BACKEND_NAME);
         this.slangTarget = switch (backend) {
-            case "Vulkan" -> SlangNative.SLANG_SPIRV;
-            case "WebGPU" -> SlangNative.SLANG_WGSL;
-            default -> SlangNative.SLANG_GLSL;
+            case "Vulkan" -> ShaderCompiler.TARGET_SPIRV;
+            case "WebGPU" -> ShaderCompiler.TARGET_WGSL;
+            default -> ShaderCompiler.TARGET_GLSL;
         };
 
-        if (!SlangCompilerNative.isAvailable()) {
-            throw new RuntimeException("Slang native library not available — cannot compile shaders");
+        if (!compiler.isAvailable()) {
+            log.warn("Shader compiler is not available — shader compilation will fail at runtime");
         }
-        this.nativeCompiler = SlangCompilerNative.create();
         String targetName = switch (slangTarget) {
-            case SlangNative.SLANG_SPIRV -> "SPIRV";
-            case SlangNative.SLANG_WGSL -> "WGSL";
+            case ShaderCompiler.TARGET_SPIRV -> "SPIRV";
+            case ShaderCompiler.TARGET_WGSL -> "WGSL";
             default -> "GLSL";
         };
-        log.info("Using native Slang compiler (FFM bindings, target: {})", targetName);
+        log.info("Shader compiler: {} (target: {})", compiler.getClass().getSimpleName(), targetName);
     }
 
     public void setAssetManager(AssetManager assetManager) {
@@ -159,16 +157,12 @@ public class ShaderManager {
         log.info("Compiling Slang shader (auto-specialize): {}", name);
 
         var entryPoints = List.of(
-                new SlangCompilerNative.EntryPointDesc("vertexMain", SlangNative.SLANG_STAGE_VERTEX),
-                new SlangCompilerNative.EntryPointDesc("fragmentMain", SlangNative.SLANG_STAGE_FRAGMENT));
+                new ShaderCompiler.EntryPointDesc("vertexMain", ShaderCompiler.STAGE_VERTEX),
+                new ShaderCompiler.EntryPointDesc("fragmentMain", ShaderCompiler.STAGE_FRAGMENT));
 
-        try (var result = nativeCompiler.compileWithTypeMap(source, entryPoints, slangTarget, typeMap)) {
+        try (var result = compiler.compileWithTypeMap(source, entryPoints, slangTarget, typeMap)) {
             var pipeline = createPipelineFromResult(result);
-            // Pass generated GLSL for binding extraction (more reliable than reflection for GLSL)
-            var glslCodes = slangTarget == SlangNative.SLANG_GLSL
-                    ? new String[]{ result.code(0), result.code(1) }
-                    : null;
-            var bindings = extractBindings(result.reflection(), glslCodes);
+            var bindings = extractBindings(result);
             log.debug("Slang compiled: {} ({} bindings)", name, bindings.size());
             return new CompiledShader(pipeline, bindings);
         }
@@ -178,24 +172,21 @@ public class ShaderManager {
         log.info("Compiling Slang shader: {}", name);
 
         var entryPoints = List.of(
-                new SlangCompilerNative.EntryPointDesc("vertexMain", SlangNative.SLANG_STAGE_VERTEX),
-                new SlangCompilerNative.EntryPointDesc("fragmentMain", SlangNative.SLANG_STAGE_FRAGMENT));
+                new ShaderCompiler.EntryPointDesc("vertexMain", ShaderCompiler.STAGE_VERTEX),
+                new ShaderCompiler.EntryPointDesc("fragmentMain", ShaderCompiler.STAGE_FRAGMENT));
 
-        try (var result = nativeCompiler.compile(source, entryPoints, slangTarget)) {
+        try (var result = compiler.compile(source, entryPoints, slangTarget)) {
             var pipeline = createPipelineFromResult(result);
-            var glslCodes = slangTarget == SlangNative.SLANG_GLSL
-                    ? new String[]{ result.code(0), result.code(1) }
-                    : null;
-            var bindings = extractBindings(result.reflection(), glslCodes);
+            var bindings = extractBindings(result);
             log.debug("Slang compiled: {} ({} bindings)", name, bindings.size());
             return new CompiledShader(pipeline, bindings);
         }
     }
 
-    private Handle<PipelineResource> createPipelineFromResult(SlangCompilerNative.CompileResult result) {
+    private Handle<PipelineResource> createPipelineFromResult(ShaderCompiler.CompileResult result) {
         // Use standard vertex format (pos + normal + uv) for all shaders
         var standardFormat = dev.engine.graphics.common.mesh.PrimitiveMeshes.STANDARD_FORMAT;
-        if (slangTarget == SlangNative.SLANG_SPIRV) {
+        if (slangTarget == ShaderCompiler.TARGET_SPIRV) {
             return device.createPipeline(PipelineDescriptor.ofSpirv(
                     new ShaderBinary(ShaderStage.VERTEX, result.codeBytes(0)),
                     new ShaderBinary(ShaderStage.FRAGMENT, result.codeBytes(1)))
@@ -203,8 +194,8 @@ public class ShaderManager {
         } else {
             // For WGSL targets, Slang preserves original entry point names (vertexMain/fragmentMain).
             // For GLSL, Slang always renames to "main". Pass the correct names so backends can use them.
-            String vsEntry = (slangTarget == SlangNative.SLANG_WGSL) ? "vertexMain" : "main";
-            String fsEntry = (slangTarget == SlangNative.SLANG_WGSL) ? "fragmentMain" : "main";
+            String vsEntry = (slangTarget == ShaderCompiler.TARGET_WGSL) ? "vertexMain" : "main";
+            String fsEntry = (slangTarget == ShaderCompiler.TARGET_WGSL) ? "fragmentMain" : "main";
             return device.createPipeline(PipelineDescriptor.of(
                     new ShaderSource(ShaderStage.VERTEX, result.code(0), vsEntry),
                     new ShaderSource(ShaderStage.FRAGMENT, result.code(1), fsEntry))
@@ -263,7 +254,7 @@ public class ShaderManager {
                 // For WGSL/GLSL, let Slang auto-assign sequential bindings. Slang applies
                 // vk::binding to ALL targets (including WGSL), which would force texture
                 // bindings to index 16+ even in WebGPU where there's no such requirement.
-                if (slangTarget == SlangNative.SLANG_SPIRV) {
+                if (slangTarget == ShaderCompiler.TARGET_SPIRV) {
                     sb.append("[[vk::binding(").append(vkTexOffset + texIndex).append(")]]\n");
                 }
                 sb.append("Sampler2D ").append(texName).append(";\n");
@@ -298,93 +289,23 @@ public class ShaderManager {
         };
     }
 
-    private Map<String, CompiledShader.ParameterBinding> extractBindings(SlangReflection reflection) {
-        return extractBindings(reflection, null);
-    }
-
     /**
-     * Extracts bindings from Slang reflection, optionally augmenting with GLSL-parsed bindings.
-     * Slang reflection can report incorrect binding offsets for GLSL targets (particularly for
-     * textures), so we also parse the generated GLSL for {@code layout(binding = N)} annotations.
+     * Converts compiler-provided parameter info to CompiledShader bindings.
+     * The compiler implementations handle reflection and GLSL parsing internally.
      */
-    private Map<String, CompiledShader.ParameterBinding> extractBindings(SlangReflection reflection,
-                                                                         String[] generatedGlsl) {
+    private Map<String, CompiledShader.ParameterBinding> extractBindings(ShaderCompiler.CompileResult result) {
         var bindings = new HashMap<String, CompiledShader.ParameterBinding>();
-        if (reflection == null) return bindings;
-
-        // Parse GLSL for binding annotations if available (more reliable than reflection for GLSL targets)
-        var glslBindings = new HashMap<String, Integer>();
-        if (generatedGlsl != null) {
-            for (var glsl : generatedGlsl) {
-                if (glsl != null) parseGlslBindings(glsl, glslBindings);
-            }
-        }
-
-        for (var param : reflection.getParameters()) {
-            var name = param.name();
-            if (name == null) continue;
-
-            // Try GLSL-parsed binding first (more reliable), fall back to reflection
-            int binding;
-            if (glslBindings.containsKey(name)) {
-                binding = glslBindings.get(name);
-                log.debug("  Reflection: {} → GLSL binding={}", name, binding);
-            } else {
-                long bindingDTS = param.bindingOffset(dev.engine.bindings.slang.SlangReflection.SLANG_PARAMETER_CATEGORY_DESCRIPTOR_TABLE_SLOT);
-                long bindingCB = param.bindingOffset(dev.engine.bindings.slang.SlangReflection.SLANG_PARAMETER_CATEGORY_CONSTANT_BUFFER);
-                long bindingSR = param.bindingOffset(dev.engine.bindings.slang.SlangReflection.SLANG_PARAMETER_CATEGORY_SHADER_RESOURCE);
-                long bindingSS = param.bindingOffset(dev.engine.bindings.slang.SlangReflection.SLANG_PARAMETER_CATEGORY_SAMPLER_STATE);
-                binding = (int) Math.max(bindingDTS, Math.max(bindingCB, Math.max(bindingSR, bindingSS)));
-                log.debug("  Reflection: {} → DTS={}, CB={}, SR={}, SS={}, resolved={}", name, bindingDTS, bindingCB, bindingSR, bindingSS, binding);
-            }
-            var type = guessBindingType(name, binding);
-            bindings.put(name, new CompiledShader.ParameterBinding(name, binding, type));
+        for (var entry : result.parameters().entrySet()) {
+            var param = entry.getValue();
+            var type = switch (param.category()) {
+                case TEXTURE -> CompiledShader.BindingType.TEXTURE;
+                case SAMPLER -> CompiledShader.BindingType.SAMPLER;
+                case SHADER_RESOURCE -> CompiledShader.BindingType.STORAGE_BUFFER;
+                default -> CompiledShader.BindingType.CONSTANT_BUFFER;
+            };
+            bindings.put(entry.getKey(), new CompiledShader.ParameterBinding(param.name(), param.binding(), type));
         }
         return bindings;
-    }
-
-    /**
-     * Parses GLSL source for {@code layout(binding = N)} annotations followed by
-     * uniform declarations, extracting the parameter name (Slang-suffixed with _0) back
-     * to the original name.
-     */
-    private void parseGlslBindings(String glsl, Map<String, Integer> bindings) {
-        // Match: layout(binding = N) ... uniform ... paramName_0;
-        // Slang appends _0 suffix to parameter names in GLSL output
-        var pattern = java.util.regex.Pattern.compile(
-                "layout\\(binding\\s*=\\s*(\\d+)\\)\\s*\\n?" +
-                "(?:layout\\([^)]*\\)\\s*)?uniform\\s+\\w+\\s+(\\w+?)(?:_0)?\\s*\\{");
-        var matcher = pattern.matcher(glsl);
-        while (matcher.find()) {
-            int binding = Integer.parseInt(matcher.group(1));
-            String rawName = matcher.group(2);
-            // Strip Slang's SLANG_ParameterGroup_ prefix if present
-            String name = rawName.replace("block_SLANG_ParameterGroup_", "");
-            bindings.put(name, binding);
-        }
-
-        // Also match simple uniform declarations (samplers, textures):
-        // layout(binding = N)\nuniform sampler2D albedoTexture_0;
-        var simplePattern = java.util.regex.Pattern.compile(
-                "layout\\(binding\\s*=\\s*(\\d+)\\)\\s*\\n?" +
-                "uniform\\s+\\w+\\s+(\\w+?)_0\\s*;");
-        var simpleMatcher = simplePattern.matcher(glsl);
-        while (simpleMatcher.find()) {
-            int binding = Integer.parseInt(simpleMatcher.group(1));
-            String name = simpleMatcher.group(2);
-            bindings.put(name, binding);
-        }
-    }
-
-    private CompiledShader.BindingType guessBindingType(String name, int binding) {
-        // Heuristic based on name — reflection gives us the slot but not always the type clearly
-        var lower = name.toLowerCase();
-        if (lower.contains("sampler")) return CompiledShader.BindingType.SAMPLER;
-        if (lower.contains("tex") || lower.contains("texture") || lower.contains("map"))
-            return CompiledShader.BindingType.TEXTURE;
-        if (lower.contains("storage") || lower.contains("buffer"))
-            return CompiledShader.BindingType.STORAGE_BUFFER;
-        return CompiledShader.BindingType.CONSTANT_BUFFER;
     }
 
     private String loadShaderSource(String shaderName) {
