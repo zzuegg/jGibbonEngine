@@ -70,32 +70,46 @@ public final class WgpuNative {
     public static final int TEXTURE_DIMENSION_2D = 2;
     public static final int TEXTURE_DIMENSION_3D = 3;
 
-    // WGPUTextureFormat (common ones)
-    public static final int TEXTURE_FORMAT_RGBA8_UNORM      = 18;
-    public static final int TEXTURE_FORMAT_RGBA8_UNORM_SRGB = 19;
-    public static final int TEXTURE_FORMAT_BGRA8_UNORM      = 23;
-    public static final int TEXTURE_FORMAT_BGRA8_UNORM_SRGB = 24;
-    public static final int TEXTURE_FORMAT_DEPTH24_PLUS           = 39;
-    public static final int TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8  = 40;
-    public static final int TEXTURE_FORMAT_DEPTH32_FLOAT          = 41;
+    // WGPUTextureFormat (common ones — v24 webgpu.h)
+    public static final int TEXTURE_FORMAT_RGBA8_UNORM      = 0x12;
+    public static final int TEXTURE_FORMAT_RGBA8_UNORM_SRGB = 0x13;
+    public static final int TEXTURE_FORMAT_BGRA8_UNORM      = 0x17;
+    public static final int TEXTURE_FORMAT_BGRA8_UNORM_SRGB = 0x18;
+    public static final int TEXTURE_FORMAT_DEPTH24_PLUS           = 0x28;
+    public static final int TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8  = 0x29;
+    public static final int TEXTURE_FORMAT_DEPTH32_FLOAT          = 0x2A;
 
-    // WGPUTextureViewDimension
-    public static final int TEXTURE_VIEW_DIMENSION_2D   = 2;
-    public static final int TEXTURE_VIEW_DIMENSION_CUBE = 5;
+    // WGPUTextureViewDimension (v24: 0=Undefined, 1=1D, 2=2D, 3=2DArray, 4=Cube, 5=CubeArray, 6=3D)
+    public static final int TEXTURE_VIEW_DIMENSION_2D   = 0x02;
+    public static final int TEXTURE_VIEW_DIMENSION_CUBE = 0x04;
 
     // WGPUTextureAspect
     public static final int TEXTURE_ASPECT_ALL          = 1;
     public static final int TEXTURE_ASPECT_STENCIL_ONLY = 2;
     public static final int TEXTURE_ASPECT_DEPTH_ONLY   = 3;
 
-    // WGPUVertexFormat (common)
-    public static final int VERTEX_FORMAT_FLOAT32X2 = 10;
-    public static final int VERTEX_FORMAT_FLOAT32X3 = 11;
-    public static final int VERTEX_FORMAT_FLOAT32X4 = 12;
+    // WGPUVertexFormat (v24 webgpu.h — values are NOT sequential from 0)
+    public static final int VERTEX_FORMAT_UINT8X2   = 0x02;
+    public static final int VERTEX_FORMAT_UINT8X4   = 0x03;
+    public static final int VERTEX_FORMAT_FLOAT16X2 = 0x1A;
+    public static final int VERTEX_FORMAT_FLOAT16X4 = 0x1B;
+    public static final int VERTEX_FORMAT_FLOAT32   = 0x1C;
+    public static final int VERTEX_FORMAT_FLOAT32X2 = 0x1D;
+    public static final int VERTEX_FORMAT_FLOAT32X3 = 0x1E;
+    public static final int VERTEX_FORMAT_FLOAT32X4 = 0x1F;
+    public static final int VERTEX_FORMAT_UINT32    = 0x20;
+    public static final int VERTEX_FORMAT_UINT32X2  = 0x21;
+    public static final int VERTEX_FORMAT_UINT32X3  = 0x22;
+    public static final int VERTEX_FORMAT_UINT32X4  = 0x23;
+    public static final int VERTEX_FORMAT_SINT32    = 0x24;
+    public static final int VERTEX_FORMAT_SINT32X2  = 0x25;
+    public static final int VERTEX_FORMAT_SINT32X3  = 0x26;
+    public static final int VERTEX_FORMAT_SINT32X4  = 0x27;
 
     // WGPUVertexStepMode
-    public static final int VERTEX_STEP_MODE_VERTEX   = 1;
-    public static final int VERTEX_STEP_MODE_INSTANCE = 2;
+    // 0=Undefined, 1=VertexBufferNotUsed, 2=Vertex, 3=Instance
+    public static final int VERTEX_STEP_MODE_VERTEX   = 2;
+    public static final int VERTEX_STEP_MODE_INSTANCE = 3;
 
     // WGPUPrimitiveTopology
     public static final int PRIMITIVE_TOPOLOGY_POINT_LIST     = 1;
@@ -180,26 +194,29 @@ public final class WgpuNative {
     public static final long SHADER_STAGE_FRAGMENT = 0x02L;
     public static final long SHADER_STAGE_COMPUTE  = 0x04L;
 
-    // WGPUBufferBindingType
-    public static final int BUFFER_BINDING_TYPE_UNIFORM           = 1;
-    public static final int BUFFER_BINDING_TYPE_STORAGE           = 2;
-    public static final int BUFFER_BINDING_TYPE_READ_ONLY_STORAGE = 3;
+    // WGPUBufferBindingType (v24: 0=BindingNotUsed, 1=Undefined, 2=Uniform, 3=Storage, 4=ReadOnlyStorage)
+    public static final int BUFFER_BINDING_TYPE_UNIFORM           = 0x02;
+    public static final int BUFFER_BINDING_TYPE_STORAGE           = 0x03;
+    public static final int BUFFER_BINDING_TYPE_READ_ONLY_STORAGE = 0x04;
 
-    // WGPUSamplerBindingType
-    public static final int SAMPLER_BINDING_TYPE_FILTERING     = 1;
-    public static final int SAMPLER_BINDING_TYPE_NON_FILTERING = 2;
-    public static final int SAMPLER_BINDING_TYPE_COMPARISON    = 3;
+    // WGPUSamplerBindingType (v24: 0=BindingNotUsed, 1=Undefined, 2=Filtering, 3=NonFiltering, 4=Comparison)
+    public static final int SAMPLER_BINDING_TYPE_FILTERING     = 0x02;
+    public static final int SAMPLER_BINDING_TYPE_NON_FILTERING = 0x03;
+    public static final int SAMPLER_BINDING_TYPE_COMPARISON    = 0x04;
 
-    // WGPUTextureSampleType
-    public static final int TEXTURE_SAMPLE_TYPE_FLOAT              = 1;
-    public static final int TEXTURE_SAMPLE_TYPE_UNFILTERABLE_FLOAT = 2;
-    public static final int TEXTURE_SAMPLE_TYPE_DEPTH              = 3;
-    public static final int TEXTURE_SAMPLE_TYPE_SINT               = 4;
-    public static final int TEXTURE_SAMPLE_TYPE_UINT               = 5;
+    // WGPUTextureSampleType (v24: 0=BindingNotUsed, 1=Undefined, 2=Float, 3=UnfilterableFloat, 4=Depth, 5=Sint, 6=Uint)
+    public static final int TEXTURE_SAMPLE_TYPE_FLOAT              = 0x02;
+    public static final int TEXTURE_SAMPLE_TYPE_UNFILTERABLE_FLOAT = 0x03;
+    public static final int TEXTURE_SAMPLE_TYPE_DEPTH              = 0x04;
+    public static final int TEXTURE_SAMPLE_TYPE_SINT               = 0x05;
+    public static final int TEXTURE_SAMPLE_TYPE_UINT               = 0x06;
 
     // WGPUMapMode flags
     public static final long MAP_MODE_READ  = 0x01L;
     public static final long MAP_MODE_WRITE = 0x02L;
+
+    // WGPUMapAsyncStatus
+    public static final int MAP_ASYNC_STATUS_SUCCESS = 0x00000001;
 
     // WGPURequestAdapterStatus
     public static final int REQUEST_ADAPTER_STATUS_SUCCESS = 0x00000001;
@@ -292,6 +309,19 @@ public final class WgpuNative {
             MemoryLayout.paddingLayout(4)
     );
 
+    /**
+     * WGPUBufferMapCallbackInfo: same layout as request adapter/device callback info.
+     * { nextInChain(8), mode(4), pad(4), callback(8), userdata1(8), userdata2(8) } = 40
+     */
+    public static final StructLayout BUFFER_MAP_CALLBACK_INFO_LAYOUT = MemoryLayout.structLayout(
+            ValueLayout.ADDRESS.withName("nextInChain"),
+            ValueLayout.JAVA_INT.withName("mode"),
+            MemoryLayout.paddingLayout(4),
+            ValueLayout.ADDRESS.withName("callback"),
+            ValueLayout.ADDRESS.withName("userdata1"),
+            ValueLayout.ADDRESS.withName("userdata2")
+    );
+
     // ── Library loading ────────────────────────────────────────────────
 
     private static volatile SymbolLookup library;
@@ -310,6 +340,7 @@ public final class WgpuNative {
 
     // Device
     private static MethodHandle h_wgpuDeviceGetQueue;
+    private static MethodHandle h_wgpuDevicePoll;
     private static MethodHandle h_wgpuDeviceCreateShaderModule;
     private static MethodHandle h_wgpuDeviceCreateBuffer;
     private static MethodHandle h_wgpuDeviceCreateTexture;
@@ -355,9 +386,11 @@ public final class WgpuNative {
     private static MethodHandle h_wgpuComputePassEncoderRelease;
 
     // Buffer
+    private static MethodHandle h_wgpuBufferMapAsync;
     private static MethodHandle h_wgpuBufferGetMappedRange;
     private static MethodHandle h_wgpuBufferUnmap;
     private static MethodHandle h_wgpuBufferRelease;
+    private static MethodHandle h_wgpuBufferGetSize;
 
     // Texture
     private static MethodHandle h_wgpuTextureCreateView;
@@ -757,6 +790,20 @@ public final class WgpuNative {
         } catch (Throwable t) { throw rethrow(t); }
     }
 
+    /**
+     * Polls the device for completed work. wgpu-native extension (not standard WebGPU).
+     *
+     * @param device the WGPUDevice
+     * @param wait if true (1), blocks until all submitted work is done
+     * @return true if the queue is empty (all work completed)
+     */
+    public static boolean devicePoll(MemorySegment device, boolean wait) {
+        try {
+            int result = (int) h_wgpuDevicePoll.invokeExact(device, wait ? 1 : 0, MemorySegment.NULL);
+            return result != 0;
+        } catch (Throwable t) { throw rethrow(t); }
+    }
+
     public static void deviceRelease(MemorySegment device) {
         try {
             h_wgpuDeviceRelease.invokeExact(device);
@@ -970,6 +1017,106 @@ public final class WgpuNative {
         } catch (Throwable t) { throw rethrow(t); }
     }
 
+    public static long bufferGetSize(MemorySegment buffer) {
+        try {
+            return (long) h_wgpuBufferGetSize.invokeExact(buffer);
+        } catch (Throwable t) { throw rethrow(t); }
+    }
+
+    /**
+     * Synchronous buffer mapping. Maps a buffer for reading or writing
+     * using a callback + WaitAny pattern (same as adapter/device request).
+     *
+     * @param instance the WGPUInstance (needed for WaitAny)
+     * @param buffer the WGPUBuffer to map
+     * @param mode MAP_MODE_READ or MAP_MODE_WRITE flags
+     * @param offset byte offset
+     * @param size byte size
+     */
+    /**
+     * Synchronous buffer mapping. Maps a buffer for reading or writing.
+     * Uses {@code wgpuDevicePoll(wait=true)} to wait for the map to complete.
+     *
+     * @param device the WGPUDevice (needed for polling)
+     * @param buffer the WGPUBuffer to map
+     * @param mode MAP_MODE_READ or MAP_MODE_WRITE flags
+     * @param offset byte offset
+     * @param size byte size
+     */
+    public static void bufferMapSync(MemorySegment device, MemorySegment buffer,
+                                      long mode, long offset, long size) {
+        try (var arena = Arena.ofConfined()) {
+            var statusSlot = arena.allocate(ValueLayout.JAVA_INT);
+
+            // callback: void(WGPUMapAsyncStatus status, WGPUStringView message, void* userdata1, void* userdata2)
+            var callbackDesc = FunctionDescriptor.ofVoid(
+                    ValueLayout.JAVA_INT,   // status
+                    STRING_VIEW_LAYOUT,     // message (by value)
+                    ValueLayout.ADDRESS,    // userdata1
+                    ValueLayout.ADDRESS     // userdata2
+            );
+
+            var callbackStub = Linker.nativeLinker().upcallStub(
+                    MethodHandles.lookup().findStatic(
+                            WgpuNative.class, "bufferMapCallback",
+                            MethodType.methodType(void.class,
+                                    int.class, MemorySegment.class,
+                                    MemorySegment.class, MemorySegment.class)),
+                    callbackDesc,
+                    arena
+            );
+
+            // Use AllowSpontaneous so wgpu-native fires the callback inline.
+            // wgpuInstanceWaitAny is not implemented in wgpu-native v24,
+            // so we cannot use WaitAnyOnly mode.
+            var callbackInfo = arena.allocate(BUFFER_MAP_CALLBACK_INFO_LAYOUT);
+            callbackInfo.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);   // nextInChain
+            callbackInfo.set(ValueLayout.JAVA_INT, 8, CALLBACK_MODE_ALLOW_SPONTANEOUS);
+            callbackInfo.set(ValueLayout.ADDRESS, 16, callbackStub);
+            callbackInfo.set(ValueLayout.ADDRESS, 24, statusSlot);
+            callbackInfo.set(ValueLayout.ADDRESS, 32, MemorySegment.NULL);
+
+            try {
+                var ignored = (MemorySegment) h_wgpuBufferMapAsync.invokeExact(
+                        (SegmentAllocator) arena, buffer, mode, offset, size, callbackInfo);
+
+                // With AllowSpontaneous, wgpu-native may fire the callback inline.
+                // If not, use wgpuDevicePoll(wait=true) to block until GPU work
+                // completes and the callback fires.
+                int status = statusSlot.get(ValueLayout.JAVA_INT, 0);
+                if (status == 0) {
+                    // Poll the device to wait for the map operation to complete
+                    devicePoll(device, true);
+                    status = statusSlot.get(ValueLayout.JAVA_INT, 0);
+                }
+
+                if (status != MAP_ASYNC_STATUS_SUCCESS) {
+                    throw new RuntimeException("wgpuBufferMapAsync failed with status " + status);
+                }
+            } catch (Throwable t) { throw rethrow(t); }
+        } catch (NoSuchMethodException | IllegalAccessException e) {
+            throw new RuntimeException("Failed to create upcall stub for bufferMapAsync", e);
+        }
+    }
+
+    /** Buffer map callback. */
+    @SuppressWarnings("unused")
+    public static void bufferMapCallback(int status, MemorySegment message,
+                                          MemorySegment userdata1, MemorySegment userdata2) {
+        userdata1.reinterpret(ValueLayout.JAVA_INT.byteSize())
+                .set(ValueLayout.JAVA_INT, 0, status);
+    }
+
+    /**
+     * wgpuInstanceWaitAny - waits for futures to complete.
+     */
+    public static int instanceWaitAny(MemorySegment instance, long futureCount,
+                                       MemorySegment futures, long timeoutNS) {
+        try {
+            return (int) h_wgpuInstanceWaitAny.invokeExact(instance, futureCount, futures, timeoutNS);
+        } catch (Throwable t) { throw rethrow(t); }
+    }
+
     // ── Texture ────────────────────────────────────────────────────────
 
     public static MemorySegment textureCreateView(MemorySegment texture, MemorySegment descriptor) {
@@ -1113,6 +1260,9 @@ public final class WgpuNative {
 
         // Device
         h_wgpuDeviceGetQueue = bind(linker, "wgpuDeviceGetQueue", ptrToPtr);
+        h_wgpuDevicePoll = bind(linker, "wgpuDevicePoll",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                        ValueLayout.ADDRESS, ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
         h_wgpuDeviceCreateShaderModule = bind(linker, "wgpuDeviceCreateShaderModule", ptrPtrToPtr);
         h_wgpuDeviceCreateBuffer = bind(linker, "wgpuDeviceCreateBuffer", ptrPtrToPtr);
         h_wgpuDeviceCreateTexture = bind(linker, "wgpuDeviceCreateTexture", ptrPtrToPtr);
@@ -1207,11 +1357,21 @@ public final class WgpuNative {
         h_wgpuComputePassEncoderRelease = bind(linker, "wgpuComputePassEncoderRelease", voidPtr);
 
         // Buffer
+        // wgpuBufferMapAsync(WGPUBuffer, WGPUMapMode mode, size_t offset, size_t size, WGPUBufferMapCallbackInfo) -> WGPUFuture
+        h_wgpuBufferMapAsync = bind(linker, "wgpuBufferMapAsync",
+                FunctionDescriptor.of(FUTURE_LAYOUT,
+                        ValueLayout.ADDRESS,       // buffer
+                        ValueLayout.JAVA_LONG,     // mode (WGPUMapModeFlags = uint64)
+                        ValueLayout.JAVA_LONG,     // offset
+                        ValueLayout.JAVA_LONG,     // size
+                        BUFFER_MAP_CALLBACK_INFO_LAYOUT)); // callbackInfo (by value)
         h_wgpuBufferGetMappedRange = bind(linker, "wgpuBufferGetMappedRange",
                 FunctionDescriptor.of(ValueLayout.ADDRESS,
                         ValueLayout.ADDRESS, ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG));
         h_wgpuBufferUnmap = bind(linker, "wgpuBufferUnmap", voidPtr);
         h_wgpuBufferRelease = bind(linker, "wgpuBufferRelease", voidPtr);
+        h_wgpuBufferGetSize = bind(linker, "wgpuBufferGetSize",
+                FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS));
 
         // Texture
         h_wgpuTextureCreateView = bind(linker, "wgpuTextureCreateView", ptrPtrToPtr);
