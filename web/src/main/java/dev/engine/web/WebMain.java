@@ -19,56 +19,17 @@ public class WebMain {
 
     // Slang shader source — same as graphics/common/src/main/resources/shaders/unlit.slang
     // but self-contained (interfaces + param blocks inlined) so it compiles standalone.
-    private static final String SLANG_SHADER = """
-        // Inline interfaces and param blocks for standalone compilation
-
-        struct CameraData {
-            float4x4 viewProjection;
-        };
-
-        struct ObjectData {
-            float4x4 world;
-        };
-
-        struct MaterialData {
-            float3 color;
-        };
-
-        ParameterBlock<CameraData> camera;
-        ParameterBlock<ObjectData> object;
-        ParameterBlock<MaterialData> material;
-
-        struct VertexInput {
-            float3 position : POSITION;
-            float3 normal   : NORMAL;
-            float2 uv       : TEXCOORD;
-        };
-
-        struct VertexOutput {
-            float4 position : SV_Position;
-            float3 normal;
-            float2 uv;
-        };
-
-        [shader("vertex")]
-        VertexOutput vertexMain(VertexInput input) {
-            VertexOutput output;
-            float4x4 mvp = mul(object.world, camera.viewProjection);
-            output.position = mul(float4(input.position, 1.0), mvp);
-            output.normal = mul(float4(input.normal, 0.0), object.world).xyz;
-            output.uv = input.uv;
-            return output;
-        }
-
-        [shader("fragment")]
-        float4 fragmentMain(VertexOutput input) : SV_Target {
-            float3 N = normalize(input.normal);
-            float3 L = normalize(float3(0.5, 1.0, 0.3));
-            float NdotL = max(dot(N, L), 0.0);
-            float3 lit = material.color * (0.3 + 0.7 * NdotL);
-            return float4(lit, 1.0);
-        }
-        """;
+    // Simplest possible Slang shader to test WASM compiler
+    private static final String SLANG_SHADER =
+        "struct VOut { float4 pos : SV_Position; float3 col; };\n" +
+        "[shader(\"vertex\")]\n" +
+        "VOut vertexMain(float3 position : POSITION, float3 color : COLOR) {\n" +
+        "    VOut o; o.pos = float4(position, 1.0); o.col = color; return o;\n" +
+        "}\n" +
+        "[shader(\"fragment\")]\n" +
+        "float4 fragmentMain(VOut input) : SV_Target {\n" +
+        "    return float4(input.col, 1.0);\n" +
+        "}\n";
 
     // Fallback hard-coded WGSL shaders (simple passthrough triangle)
     private static final String FALLBACK_VERTEX_WGSL = """
@@ -169,15 +130,13 @@ public class WebMain {
         contextId = TeaVmWgpuBindings.configureCanvasContext("canvas", deviceId);
         String canvasFormat = TeaVmWgpuBindings.getPreferredCanvasFormat();
 
-        // Compile shaders — try Slang WASM first, fall back to hardcoded WGSL
+        // Compile shaders — try Slang WASM runtime, fall back to hardcoded WGSL
         String vertexWGSL;
         String fragmentWGSL;
 
         if (TeaVmSlangCompiler.isAvailable()) {
-            String version = TeaVmSlangCompiler.getVersionString();
-            consoleLog("[Slang WASM] Compiler available, version: " + version);
+            consoleLog("[Slang WASM] Compiler available, version: " + TeaVmSlangCompiler.getVersionString());
             setStatus("Compiling Slang shaders to WGSL...");
-
             try {
                 String[] wgsl = TeaVmSlangCompiler.compile(SLANG_SHADER, "vertexMain", "fragmentMain");
                 vertexWGSL = wgsl[0];
@@ -185,8 +144,7 @@ public class WebMain {
                 vertexEntryName = "vertexMain";
                 fragmentEntryName = "fragmentMain";
                 slangCompiled = true;
-                consoleLog("[Slang WASM] Vertex WGSL:\n" + vertexWGSL);
-                consoleLog("[Slang WASM] Fragment WGSL:\n" + fragmentWGSL);
+                consoleLog("[Slang WASM] Compilation succeeded!");
             } catch (Exception e) {
                 consoleLog("[Slang WASM] Compilation failed: " + e.getMessage() + ", using fallback WGSL");
                 vertexWGSL = FALLBACK_VERTEX_WGSL;

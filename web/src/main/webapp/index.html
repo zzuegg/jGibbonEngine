@@ -61,6 +61,7 @@
             });
             window._slangModule = slangModule;
             console.log('Slang WASM loaded:', slangModule.getVersionString());
+
             statusEl.textContent = 'Slang loaded. Starting engine...';
         } catch (err) {
             console.error('Failed to load Slang WASM:', err);

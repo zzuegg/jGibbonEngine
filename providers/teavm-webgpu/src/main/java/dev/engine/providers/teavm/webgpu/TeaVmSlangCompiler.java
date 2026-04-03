@@ -42,29 +42,27 @@ public class TeaVmSlangCompiler {
         var globalSession = slang.createGlobalSession();
         if (!globalSession) throw new Error('Failed to create Slang global session');
 
+        var srcStr = '' + source;
+
+        // Find WGSL target dynamically (same as Slang Playground)
         var targets = slang.getCompileTargets();
-        var wgslTarget = -1;
-        var targetNames = Object.keys(targets);
-        for (var i = 0; i < targetNames.length; i++) {
-            if (targetNames[i] === 'WGSL') {
-                wgslTarget = targets[targetNames[i]];
-                break;
+        var wgslTarget = 0;
+        for (var i = 0; i < targets.length; i++) {
+            console.log('[Slang WASM] Target ' + i + ': name=' + targets[i].name + ' value=' + targets[i].value);
+            if (targets[i].name === 'WGSL') {
+                wgslTarget = targets[i].value;
             }
         }
-        if (wgslTarget < 0) {
-            for (var i = 0; i < targetNames.length; i++) {
-                if (targetNames[i].toLowerCase().indexOf('wgsl') >= 0) {
-                    wgslTarget = targets[targetNames[i]];
-                    break;
-                }
-            }
-        }
-        if (wgslTarget < 0) throw new Error('WGSL target not found in Slang. Available: ' + targetNames.join(', '));
-
+        if (wgslTarget === 0) throw new Error('WGSL target not found in compile targets');
+        console.log('[Slang WASM] Using WGSL target value: ' + wgslTarget);
         var session = globalSession.createSession(wgslTarget);
-        if (!session) throw new Error('Failed to create Slang session');
+        if (!session) throw new Error('Failed to create Slang WGSL session');
 
-        var module = session.loadModuleFromSource('shader', 'shader.slang', source);
+        var module = session.loadModuleFromSource(srcStr, 'shader', 'shader.slang');
+        if (!module) {
+            var err = slang.getLastError();
+            throw new Error('Slang compile error: ' + (err ? err.message : 'unknown'));
+        }
         if (!module) {
             var err = slang.getLastError();
             throw new Error('Slang compile error: ' + (err ? err.message : 'unknown'));
@@ -107,27 +105,9 @@ public class TeaVmSlangCompiler {
         var globalSession = slang.createGlobalSession();
         if (!globalSession) throw new Error('Failed to create Slang global session');
 
-        var targets = slang.getCompileTargets();
-        var wgslTarget = -1;
-        var targetNames = Object.keys(targets);
-        for (var i = 0; i < targetNames.length; i++) {
-            if (targetNames[i] === 'WGSL') {
-                wgslTarget = targets[targetNames[i]];
-                break;
-            }
-        }
-        if (wgslTarget < 0) {
-            for (var i = 0; i < targetNames.length; i++) {
-                if (targetNames[i].toLowerCase().indexOf('wgsl') >= 0) {
-                    wgslTarget = targets[targetNames[i]];
-                    break;
-                }
-            }
-        }
-        if (wgslTarget < 0) throw new Error('WGSL target not found in Slang');
-
-        var session = globalSession.createSession(wgslTarget);
-        var module = session.loadModuleFromSource('shader', 'shader.slang', source);
+        var SLANG_WGSL = 26;
+        var session = globalSession.createSession(SLANG_WGSL);
+        var module = session.loadModuleFromSource(source, 'shader', 'shader.slang');
         if (!module) {
             var err = slang.getLastError();
             throw new Error('Slang compile error: ' + (err ? err.message : 'unknown'));
