@@ -91,6 +91,16 @@ class CrossBackendTest {
             RenderTestHarness.Tolerance.loose());
     }
 
+    @Test void texture3dCreate() {
+        harness.assertCrossBackend(ScreenshotTestSuite.TEXTURE_3D_CREATE, "texture_3d_create",
+            RenderTestHarness.Tolerance.loose());
+    }
+
+    @Test void textureArrayCreate() {
+        harness.assertCrossBackend(ScreenshotTestSuite.TEXTURE_ARRAY_CREATE, "texture_array_create",
+            RenderTestHarness.Tolerance.loose());
+    }
+
     // Wireframe is not cross-backend comparable — Vulkan doesn't support dynamic polygon mode.
     // Per-backend wireframe tests exist in OpenGlRenderTest and VulkanRenderTest.
 }

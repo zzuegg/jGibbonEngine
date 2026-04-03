@@ -78,4 +78,12 @@ class VulkanRenderTest {
     @Test void textureSwitching() throws IOException {
         harness.assertVulkanMatchesReference(ScreenshotTestSuite.TEXTURE_SWITCHING, "texture_switching");
     }
+
+    @Test void texture3dCreate() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.TEXTURE_3D_CREATE, "texture_3d_create");
+    }
+
+    @Test void textureArrayCreate() throws IOException {
+        harness.assertVulkanMatchesReference(ScreenshotTestSuite.TEXTURE_ARRAY_CREATE, "texture_array_create");
+    }
 }

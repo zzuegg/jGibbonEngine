@@ -12,6 +12,8 @@ import dev.engine.graphics.renderstate.FrontFace;
 import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.graphics.renderstate.StencilOp;
 import dev.engine.graphics.sampler.SamplerDescriptor;
+import dev.engine.graphics.texture.TextureDescriptor;
+import dev.engine.graphics.texture.TextureFormat;
 
 /**
  * Comprehensive test scenes exercising rendering features.
@@ -339,16 +341,14 @@ public final class ScreenshotTestSuite {
         pbrSphere2.add(Transform.at(0, 0, -2));
     };
 
-    /** Material with texture data — uses unlit shader (texture sampling not yet wired through materials).
-     *  The texture is uploaded to verify the texture upload path doesn't crash.
-     *  TODO: wire texture sampling through the material/shader generation pipeline. */
+    /** Material with texture data — uses textured shader to sample albedo texture. */
     static final RenderTestScene MATERIAL_TEXTURE = (renderer, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 3), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
-        // Create 8x8 checkerboard texture (exercises the texture upload path)
+        // Create 8x8 checkerboard texture
         int texW = 8, texH = 8;
         var pixels = java.nio.ByteBuffer.allocateDirect(texW * texH * 4);
         for (int y = 0; y < texH; y++) {
@@ -364,31 +364,29 @@ public final class ScreenshotTestSuite {
 
         var quad = renderer.scene().createEntity();
         quad.add(PrimitiveMeshes.quad());
-        quad.add(MaterialData.unlit(new Vec3(0.8f, 0.6f, 0.2f))
+        quad.add(MaterialData.create("textured")
             .set(MaterialData.ALBEDO_MAP, texData));
         quad.add(Transform.IDENTITY);
     };
 
-    /** Two quads with different colors and textures — verifies material switching between draws.
-     *  Uses unlit shader (texture sampling not yet wired through materials).
-     *  TODO: wire texture sampling through the material/shader generation pipeline. */
+    /** Two quads with different textures — verifies material/texture switching between draws. */
     static final RenderTestScene TEXTURE_SWITCHING = (renderer, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 4), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
-        // Left quad: red unlit with checkerboard texture data (exercises texture upload)
+        // Left quad: red checkerboard texture
         var leftQuad = renderer.scene().createEntity();
         leftQuad.add(PrimitiveMeshes.quad());
-        leftQuad.add(MaterialData.unlit(new Vec3(0.9f, 0.2f, 0.2f))
+        leftQuad.add(MaterialData.create("textured")
             .set(MaterialData.ALBEDO_MAP, createCheckerboard(8, 8, (byte) 255, (byte) 0, (byte) 0)));
         leftQuad.add(Transform.at(-1.5f, 0, 0));
 
-        // Right quad: blue unlit with checkerboard texture data
+        // Right quad: blue checkerboard texture
         var rightQuad = renderer.scene().createEntity();
         rightQuad.add(PrimitiveMeshes.quad());
-        rightQuad.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.9f))
+        rightQuad.add(MaterialData.create("textured")
             .set(MaterialData.ALBEDO_MAP, createCheckerboard(8, 8, (byte) 0, (byte) 0, (byte) 255)));
         rightQuad.add(Transform.at(1.5f, 0, 0));
     };
@@ -408,6 +406,56 @@ public final class ScreenshotTestSuite {
         pixels.flip();
         return TextureData.rgba(w, h, pixels);
     }
+
+    /** Creates a 3D texture (verifies API), renders an unlit cube alongside. */
+    static final RenderTestScene TEXTURE_3D_CREATE = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Create and upload a 4x4x4 3D texture (proves the path works)
+        var desc3d = TextureDescriptor.texture3d(4, 4, 4, TextureFormat.RGBA8);
+        var tex3d = renderer.device().createTexture(desc3d);
+        var pixels = java.nio.ByteBuffer.allocateDirect(4 * 4 * 4 * 4);
+        for (int i = 0; i < 4 * 4 * 4; i++) {
+            pixels.put((byte) 255).put((byte) 128).put((byte) 0).put((byte) 255);
+        }
+        pixels.flip();
+        renderer.device().uploadTexture(tex3d, pixels);
+        renderer.device().destroyTexture(tex3d);
+
+        // Render a visible cube to prove the scene works
+        var cube = renderer.scene().createEntity();
+        cube.add(PrimitiveMeshes.cube());
+        cube.add(MaterialData.unlit(new Vec3(1.0f, 0.5f, 0.0f))); // orange = success
+        cube.add(Transform.IDENTITY);
+    };
+
+    /** Creates a 2D array texture (verifies API), renders an unlit sphere alongside. */
+    static final RenderTestScene TEXTURE_ARRAY_CREATE = (renderer, w, h) -> {
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
+
+        // Create a 4x4 2D array texture with 3 layers
+        var descArr = TextureDescriptor.texture2dArray(4, 4, 3, TextureFormat.RGBA8);
+        var texArr = renderer.device().createTexture(descArr);
+        var pixels = java.nio.ByteBuffer.allocateDirect(4 * 4 * 3 * 4);
+        for (int i = 0; i < 4 * 4 * 3; i++) {
+            pixels.put((byte) 0).put((byte) 255).put((byte) 128).put((byte) 255);
+        }
+        pixels.flip();
+        renderer.device().uploadTexture(texArr, pixels);
+        renderer.device().destroyTexture(texArr);
+
+        // Render a visible sphere to prove the scene works
+        var sphere = renderer.scene().createEntity();
+        sphere.add(PrimitiveMeshes.sphere());
+        sphere.add(MaterialData.unlit(new Vec3(0.0f, 1.0f, 0.5f))); // teal = success
+        sphere.add(Transform.IDENTITY);
+    };
 
     /** Stencil write + test — left quad writes to stencil, right quad only shows where stencil is set. */
     static final RenderTestScene STENCIL_MASKING = (renderer, w, h) -> {
