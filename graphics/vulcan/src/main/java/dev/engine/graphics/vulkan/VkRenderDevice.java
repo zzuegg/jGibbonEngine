@@ -83,6 +83,13 @@ public class VkRenderDevice implements RenderDevice {
     private record VkTextureAllocation(long image, long memory, long imageView, TextureDescriptor desc) {}
     private final Map<Integer, VkTextureAllocation> textures = new HashMap<>();
     private final Map<Integer, Long> vkSamplers = new HashMap<>();
+    private final Map<Integer, Boolean> textureMipsDirty = new HashMap<>();
+    private final Map<Integer, SamplerDescriptor> vkSamplerDescs = new HashMap<>();
+    // Track bound textures/samplers per unit for lazy mip generation
+    @SuppressWarnings("unchecked")
+    private final Handle<TextureResource>[] currentTextures = new Handle[8];
+    @SuppressWarnings("unchecked")
+    private final Handle<SamplerResource>[] currentSamplerHandles = new Handle[8];
 
     private record VkRenderTargetAllocation(
         long renderPass,
@@ -564,9 +571,10 @@ public class VkRenderDevice implements RenderDevice {
                 }
             });
 
-            // TODO: Auto-mipmap generation via vkCmdBlitImage chain when MipMode.AUTO.
-            //       Requires iterating mip levels, blitting from level N-1 to N with
-            //       layout transitions per level. For now only level 0 is populated.
+            // Mark mips dirty so they are generated lazily when a mipmap sampler is bound
+            if (computeMipLevels(alloc.desc()) > 1) {
+                textureMipsDirty.put(texture.index(), true);
+            }
 
             // Cleanup staging resources
             vkFreeMemory(device, stagingMemory, null);
@@ -931,6 +939,7 @@ public class VkRenderDevice implements RenderDevice {
 
             var handle = samplerPool.allocate();
             vkSamplers.put(handle.index(), pSampler.get(0));
+            vkSamplerDescs.put(handle.index(), descriptor);
             return handle;
         }
     }
@@ -939,6 +948,7 @@ public class VkRenderDevice implements RenderDevice {
     public void destroySampler(Handle<SamplerResource> handle) {
         if (!samplerPool.isValid(handle)) return;
         var sampler = vkSamplers.remove(handle.index());
+        vkSamplerDescs.remove(handle.index());
         if (sampler != null) {
             vkDestroySampler(device, sampler, null);
         }
@@ -1504,12 +1514,20 @@ public class VkRenderDevice implements RenderDevice {
                         pendingTextureViews[bt.unit()] = texAlloc.imageView();
                         descriptorDirty = true;
                     }
+                    if (bt.unit() < currentTextures.length) {
+                        currentTextures[bt.unit()] = bt.texture();
+                        maybeGenerateMipmaps(bt.unit());
+                    }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindSampler bs -> {
                     var sampler = vkSamplers.get(bs.sampler().index());
                     if (sampler != null && bs.unit() < pendingTextureSamplers.length) {
                         pendingTextureSamplers[bs.unit()] = sampler;
                         descriptorDirty = true;
+                    }
+                    if (bs.unit() < currentSamplerHandles.length) {
+                        currentSamplerHandles[bs.unit()] = bs.sampler();
+                        maybeGenerateMipmaps(bs.unit());
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindStorageBuffer bsb -> {
@@ -1902,6 +1920,128 @@ public class VkRenderDevice implements RenderDevice {
             case "MIRRORED_REPEAT" -> VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
             default -> VK_SAMPLER_ADDRESS_MODE_REPEAT;
         };
+    }
+
+    private void maybeGenerateMipmaps(int unit) {
+        var texHandle = currentTextures[unit];
+        var samplerHandle = currentSamplerHandles[unit];
+        if (texHandle == null || samplerHandle == null) return;
+
+        var texAlloc = textures.get(texHandle.index());
+        if (texAlloc == null) return;
+        if (texAlloc.desc().mipMode() == dev.engine.graphics.texture.MipMode.NONE) return;
+
+        Boolean dirty = textureMipsDirty.get(texHandle.index());
+        if (dirty == null || !dirty) return;
+
+        var samplerDesc = vkSamplerDescs.get(samplerHandle.index());
+        if (samplerDesc == null) return;
+        if (!usesMipmaps(samplerDesc)) return;
+
+        generateMipmaps(texHandle);
+    }
+
+    private boolean usesMipmaps(SamplerDescriptor desc) {
+        return isMipmapFilter(desc.minFilter());
+    }
+
+    private void generateMipmaps(Handle<TextureResource> textureHandle) {
+        var alloc = textures.get(textureHandle.index());
+        if (alloc == null) return;
+
+        var desc = alloc.desc();
+        int mipLevels = computeMipLevels(desc);
+        if (mipLevels <= 1) return;
+
+        executeOneShot(cmd -> {
+            int mipWidth = desc.width();
+            int mipHeight = desc.height();
+
+            for (int i = 1; i < mipLevels; i++) {
+                // Transition level i-1 from SHADER_READ_ONLY to TRANSFER_SRC
+                insertImageBarrier(cmd, alloc.image(),
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                        VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        i - 1, 1);
+
+                // Transition level i from UNDEFINED to TRANSFER_DST
+                insertImageBarrier(cmd, alloc.image(),
+                        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        0, VK_ACCESS_TRANSFER_WRITE_BIT,
+                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        i, 1);
+
+                int nextWidth = Math.max(1, mipWidth / 2);
+                int nextHeight = Math.max(1, mipHeight / 2);
+
+                try (var stack = stackPush()) {
+                    var blit = VkImageBlit.calloc(1, stack);
+                    blit.srcSubresource()
+                            .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                            .mipLevel(i - 1)
+                            .baseArrayLayer(0)
+                            .layerCount(1);
+                    blit.srcOffsets(0).set(0, 0, 0);
+                    blit.srcOffsets(1).set(mipWidth, mipHeight, 1);
+
+                    blit.dstSubresource()
+                            .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                            .mipLevel(i)
+                            .baseArrayLayer(0)
+                            .layerCount(1);
+                    blit.dstOffsets(0).set(0, 0, 0);
+                    blit.dstOffsets(1).set(nextWidth, nextHeight, 1);
+
+                    vkCmdBlitImage(cmd, alloc.image(),
+                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                            alloc.image(),
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            blit, VK_FILTER_LINEAR);
+                }
+
+                // Transition level i-1 back to SHADER_READ_ONLY
+                insertImageBarrier(cmd, alloc.image(),
+                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_ACCESS_TRANSFER_READ_BIT, VK_ACCESS_SHADER_READ_BIT,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                        i - 1, 1);
+
+                // Transition level i to SHADER_READ_ONLY
+                insertImageBarrier(cmd, alloc.image(),
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
+                        VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                        i, 1);
+
+                mipWidth = nextWidth;
+                mipHeight = nextHeight;
+            }
+        });
+
+        textureMipsDirty.put(textureHandle.index(), false);
+    }
+
+    private void insertImageBarrier(VkCommandBuffer cmd, long image,
+                                    int oldLayout, int newLayout,
+                                    int srcAccess, int dstAccess,
+                                    int srcStage, int dstStage,
+                                    int baseMipLevel, int levelCount) {
+        try (var stack = stackPush()) {
+            var barrier = VkImageMemoryBarrier.calloc(1, stack)
+                    .sType$Default()
+                    .oldLayout(oldLayout)
+                    .newLayout(newLayout)
+                    .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+                    .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+                    .image(image)
+                    .subresourceRange(sr -> sr.aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                            .baseMipLevel(baseMipLevel).levelCount(levelCount)
+                            .baseArrayLayer(0).layerCount(1))
+                    .srcAccessMask(srcAccess)
+                    .dstAccessMask(dstAccess);
+            vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, null, null, barrier);
+        }
     }
 
     private int findMemoryType(int typeFilter, int properties) {
