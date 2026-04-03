@@ -29,6 +29,7 @@ public class CommandRecorder {
     public void bindStorageBuffer(int binding, Handle<BufferResource> buffer) { commands.add(new RenderCommand.BindStorageBuffer(binding, buffer)); }
 
     // --- Draw commands ---
+    public void draw(DrawCall call) { commands.addAll(call.toCommands()); }
     public void draw(int vertexCount, int firstVertex) { commands.add(new RenderCommand.Draw(vertexCount, firstVertex)); }
     public void drawIndexed(int indexCount, int firstIndex) { commands.add(new RenderCommand.DrawIndexed(indexCount, firstIndex)); }
 
