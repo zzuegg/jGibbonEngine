@@ -1,9 +1,22 @@
 package dev.engine.graphics.common;
 
+import dev.engine.core.gpu.BufferWriter;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.handle.HandlePool;
+import dev.engine.core.material.MaterialData;
+import dev.engine.core.math.Vec2;
+import dev.engine.core.math.Vec3;
+import dev.engine.core.math.Vec4;
+import dev.engine.core.property.MutablePropertyMap;
+import dev.engine.core.property.PropertyKey;
+import dev.engine.core.property.PropertyMap;
+import dev.engine.core.shader.GlobalParamsRegistry;
+import dev.engine.graphics.renderstate.RenderState;
+import dev.engine.core.shader.params.CameraParams;
+import dev.engine.core.shader.params.EngineParams;
+import dev.engine.core.shader.params.ObjectParams;
 import dev.engine.core.scene.AbstractScene;
 import dev.engine.core.scene.MaterialTag;
 import dev.engine.core.scene.MeshTag;
@@ -15,11 +28,7 @@ import dev.engine.graphics.*;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
-import dev.engine.core.shader.SlangCompiler;
 import dev.engine.graphics.command.CommandRecorder;
-import dev.engine.core.material.Material;
-import dev.engine.core.material.MaterialType;
-import dev.engine.graphics.common.material.MaterialCompiler;
 import dev.engine.core.asset.TextureData;
 import dev.engine.core.mesh.MeshData;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -32,6 +41,7 @@ import java.lang.foreign.ValueLayout;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,19 +63,21 @@ public class Renderer implements AutoCloseable {
 
     // Shader management
     private final ShaderManager shaderManager;
+    private final GlobalParamsRegistry globalParams;
 
-    // Internal GPU resources
-    private final Handle<BufferResource> mvpUbo;
-    private final StructLayout mat4Layout = StructLayout.of(Mat4.class);
+    // GPU buffers for each registered global param block
+    private final Map<String, Handle<BufferResource>> globalUbos = new HashMap<>();
+    private final Map<String, StructLayout> globalLayouts = new HashMap<>();
     private Handle<PipelineResource> defaultPipeline;
+
+    // Engine timing
+    private float engineTime = 0f;
+    private float lastDeltaTime = 0f;
+    private int frameCount = 0;
 
     // Mesh registry: Handle<MeshTag> → MeshHandle (GPU resources)
     private final HandlePool<MeshTag> meshPool = new HandlePool<>();
     private final Map<Integer, MeshHandle> meshRegistry = new HashMap<>();
-
-    // Material registry: Handle<MaterialTag> → Material
-    private final HandlePool<MaterialTag> materialPool = new HandlePool<>();
-    private final Map<Integer, Material> materialRegistry = new HashMap<>();
 
     // Auto-upload cache: MeshData identity hash → MeshHandle (GPU resources)
     private final Map<Integer, MeshHandle> meshDataCache = new HashMap<>();
@@ -73,56 +85,58 @@ public class Renderer implements AutoCloseable {
     // Texture auto-upload cache: TextureData identity hash → GPU texture handle
     private final Map<Integer, Handle<TextureResource>> textureCache = new HashMap<>();
 
-    // Material type → shader mapping (PbrMaterial.class → "PBR", etc.)
-    private final Map<Class<? extends dev.engine.core.material.MaterialData>, String> materialShaderMap = new HashMap<>();
-
-    // Material data UBO (binding 1) — lazily created per material key
+    // Material data UBO — lazily created per entity
     private final Map<String, Handle<BufferResource>> materialUbos = new HashMap<>();
+    // Per-entity object params UBO (world matrix)
+    private final Map<String, Handle<BufferResource>> objectUbos = new HashMap<>();
+
+    // Shader hint → compiled shader (pipeline + reflection bindings)
+    private final Map<String, CompiledShader> shaderCache = new HashMap<>();
+
+    // Three-layer render state: forced > material > defaults
+    private final MutablePropertyMap defaultProperties = new MutablePropertyMap();
+    private final MutablePropertyMap forcedProperties = new MutablePropertyMap();
 
     // Viewport
     private int viewportWidth = 800;
     private int viewportHeight = 600;
 
+
     public Renderer(RenderDevice device) {
-        this(device, new Scene(), SlangCompiler.find());
+        this(device, new Scene());
     }
 
     public Renderer(RenderDevice device, AbstractScene scene) {
-        this(device, scene, SlangCompiler.find());
-    }
-
-    public Renderer(RenderDevice device, AbstractScene scene, SlangCompiler slangCompiler) {
         this.device = device;
         this.scene = scene;
         this.meshRenderer = new MeshRenderer();
-        this.shaderManager = new ShaderManager(slangCompiler, device);
-        this.mvpUbo = device.createBuffer(
-                new BufferDescriptor(mat4Layout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
 
-        // Register built-in material type → shader + struct mappings
-        registerMaterialShader(dev.engine.core.material.PbrMaterial.class, "PBR");
-        registerMaterialShader(dev.engine.core.material.UnlitMaterial.class, "UNLIT");
-        shaderManager.registerMaterialStruct("PBR", dev.engine.core.material.PbrMaterial.ScalarData.class);
-        shaderManager.registerMaterialStruct("UNLIT", dev.engine.core.material.UnlitMaterial.ScalarData.class);
+        // Register default global params
+        this.globalParams = new GlobalParamsRegistry();
+        globalParams.register("Engine", EngineParams.class, 0);
+        globalParams.register("Camera", CameraParams.class, 1);
+        globalParams.register("Object", ObjectParams.class, 2);
 
-        // Auto-compile default unlit pipeline if Slang is available
-        if (slangCompiler.isAvailable()) {
-            try {
-                this.defaultPipeline = shaderManager.getPipeline(MaterialType.UNLIT);
-            } catch (Exception e) {
-                org.slf4j.LoggerFactory.getLogger(Renderer.class)
-                        .warn("Failed to compile default shader: {}", e.getMessage());
-            }
+        this.shaderManager = new ShaderManager(device, globalParams);
+
+        // Create GPU buffers for each registered global
+        for (var entry : globalParams.entries()) {
+            var layout = StructLayout.of(entry.recordType());
+            globalLayouts.put(entry.name(), layout);
+            globalUbos.put(entry.name(), device.createBuffer(
+                    new BufferDescriptor(layout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
         }
-    }
 
-    /**
-     * Registers a material type → shader name mapping.
-     * The shader name maps to a .slang file via ShaderManager.
-     * Built-in: PbrMaterial → "PBR", UnlitMaterial → "UNLIT".
-     */
-    public void registerMaterialShader(Class<? extends dev.engine.core.material.MaterialData> type, String shaderName) {
-        materialShaderMap.put(type, shaderName);
+        // Pipelines are compiled lazily when first entity with a material is seen,
+        // because shader compilation requires material keys for param block generation.
+
+        // Initialize render state defaults
+        PropertyMap defaults = RenderState.defaults();
+        for (var key : defaults.keys()) {
+            @SuppressWarnings("unchecked")
+            var typedKey = (PropertyKey<Object>) key;
+            defaultProperties.set(typedKey, defaults.get(key));
+        }
     }
 
     /**
@@ -199,34 +213,13 @@ public class Renderer implements AutoCloseable {
         return createMesh(vertices, data.indices(), data.format());
     }
 
-    /** @deprecated Use {@code scene().setMesh(entity, meshHandle)} instead */
+    /** @deprecated Use {@code scene().setMesh(entity, MeshData)} instead */
     @Deprecated
     public void setMesh(Handle<EntityTag> entity, Handle<MeshTag> mesh) {
         scene.setMesh(entity, mesh);
     }
 
     // --- Material management ---
-
-    /**
-     * Creates a material and returns an opaque handle.
-     * The handle can be assigned to entities via {@code scene().setMaterial(entity, handle)}.
-     */
-    public Handle<MaterialTag> createMaterial(MaterialType type) {
-        var handle = materialPool.allocate();
-        materialRegistry.put(handle.index(), Material.create(type));
-        return handle;
-    }
-
-    /** Gets the Material object for a material handle (for setting properties). */
-    public Material material(Handle<MaterialTag> handle) {
-        return materialRegistry.get(handle.index());
-    }
-
-    /** @deprecated Use {@code scene().setMaterial(entity, materialHandle)} instead */
-    @Deprecated
-    public void setMaterial(Handle<EntityTag> entity, Handle<MaterialTag> material) {
-        scene.setMaterial(entity, material);
-    }
 
     /**
      * Updates a single material property and emits a transaction.
@@ -247,11 +240,69 @@ public class Renderer implements AutoCloseable {
         return device.createPipeline(descriptor);
     }
 
+    // --- Global params ---
+
+    /**
+     * Registers a user-defined global param block.
+     * The block becomes available as a Slang global in all subsequently compiled shaders.
+     * Must be called before shaders that use it are compiled.
+     *
+     * @param name       the block name (e.g., "Light") — shader uses {@code light.direction()}
+     * @param recordType the Java record defining the fields
+     * @param binding    the fixed UBO binding index
+     */
+    public <T extends Record> void registerGlobalParams(String name, Class<T> recordType, int binding) {
+        globalParams.register(name, recordType, binding);
+        var layout = StructLayout.of(recordType);
+        globalLayouts.put(name, layout);
+        globalUbos.put(name, device.createBuffer(
+                new BufferDescriptor(layout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
+        // Invalidate shader cache since new global changes generated preamble
+        shaderManager.invalidateAll();
+    }
+
+    /**
+     * Registers a user-defined global param block with an auto-assigned binding.
+     */
+    public <T extends Record> void registerGlobalParams(String name, Class<T> recordType) {
+        registerGlobalParams(name, recordType, globalParams.nextBinding());
+    }
+
+    /**
+     * Updates per-frame data for a registered global param block.
+     */
+    public void updateGlobalParams(String name, Object data) {
+        globalParams.update(name, data);
+    }
+
+    /** Returns the global params registry. */
+    public GlobalParamsRegistry globalParams() { return globalParams; }
+
     // --- Viewport ---
 
     public void setViewport(int width, int height) {
         this.viewportWidth = width;
         this.viewportHeight = height;
+    }
+
+    // --- Render state property resolution ---
+
+    public <T> void setDefault(PropertyKey<T> key, T value) {
+        defaultProperties.set(key, value);
+    }
+
+    public <T> void forceProperty(PropertyKey<T> key, T value) {
+        forcedProperties.set(key, value);
+    }
+
+    public <T> void clearForced(PropertyKey<T> key) {
+        forcedProperties.remove(key);
+    }
+
+    /** Updates engine timing. Called by BaseApplication each frame. */
+    public void updateTime(float time, float deltaTime) {
+        this.engineTime = time;
+        this.lastDeltaTime = deltaTime;
     }
 
     // --- Render ---
@@ -281,81 +332,125 @@ public class Renderer implements AutoCloseable {
 
             if (resolvedMesh == null) continue; // no mesh assigned yet
 
-            // Resolve pipeline from material
-            Handle<PipelineResource> pipeline = defaultPipeline;
-
-            // Check typed MaterialData first (PbrMaterial, UnlitMaterial, etc.)
-            var typedMat = meshRenderer.getTypedMaterialData(entity);
-            if (typedMat != null) {
-                var shaderName = materialShaderMap.get(typedMat.getClass());
-                if (shaderName != null) {
+            // Resolve shader from MaterialData.shaderHint() + material keys
+            CompiledShader compiled = null;
+            var mat = meshRenderer.getMaterialData(entity);
+            if (mat != null && mat.shaderHint() != null) {
+                var hint = mat.shaderHint();
+                var materialKeys = mat.keys();
+                var keyNames = materialKeys.stream()
+                        .map(dev.engine.core.property.PropertyKey::name)
+                        .sorted()
+                        .toList();
+                var cacheKey = hint + "_" + String.join("_", keyNames);
+                compiled = shaderCache.computeIfAbsent(cacheKey, k -> {
                     try {
-                        pipeline = shaderManager.getPipeline(MaterialType.of(shaderName));
-                    } catch (Exception e) { /* fall back to default */ }
-                } else if (typedMat instanceof dev.engine.core.material.CustomMaterial cm) {
-                    try {
-                        pipeline = shaderManager.compileSlangFile(cm.shaderPath());
-                    } catch (Exception e) { /* fall back to default */ }
-                }
-            } else {
-                // Legacy Material path
-                Material material = meshRenderer.getMaterialData(entity);
-                if (material == null) {
-                    var matHandle = meshRenderer.getMaterialAssignment(entity);
-                    if (matHandle != null) material = materialRegistry.get(matHandle.index());
-                }
-                if (material != null) {
-                    try {
-                        if (material.shaderSource() != null) {
-                            pipeline = shaderManager.compileSlangFile(material.shaderSource());
-                        } else {
-                            pipeline = shaderManager.getPipeline(material.type());
+                        if (hint.contains("/") || hint.contains(".")) {
+                            return shaderManager.compileSlangSource(
+                                    loadShaderFile(hint), hint);
                         }
-                    } catch (Exception e) { /* fall back to default */ }
-                }
+                        return shaderManager.getShaderWithMaterial(hint, materialKeys);
+                    } catch (Exception e) {
+                        return null;
+                    }
+                });
             }
+
+            var pipeline = compiled != null ? compiled.pipeline() : defaultPipeline;
+            var bindings = compiled != null ? extractBufferBindings(compiled) : Map.<String, Integer>of();
 
             meshRenderer.setRenderable(entity, new Renderable(
                     resolvedMesh.vertexBuffer(), resolvedMesh.indexBuffer(), resolvedMesh.vertexInput(),
-                    pipeline, resolvedMesh.vertexCount(), resolvedMesh.indexCount()));
+                    pipeline, resolvedMesh.vertexCount(), resolvedMesh.indexCount(), bindings));
         }
 
         device.beginFrame();
+        frameCount++;
 
         // Setup pass
         var setup = new CommandRecorder();
         setup.viewport(0, 0, viewportWidth, viewportHeight);
-        setup.setDepthTest(true);
-        setup.setCullFace(true);
+        setup.setRenderState(RenderState.defaults());
         setup.clear(0.05f, 0.05f, 0.08f, 1f);
         if (defaultPipeline != null) {
             setup.bindPipeline(defaultPipeline);
         }
         device.submit(setup.finish());
 
+        // Update engine params (once per frame)
+        globalParams.update("Engine", new EngineParams(engineTime, lastDeltaTime,
+                new Vec2(viewportWidth, viewportHeight), frameCount));
+
+        // Upload camera params (once per camera, pure camera data)
+        if (activeCamera != null) {
+            globalParams.update("Camera", new CameraParams(
+                    activeCamera.viewProjectionMatrix(),
+                    activeCamera.viewMatrix(),
+                    activeCamera.projectionMatrix(),
+                    Vec3.ZERO, // TODO: extract camera position from view matrix
+                    0.1f, 100f)); // TODO: store near/far on Camera
+        }
+
+        // Upload all per-frame global params to GPU (skip per-object ones)
+        for (var entry : globalParams.entries()) {
+            if (entry.data() == null) continue;
+            if ("Object".equals(entry.name())) continue; // per-draw, see below
+            var ubo = globalUbos.get(entry.name());
+            var layout = globalLayouts.get(entry.name());
+            if (ubo != null && layout != null) {
+                try (var w = device.writeBuffer(ubo)) {
+                    layout.write(w.segment(), 0, entry.data());
+                }
+            }
+        }
+
         // Draw each object
         if (activeCamera != null) {
-            var vp = activeCamera.viewProjectionMatrix();
             for (var cmd : meshRenderer.collectBatch()) {
                 // Skip if no pipeline
                 if (cmd.renderable().pipeline() == null) continue;
 
-                // Upload MVP to binding 0
-                var mvp = vp.mul(cmd.transform());
-                try (var w = device.writeBuffer(mvpUbo)) {
-                    mat4Layout.write(w.segment(), 0, mvp);
+                // Per-object: upload object params to a per-entity UBO
+                var objectLayout = globalLayouts.get("Object");
+                Handle<BufferResource> objectUbo = null;
+                if (objectLayout != null) {
+                    var objectKey = "obj_" + cmd.entity().index();
+                    objectUbo = objectUbos.computeIfAbsent(objectKey, k ->
+                            device.createBuffer(new BufferDescriptor(
+                                    objectLayout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
+                    var objectParams = new ObjectParams(cmd.transform());
+                    try (var w = device.writeBuffer(objectUbo)) {
+                        objectLayout.write(w.segment(), 0, objectParams);
+                    }
                 }
 
                 var draw = new CommandRecorder();
                 draw.bindPipeline(cmd.renderable().pipeline());
-                draw.bindUniformBuffer(0, mvpUbo);
 
-                // Upload material data to binding 1
-                var typedMaterial = meshRenderer.getTypedMaterialData(cmd.entity());
-                if (typedMaterial != null) {
-                    uploadTypedMaterialData(typedMaterial, draw);
-                } else {
-                    uploadMaterialSnapshot(cmd.entity(), cmd.materialData(), draw);
+                // Resolve and apply render state per entity
+                var mat = meshRenderer.getMaterialData(cmd.entity());
+                var renderState = resolveRenderState(mat);
+                draw.setRenderState(renderState);
+
+                // Bind all registered global params by name
+                var r = cmd.renderable();
+                for (var entry : globalParams.entries()) {
+                    Handle<BufferResource> ubo;
+                    if ("Object".equals(entry.name())) {
+                        ubo = objectUbo; // per-entity
+                    } else {
+                        ubo = globalUbos.get(entry.name());
+                    }
+                    if (ubo != null) {
+                        draw.bindUniformBuffer(
+                                r.bindingFor(entry.name() + "Buffer", entry.binding()), ubo);
+                    }
+                }
+
+                // Upload material data (mat already fetched above for render state)
+                if (mat != null) {
+                    int materialSlot = r.bindingFor("MaterialBuffer", globalParams.nextBinding());
+                    uploadMaterialData(mat, cmd.entity(), draw, materialSlot);
                 }
 
                 draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
@@ -372,32 +467,87 @@ public class Renderer implements AutoCloseable {
         device.endFrame();
     }
 
-    /** Uploads typed MaterialData scalar data as UBO at binding 1. */
-    private void uploadTypedMaterialData(dev.engine.core.material.MaterialData matData, CommandRecorder draw) {
-        var scalarRecord = matData.scalarData();
-        if (scalarRecord == null) return;
-        org.slf4j.LoggerFactory.getLogger(Renderer.class).info("Uploading typed material: {}", scalarRecord);
-
-        var layout = StructLayout.of(scalarRecord.getClass(), dev.engine.core.layout.LayoutMode.STD140);
-        var key = "typedmat_" + scalarRecord.getClass().getName();
-        var ubo = materialUbos.computeIfAbsent(key, k ->
-                device.createBuffer(new BufferDescriptor(
-                        Math.max(layout.size(), 16), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
-        try (var w = device.writeBuffer(ubo)) {
-            layout.write(w.segment(), 0, scalarRecord);
+    @SuppressWarnings("unchecked")
+    private PropertyMap resolveRenderState(MaterialData material) {
+        var builder = PropertyMap.builder();
+        // Layer 1: defaults
+        for (var key : defaultProperties.keys()) {
+            builder.set((PropertyKey<Object>) key, defaultProperties.get(key));
         }
-        draw.bindUniformBuffer(1, ubo);
-
-        // Bind textures via bindless handles (if supported and textures present)
-        var textures = matData.textures();
-        if (!textures.isEmpty() && device.supports(DeviceCapability.BINDLESS_TEXTURES)) {
-            for (var entry : textures.entrySet()) {
-                var gpuTex = uploadTexture(entry.getValue());
-                long bindlessHandle = device.getBindlessTextureHandle(gpuTex);
-                // Bindless handles would be written into an SSBO or the material UBO
-                // For now, textures are available via the handle
+        // Layer 2: material overrides (render state keys in MaterialData)
+        if (material != null) {
+            for (var key : material.keys()) {
+                Object value = material.get(key);
+                if (value != null && isRenderStateKey(key)) {
+                    builder.set((PropertyKey<Object>) key, value);
+                }
             }
         }
+        // Layer 3: forced overrides
+        for (var key : forcedProperties.keys()) {
+            builder.set((PropertyKey<Object>) key, forcedProperties.get(key));
+        }
+        return builder.build();
+    }
+
+    private boolean isRenderStateKey(PropertyKey<?> key) {
+        return key == RenderState.DEPTH_TEST || key == RenderState.DEPTH_WRITE
+            || key == RenderState.DEPTH_FUNC || key == RenderState.BLEND_MODE
+            || key == RenderState.CULL_MODE || key == RenderState.FRONT_FACE
+            || key == RenderState.WIREFRAME || key == RenderState.LINE_WIDTH;
+    }
+
+    /**
+     * Uploads MaterialData properties as UBO at the given binding slot.
+     * Uses BufferWriter for all value serialization.
+     */
+    private void uploadMaterialData(MaterialData matData, Handle<?> entity, CommandRecorder draw, int bindingSlot) {
+        var keys = matData.keys();
+        if (keys.isEmpty()) return;
+
+        // Filter to BufferWriter-supported keys and sort for deterministic layout
+        var scalarKeys = keys.stream()
+                .filter(k -> BufferWriter.supports(k.type()))
+                .sorted(Comparator.comparing(PropertyKey::name))
+                .toList();
+
+        if (scalarKeys.isEmpty()) return;
+
+        // Calculate total size with std140-style alignment
+        int totalSize = 0;
+        for (var key : scalarKeys) {
+            if (key.type() == Vec3.class) {
+                totalSize = align(totalSize, 16);
+                totalSize += 16; // Vec3 padded to 16 bytes in std140
+            } else {
+                totalSize += BufferWriter.sizeOf(key.type());
+            }
+        }
+
+        final int uboSize = Math.max(totalSize, 16);
+        var uboKey = "mat_" + entity.index();
+        var ubo = materialUbos.computeIfAbsent(uboKey, k ->
+                device.createBuffer(new BufferDescriptor(
+                        uboSize, BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
+
+        try (var w = device.writeBuffer(ubo)) {
+            int offset = 0;
+            for (var key : scalarKeys) {
+                var value = matData.get(key);
+                if (value == null) continue;
+
+                if (key.type() == Vec3.class) {
+                    offset = align(offset, 16);
+                    BufferWriter.write(w.segment(), offset, value);
+                    offset += 16; // std140 padded
+                } else {
+                    BufferWriter.write(w.segment(), offset, value);
+                    offset += BufferWriter.sizeOf(key.type());
+                }
+            }
+        }
+
+        draw.bindUniformBuffer(bindingSlot, ubo);
     }
 
     // --- Capabilities ---
@@ -469,48 +619,31 @@ public class Renderer implements AutoCloseable {
         return dev.engine.graphics.texture.TextureFormat.RGBA8;
     }
 
+    private static int align(int offset, int alignment) {
+        return (offset + alignment - 1) & ~(alignment - 1);
+    }
+
     /**
-     * Uploads material data from a transaction-driven PropertyMap snapshot.
-     * Material data comes through transactions, not by reading Material objects.
+     * Extracts buffer name → binding slot map from a CompiledShader's reflection.
+     * Only includes constant buffer bindings.
      */
-    private void uploadMaterialSnapshot(Handle<?> entity, dev.engine.core.property.PropertyMap materialData, CommandRecorder draw) {
-        if (materialData == null || materialData.size() == 0) return;
-
-        // Resolve material — prefer transaction-driven Material first, fall back to registry
-        Material material = meshRenderer.getMaterialData(entity);
-        if (material == null) {
-            var matHandle = meshRenderer.getMaterialAssignment(entity);
-            material = matHandle != null ? materialRegistry.get(matHandle.index()) : null;
-        }
-        if (material != null && material.hasRecordData()) {
-            var record = material.data();
-            var layout = dev.engine.core.layout.StructLayout.of(record.getClass());
-            var key = "record_" + record.getClass().getName();
-            var ubo = materialUbos.computeIfAbsent(key, k ->
-                    device.createBuffer(new dev.engine.graphics.buffer.BufferDescriptor(
-                            layout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
-            try (var w = device.writeBuffer(ubo)) {
-                layout.write(w.segment(), 0, record);
+    private Map<String, Integer> extractBufferBindings(CompiledShader compiled) {
+        if (compiled.bindings().isEmpty()) return Map.of();
+        var result = new HashMap<String, Integer>();
+        for (var entry : compiled.bindings().entrySet()) {
+            var binding = entry.getValue();
+            if (binding.type() == CompiledShader.BindingType.CONSTANT_BUFFER) {
+                result.put(entry.getKey(), binding.binding());
             }
-            draw.bindUniformBuffer(1, ubo);
-            return;
         }
+        return result;
+    }
 
-        // Property-bag path: serialize from the snapshot that came through transactions
-        if (material != null) {
-            var data = MaterialCompiler.serializeMaterialData(material);
-            if (data.remaining() > 0) {
-                var key = "mat_" + entity.index();
-                var ubo = materialUbos.computeIfAbsent(key, k ->
-                        device.createBuffer(new dev.engine.graphics.buffer.BufferDescriptor(
-                                Math.max(data.remaining(), 16), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
-                try (var w = device.writeBuffer(ubo)) {
-                    for (int i = 0; i < data.remaining(); i++) {
-                        w.segment().set(java.lang.foreign.ValueLayout.JAVA_BYTE, i, data.get(i));
-                    }
-                }
-                draw.bindUniformBuffer(1, ubo);
-            }
+    private String loadShaderFile(String path) {
+        try {
+            return java.nio.file.Files.readString(java.nio.file.Path.of(path));
+        } catch (java.io.IOException e) {
+            return null;
         }
     }
 
@@ -520,9 +653,12 @@ public class Renderer implements AutoCloseable {
 
     @Override
     public void close() {
-        device.destroyBuffer(mvpUbo);
+        for (var ubo : globalUbos.values()) device.destroyBuffer(ubo);
+        globalUbos.clear();
         for (var ubo : materialUbos.values()) device.destroyBuffer(ubo);
         materialUbos.clear();
+        for (var ubo : objectUbos.values()) device.destroyBuffer(ubo);
+        objectUbos.clear();
         if (defaultPipeline != null) device.destroyPipeline(defaultPipeline);
         device.close();
     }

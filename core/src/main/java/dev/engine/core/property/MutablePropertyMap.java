@@ -34,6 +34,10 @@ public final class MutablePropertyMap {
         return values.containsKey(key);
     }
 
+    public Set<PropertyKey<?>> keys() {
+        return Collections.unmodifiableSet(values.keySet());
+    }
+
     public Set<PropertyKey<?>> getChanges() {
         return Collections.unmodifiableSet(new LinkedHashSet<>(changes));
     }
