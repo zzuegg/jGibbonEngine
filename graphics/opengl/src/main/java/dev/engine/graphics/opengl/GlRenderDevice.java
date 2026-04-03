@@ -71,8 +71,8 @@ public class GlRenderDevice implements RenderDevice {
     private final CapabilityRegistry capabilities = new CapabilityRegistry();
     private final long glfwWindow;
 
-    public GlRenderDevice(GlfwWindowToolkit.GlfwWindowHandle window) {
-        this.glfwWindow = window.glfwHandle();
+    public GlRenderDevice(dev.engine.graphics.window.WindowHandle window) {
+        this.glfwWindow = window.nativeHandle();
         GLFW.glfwMakeContextCurrent(glfwWindow);
         GL.createCapabilities();
         log.info("OpenGL context created: {}", GL45.glGetString(GL45.GL_VERSION));
@@ -489,6 +489,26 @@ public class GlRenderDevice implements RenderDevice {
             case RenderCommand.Scissor cmd -> {
                 GL45.glScissor(cmd.x(), cmd.y(), cmd.width(), cmd.height());
             }
+            case RenderCommand.SetRenderState state -> {
+                // TODO: implement in Task 17
+                log.warn("SetRenderState not yet implemented in OpenGL backend");
+            }
+            case RenderCommand.PushConstants pc -> {
+                // TODO: implement in Task 18
+                log.warn("PushConstants not yet implemented in OpenGL backend");
+            }
+            case RenderCommand.BindComputePipeline bcp -> {
+                // TODO: implement in Task 19
+                log.warn("BindComputePipeline not yet implemented in OpenGL backend");
+            }
+            case RenderCommand.Dispatch dispatch -> {
+                // TODO: implement in Task 19
+                log.warn("Dispatch not yet implemented in OpenGL backend");
+            }
+            case RenderCommand.MemoryBarrier barrier -> {
+                // TODO: implement in Task 19
+                log.warn("MemoryBarrier not yet implemented in OpenGL backend");
+            }
         }
     }
 
@@ -546,6 +566,21 @@ public class GlRenderDevice implements RenderDevice {
         bufferGlNames.put(handle.index(), glBuffer);
         bufferSizes.put(handle.index(), size);
         return handle;
+    }
+
+    @Override
+    public byte[] readFramebuffer(int width, int height) {
+        java.nio.ByteBuffer pixels = java.nio.ByteBuffer.allocateDirect(width * height * 4);
+        GL45.glReadPixels(0, 0, width, height, GL45.GL_RGBA, GL45.GL_UNSIGNED_BYTE, pixels);
+        byte[] rgba = new byte[width * height * 4];
+        // Flip Y (OpenGL reads bottom-up)
+        for (int y = 0; y < height; y++) {
+            int srcRow = (height - 1 - y) * width * 4;
+            int dstRow = y * width * 4;
+            pixels.position(srcRow);
+            pixels.get(rgba, dstRow, width * 4);
+        }
+        return rgba;
     }
 
     @Override
