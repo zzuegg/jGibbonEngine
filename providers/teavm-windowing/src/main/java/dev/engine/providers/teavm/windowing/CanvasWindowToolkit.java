@@ -39,15 +39,21 @@ public class CanvasWindowToolkit implements WindowToolkit {
 
     // --- requestAnimationFrame as @Async ---
 
+    @org.teavm.jso.JSFunctor
+    private interface RafCallback extends org.teavm.jso.JSObject {
+        void onFrame();
+    }
+
     @Async
     private static native void waitForAnimationFrame();
 
     private static void waitForAnimationFrame(AsyncCallback<Void> callback) {
-        waitForAnimationFrameJS(callback);
+        RafCallback raf = () -> callback.complete(null);
+        waitForAnimationFrameJS(raf);
     }
 
-    @JSBody(params = "callback", script = "requestAnimationFrame(function() { callback(null); });")
-    private static native void waitForAnimationFrameJS(AsyncCallback<Void> callback);
+    @JSBody(params = "callback", script = "requestAnimationFrame(function() { callback(); });")
+    private static native void waitForAnimationFrameJS(RafCallback callback);
 
     // ------------------------------------------------------------------
 
