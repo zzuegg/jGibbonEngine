@@ -1,5 +1,7 @@
 package dev.engine.graphics.opengl;
 
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
+
 import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
@@ -14,6 +16,8 @@ import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
 import dev.engine.graphics.renderer.MeshRenderer;
 import dev.engine.graphics.renderer.Renderable;
+import dev.engine.graphics.renderstate.RenderState;
+import dev.engine.core.property.PropertyMap;
 import dev.engine.core.mesh.ComponentType;
 import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
@@ -61,9 +65,9 @@ class SceneRenderVerificationTest {
 
     @BeforeAll
     static void setUp() {
-        toolkit = new GlfwWindowToolkit();
+        toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Verify", 128, 128));
-        device = new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window);
+        device = new GlRenderDevice(window);
     }
 
     @AfterAll
@@ -137,7 +141,9 @@ class SceneRenderVerificationTest {
         device.beginFrame();
         var rec = new CommandRecorder();
         rec.viewport(0, 0, 128, 128);
-        rec.setDepthTest(true);
+        rec.setRenderState(PropertyMap.builder()
+                .set(RenderState.DEPTH_TEST, true)
+                .build());
         rec.clear(0f, 0f, 0f, 1f);
         rec.bindPipeline(pipeline);
 

@@ -8,6 +8,7 @@ import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.VertexInputResource;
 import dev.engine.graphics.renderstate.BarrierScope;
 import dev.engine.graphics.renderstate.BlendMode;
+import dev.engine.graphics.renderstate.CullMode;
 import dev.engine.graphics.renderstate.RenderState;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +22,9 @@ class CommandListTest {
         var ctx = new CommandRecorder();
         ctx.clear(0.1f, 0.1f, 0.1f, 1f);
         ctx.viewport(0, 0, 800, 600);
-        ctx.setDepthTest(true);
+        ctx.setRenderState(PropertyMap.builder()
+                .set(RenderState.DEPTH_TEST, true)
+                .build());
         ctx.bindPipeline(new Handle<>(0, 0));
         ctx.bindVertexBuffer(new Handle<>(1, 0), new Handle<>(2, 0));
         ctx.draw(3, 0);
@@ -30,7 +33,7 @@ class CommandListTest {
         assertEquals(6, list.commands().size());
         assertInstanceOf(RenderCommand.Clear.class, list.commands().get(0));
         assertInstanceOf(RenderCommand.Viewport.class, list.commands().get(1));
-        assertInstanceOf(RenderCommand.SetDepthTest.class, list.commands().get(2));
+        assertInstanceOf(RenderCommand.SetRenderState.class, list.commands().get(2));
         assertInstanceOf(RenderCommand.BindPipeline.class, list.commands().get(3));
         assertInstanceOf(RenderCommand.BindVertexBuffer.class, list.commands().get(4));
         assertInstanceOf(RenderCommand.Draw.class, list.commands().get(5));
@@ -62,15 +65,38 @@ class CommandListTest {
         assertEquals(36, indexed.indexCount());
     }
 
-    @Test void allStateCommandsRecorded() {
+    @Test void setRenderStateWithMultipleProperties() {
+        var ctx = new CommandRecorder();
+        ctx.setRenderState(PropertyMap.builder()
+                .set(RenderState.DEPTH_TEST, true)
+                .set(RenderState.BLEND_MODE, BlendMode.ALPHA)
+                .set(RenderState.CULL_MODE, CullMode.BACK)
+                .set(RenderState.WIREFRAME, false)
+                .build());
+        ctx.scissor(10, 20, 100, 200);
+        var list = ctx.finish();
+        assertEquals(2, list.commands().size());
+        assertInstanceOf(RenderCommand.SetRenderState.class, list.commands().get(0));
+        assertInstanceOf(RenderCommand.Scissor.class, list.commands().get(1));
+
+        var stateCmd = (RenderCommand.SetRenderState) list.commands().get(0);
+        assertEquals(true, stateCmd.properties().get(RenderState.DEPTH_TEST));
+        assertEquals(BlendMode.ALPHA, stateCmd.properties().get(RenderState.BLEND_MODE));
+        assertEquals(CullMode.BACK, stateCmd.properties().get(RenderState.CULL_MODE));
+    }
+
+    @Test void deprecatedStateCommandsStillWork() {
         var ctx = new CommandRecorder();
         ctx.setDepthTest(true);
         ctx.setBlending(true);
         ctx.setCullFace(true);
         ctx.setWireframe(false);
-        ctx.scissor(10, 20, 100, 200);
         var list = ctx.finish();
-        assertEquals(5, list.commands().size());
+        assertEquals(4, list.commands().size());
+        assertInstanceOf(RenderCommand.SetDepthTest.class, list.commands().get(0));
+        assertInstanceOf(RenderCommand.SetBlending.class, list.commands().get(1));
+        assertInstanceOf(RenderCommand.SetCullFace.class, list.commands().get(2));
+        assertInstanceOf(RenderCommand.SetWireframe.class, list.commands().get(3));
     }
 
     @Test void setRenderStateCommand() {
