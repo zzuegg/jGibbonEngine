@@ -172,6 +172,25 @@ Calling it causes a Rust panic. Instead:
 
 `wgpuDevicePoll` is a wgpu-native extension (defined in `wgpu.h`, not `webgpu.h`).
 
+## Shader Entry Point Names (Slang WGSL Output)
+
+Slang preserves original entry point names when compiling to WGSL. If your Slang shader
+declares `vertexMain` and `fragmentMain`, the generated WGSL will use those exact names
+(e.g., `@vertex fn vertexMain(...)`). This is different from GLSL where Slang always
+renames entry points to `main`.
+
+The `WGPUVertexState` and `WGPUFragmentState` structs contain a `WGPUStringView entryPoint`
+field (data pointer + length). This must match the entry point name in the WGSL source
+exactly. A mismatch causes wgpu-native to SIGABRT with:
+```
+"Error matching ShaderStages(VERTEX) shader requirements against the pipeline"
+```
+
+The fix: `ShaderSource` carries an `entryPoint` field (defaults to `"main"` for GLSL).
+The `ShaderManager` sets it to `"vertexMain"`/`"fragmentMain"` for WGSL targets,
+and `WgpuRenderDevice.buildRenderPipeline` reads the entry point from `ShaderSource`
+rather than hardcoding names.
+
 ## Vulkan Backend Warning
 
 wgpu-native prints `WARNING: radv is not a conformant Vulkan implementation` on
