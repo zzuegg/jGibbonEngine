@@ -144,6 +144,53 @@ import "common";  // looks for common.slang in search paths
 
 Add search paths via `-I` flag to slangc. Our `SlangCompiler.addSearchPath()` handles this.
 
+## Texture Declarations (Sampler2D vs Texture2D + SamplerState)
+
+**Always use `Sampler2D` (combined type) for cross-backend compatibility.**
+
+```slang
+// CORRECT — combined texture+sampler, works for both GLSL and SPIRV
+Sampler2D albedoTexture;
+float3 color = albedoTexture.Sample(uv).rgb;
+
+// WRONG for OpenGL — separate texture and sampler
+// Generates `uniform texture2D` + `uniform sampler` which Mesa's GLSL rejects
+Texture2D albedoTexture;
+SamplerState albedoSampler;
+float3 color = albedoTexture.Sample(albedoSampler, uv).rgb;
+```
+
+`Texture2D` + `SamplerState` generates valid Vulkan SPIRV but invalid desktop OpenGL GLSL (`uniform texture2D` and `uniform sampler` are not supported by Mesa's GLSL compiler). Slang's `Sampler2D` compiles to `uniform sampler2D` in GLSL, which works everywhere.
+
+## Texture Binding and [[vk::binding(N)]]
+
+**`[[vk::binding(N)]]` affects GLSL output too, not just SPIRV.** The annotation overrides the `layout(binding = N)` in generated GLSL.
+
+For cross-backend texture binding, use `[[vk::binding(16)]]` (matching `VkDescriptorManager.TEXTURE_BINDING_OFFSET`) so the Vulkan descriptor set layout matches. The same binding (16) is used for OpenGL's `glBindTextureUnit`.
+
+```slang
+[[vk::binding(16)]]
+Sampler2D albedoTexture;
+```
+
+This generates:
+- GLSL: `layout(binding = 16) uniform sampler2D albedoTexture_0;`
+- SPIRV: descriptor binding 16
+
+## Slang Reflection Limitations
+
+Slang's reflection API (`bindingOffset()`) does not reliably return the correct binding index for texture parameters. The `DESCRIPTOR_TABLE_SLOT`, `CONSTANT_BUFFER`, `SHADER_RESOURCE`, and `SAMPLER_STATE` categories all return 0 for combined `Sampler2D` types.
+
+**Workaround:** For GLSL targets, parse the generated GLSL for `layout(binding = N)` patterns to extract the actual binding index. For SPIRV targets, the binding comes from `[[vk::binding(N)]]` annotations. The `ShaderManager.parseGlslBindings()` method handles this.
+
+## WGSL Target (WebGPU)
+
+**The `SLANG_WGSL` compile target enum value is 28, NOT 29.** Value 29 is `SLANG_WGSL_SPIRV_ASM`, which requires the `slang-tint` pass-through library (not included in standard Slang releases).
+
+Slang can emit WGSL directly (target 28) without any additional libraries. The generated WGSL uses `@vertex`/`@fragment` annotations, `@location(N)` for vertex inputs, and `@builtin(position)` for SV_Position.
+
+The `ShaderManager` must select `SLANG_WGSL` when the backend is "WebGPU" (not fall through to GLSL). Passing GLSL source to `wgpuDeviceCreateShaderModule` causes a Rust panic in wgpu-native.
+
 ## Common Pitfalls
 
 1. **mul order** — always `mul(vector, matrix)`, never `mul(matrix, vector)`
@@ -154,3 +201,6 @@ Add search paths via `-I` flag to slangc. Our `SlangCompiler.addSearchPath()` ha
 6. **Cache invalidation** — if you change a .slang file, the cache key changes (content hash), so recompilation is automatic
 7. **SPIR-V output is binary** — don't try to read it as text
 8. **mix() vs lerp()** — Slang uses `lerp()` (HLSL convention), not `mix()` (GLSL convention)
+9. **Sampler2D not Texture2D** — use combined `Sampler2D` type for OpenGL compatibility (see above)
+10. **[[vk::binding]] affects GLSL** — the annotation is not Vulkan-only, it changes GLSL `layout(binding)` too
+11. **SLANG_WGSL is 28** — the enum value for WGSL is 28 (not 29, which is WGSL_SPIRV_ASM and requires slang-tint)

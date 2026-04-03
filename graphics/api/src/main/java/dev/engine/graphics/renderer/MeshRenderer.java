@@ -1,7 +1,6 @@
 package dev.engine.graphics.renderer;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.core.material.Material;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.mesh.MeshData;
@@ -30,8 +29,7 @@ public class MeshRenderer {
     private final Map<Handle<?>, Renderable> renderables = new HashMap<>();
     private final Map<Handle<?>, MutablePropertyMap> materials = new HashMap<>();
     private final Map<Handle<?>, MeshData> meshDataAssignments = new HashMap<>();
-    private final Map<Handle<?>, Material> materialDataAssignments = new HashMap<>();
-    private final Map<Handle<?>, MaterialData> typedMaterialData = new HashMap<>();
+    private final Map<Handle<?>, MaterialData> materialData = new HashMap<>();
     private final Map<Handle<?>, Handle<MeshTag>> meshAssignments = new HashMap<>();
     private final Map<Handle<?>, Handle<MaterialTag>> materialAssignments = new HashMap<>();
 
@@ -45,7 +43,7 @@ public class MeshRenderer {
                 transforms.remove(removed.entity());
                 renderables.remove(removed.entity());
                 materials.remove(removed.entity());
-                materialDataAssignments.remove(removed.entity());
+                materialData.remove(removed.entity());
             }
             case Transaction.TransformChanged changed ->
                     transforms.put(changed.entity(), changed.transform());
@@ -72,10 +70,8 @@ public class MeshRenderer {
                 meshDataAssignments.put(changed.entity(), changed.meshData());
                 renderables.remove(changed.entity()); // force re-resolve
             }
-            case Transaction.MaterialChanged changed ->
-                    materialDataAssignments.put(changed.entity(), changed.material());
             case Transaction.MaterialDataChanged changed -> {
-                typedMaterialData.put(changed.entity(), changed.materialData());
+                materialData.put(changed.entity(), changed.materialData());
                 renderables.remove(changed.entity()); // force re-resolve with new material
             }
             case Transaction.MeshAssigned assigned ->
@@ -113,16 +109,12 @@ public class MeshRenderer {
         return materials.get(entity);
     }
 
-    public MaterialData getTypedMaterialData(Handle<?> entity) {
-        return typedMaterialData.get(entity);
+    public MaterialData getMaterialData(Handle<?> entity) {
+        return materialData.get(entity);
     }
 
     public MeshData getMeshData(Handle<?> entity) {
         return meshDataAssignments.get(entity);
-    }
-
-    public Material getMaterialData(Handle<?> entity) {
-        return materialDataAssignments.get(entity);
     }
 
     public Handle<MeshTag> getMeshAssignment(Handle<?> entity) {

@@ -348,6 +348,30 @@ and GPU driver. Use `wgpuSurfaceGetCapabilities` to query supported formats.
 not by pointer. In the FFM binding, the `FunctionDescriptor` must use `SURFACE_CAPABILITIES_LAYOUT`
 as the parameter type instead of `ValueLayout.ADDRESS`.
 
+## Pipeline Variants for Immutable State
+
+WebGPU pipelines are **fully immutable** — blend mode, cull mode, front face, depth
+test/write/func are all baked in at pipeline creation time. Unlike OpenGL where these
+are dynamic state set via `glEnable`/`glBlendFunc`, WebGPU requires creating a new
+pipeline object for each distinct combination.
+
+When `SetRenderState` (or `SetBlending`/`SetCullFace`/`SetDepthTest`) changes
+pipeline-baked state mid-frame, the WebGPU backend must:
+
+1. Build a `PipelineStateKey` from the current state (blend mode, cull mode, etc.)
+2. Look up or create a pipeline variant via `pipelineVariants` cache
+3. Rebind the variant on the render pass encoder before the next draw
+
+The variant pipeline reuses the same shader modules and bind group layout as the
+base pipeline, only changing the state that differs. Variants are cached for the
+device lifetime and cleaned up on pipeline destroy or device close.
+
+This is the same approach used by the Vulkan backend (`rebindPipelineVariant`).
+
+**Key gotcha:** When creating a variant, the base pipeline's `WGPUBindGroupLayout`
+is shared (not recreated). The bind group layout is owned by the base pipeline and
+must not be released by variants.
+
 ## Vulkan Backend Warning
 
 wgpu-native prints `WARNING: radv is not a conformant Vulkan implementation` on

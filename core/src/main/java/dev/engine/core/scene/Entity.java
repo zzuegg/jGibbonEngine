@@ -18,7 +18,7 @@ import java.util.function.UnaryOperator;
  *
  * entity.get(Transform.class);           // → Transform
  * entity.has(MeshData.class);            // → true
- * entity.get(Material.class).type();     // → MaterialType
+ * entity.get(MaterialData.class).shaderHint(); // → "PBR"
  * </pre>
  */
 public class Entity {

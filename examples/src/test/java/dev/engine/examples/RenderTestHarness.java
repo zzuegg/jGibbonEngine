@@ -100,8 +100,8 @@ public class RenderTestHarness {
         if (wgpu != null) {
             saveScreenshot(wgpu, "webgpu", name);
             var wgpuTolerance = new Tolerance(
-                    Math.max(tolerance.maxChannelDiff(), 10),
-                    Math.max(tolerance.maxDiffPercent(), 10.0));
+                    Math.max(tolerance.maxChannelDiff(), 5),
+                    Math.max(tolerance.maxDiffPercent(), 5.0));
             double glWgpuDiff = ScreenshotHelper.diffPercentage(gl, wgpu, wgpuTolerance.maxChannelDiff());
             assertTrue(glWgpuDiff < wgpuTolerance.maxDiffPercent(),
                     "Cross-backend '" + name + "': GL/WebGPU differ by "

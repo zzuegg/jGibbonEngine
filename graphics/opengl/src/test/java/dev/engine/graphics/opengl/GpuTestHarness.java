@@ -1,5 +1,7 @@
 package dev.engine.graphics.opengl;
 
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
+
 import dev.engine.core.handle.Handle;
 import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
@@ -55,9 +57,9 @@ public class GpuTestHarness implements AutoCloseable {
     public GpuTestHarness(int width, int height) {
         this.width = width;
         this.height = height;
-        this.toolkit = new GlfwWindowToolkit();
+        this.toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("GPU Test", 1, 1));
-        this.device = new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window);
+        this.device = new GlRenderDevice(window);
 
         // Offscreen FBO
         fbo = GL45.glCreateFramebuffers();

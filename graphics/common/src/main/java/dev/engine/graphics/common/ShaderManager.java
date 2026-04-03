@@ -259,8 +259,13 @@ public class ShaderManager {
                     .toList();
             for (var key : sortedTexKeys) {
                 String texName = mapTextureKeyName(key.name());
-                // Always emit vk::binding for Vulkan; Slang only uses it for SPIRV targets
-                sb.append("[[vk::binding(").append(vkTexOffset + texIndex).append(")]]\n");
+                // Only emit vk::binding for SPIRV targets (Vulkan descriptor set layout).
+                // For WGSL/GLSL, let Slang auto-assign sequential bindings. Slang applies
+                // vk::binding to ALL targets (including WGSL), which would force texture
+                // bindings to index 16+ even in WebGPU where there's no such requirement.
+                if (slangTarget == SlangNative.SLANG_SPIRV) {
+                    sb.append("[[vk::binding(").append(vkTexOffset + texIndex).append(")]]\n");
+                }
                 sb.append("Sampler2D ").append(texName).append(";\n");
                 texIndex++;
             }

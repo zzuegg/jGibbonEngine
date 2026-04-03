@@ -31,16 +31,18 @@ public final class ScreenshotReportGenerator {
         // Collect screenshot files
         var glDir = screenshotDir.resolve("opengl");
         var vkDir = screenshotDir.resolve("vulkan");
+        var wgpuDir = screenshotDir.resolve("webgpu");
         var scenes = new TreeSet<String>();
         collectSceneNames(glDir, scenes);
         collectSceneNames(vkDir, scenes);
+        collectSceneNames(wgpuDir, scenes);
 
         // Also add scenes from test results that might not have screenshots
         for (var r : results) {
             if (r.sceneName != null) scenes.add(r.sceneName);
         }
 
-        var html = generateReport(scenes, results, glDir, vkDir);
+        var html = generateReport(scenes, results, glDir, vkDir, wgpuDir);
         Files.createDirectories(outputFile.getParent());
         Files.writeString(outputFile, html);
         System.out.println("Screenshot report generated: " + outputFile.toAbsolutePath());
@@ -109,16 +111,18 @@ public final class ScreenshotReportGenerator {
         }
     }
 
-    private static String generateReport(Set<String> scenes, List<TestResult> results, Path glDir, Path vkDir) {
+    private static String generateReport(Set<String> scenes, List<TestResult> results, Path glDir, Path vkDir, Path wgpuDir) {
         // Index results by scene name
         var glResults = new HashMap<String, TestResult>();
         var vkResults = new HashMap<String, TestResult>();
+        var wgpuResults = new HashMap<String, TestResult>();
         var crossResults = new HashMap<String, TestResult>();
         int totalPassed = 0, totalFailed = 0, totalSkipped = 0;
 
         for (var r : results) {
             if (r.className.contains("OpenGl")) glResults.put(r.sceneName, r);
             else if (r.className.contains("Vulkan")) vkResults.put(r.sceneName, r);
+            else if (r.className.contains("WebGpu")) wgpuResults.put(r.sceneName, r);
             else if (r.className.contains("CrossBackend")) crossResults.put(r.sceneName, r);
 
             switch (r.status) {
@@ -132,19 +136,24 @@ public final class ScreenshotReportGenerator {
         for (var scene : scenes) {
             var glFile = glDir.resolve(scene + ".png");
             var vkFile = vkDir.resolve(scene + ".png");
+            var wgpuFile = wgpuDir.resolve(scene + ".png");
             boolean hasGl = Files.exists(glFile);
             boolean hasVk = Files.exists(vkFile);
+            boolean hasWgpu = Files.exists(wgpuFile);
 
             var glResult = glResults.get(scene);
             var vkResult = vkResults.get(scene);
+            var wgpuResult = wgpuResults.get(scene);
             var crossResult = crossResults.get(scene);
 
             String displayName = scene.replace("_", " ");
             String glImg = hasGl ? "<img src=\"opengl/" + scene + ".png\" alt=\"OpenGL\">" : "<span class=\"missing\">no image</span>";
             String vkImg = hasVk ? "<img src=\"vulkan/" + scene + ".png\" alt=\"Vulkan\">" : "<span class=\"missing\">no image</span>";
+            String wgpuImg = hasWgpu ? "<img src=\"webgpu/" + scene + ".png\" alt=\"WebGPU\">" : "<span class=\"missing\">not available</span>";
 
             String glStatus = statusBadge(glResult);
             String vkStatus = statusBadge(vkResult);
+            String wgpuStatus = statusBadge(wgpuResult);
             String crossStatus = statusBadge(crossResult);
 
             String failMessage = "";
@@ -154,29 +163,34 @@ public final class ScreenshotReportGenerator {
             if (vkResult != null && vkResult.status == TestResult.Status.FAILED) {
                 failMessage += "<div class=\"fail-msg\">VK: " + escapeHtml(vkResult.message) + "</div>";
             }
+            if (wgpuResult != null && wgpuResult.status == TestResult.Status.FAILED) {
+                failMessage += "<div class=\"fail-msg\">WebGPU: " + escapeHtml(wgpuResult.message) + "</div>";
+            }
             if (crossResult != null && crossResult.status == TestResult.Status.FAILED) {
                 failMessage += "<div class=\"fail-msg\">Cross: " + escapeHtml(crossResult.message) + "</div>";
             }
 
             boolean anyFailed = (glResult != null && glResult.status == TestResult.Status.FAILED)
                 || (vkResult != null && vkResult.status == TestResult.Status.FAILED)
+                || (wgpuResult != null && wgpuResult.status == TestResult.Status.FAILED)
                 || (crossResult != null && crossResult.status == TestResult.Status.FAILED);
 
             rows.append("""
                 <tr class="%s">
                     <td class="scene-name">
                         %s
-                        <div class="badges">%s %s %s</div>
+                        <div class="badges">%s %s %s %s</div>
                         %s
                     </td>
+                    <td class="screenshot">%s</td>
                     <td class="screenshot">%s</td>
                     <td class="screenshot">%s</td>
                 </tr>
             """.formatted(
                 anyFailed ? "failed-row" : "",
-                displayName, glStatus, vkStatus, crossStatus,
+                displayName, glStatus, vkStatus, wgpuStatus, crossStatus,
                 failMessage,
-                glImg, vkImg
+                glImg, vkImg, wgpuImg
             ));
         }
 
@@ -257,7 +271,7 @@ public final class ScreenshotReportGenerator {
             </head>
             <body>
                 <h1>Screenshot Test Report</h1>
-                <p class="subtitle">Visual regression test results &mdash; OpenGL 4.5 vs Vulkan 1.3</p>
+                <p class="subtitle">Visual regression test results &mdash; OpenGL 4.5 vs Vulkan 1.3 vs WebGPU</p>
 
                 <div class="stats">
                     <div class="stat">
@@ -284,6 +298,7 @@ public final class ScreenshotReportGenerator {
                             <th>Scene / Status</th>
                             <th>OpenGL</th>
                             <th>Vulkan</th>
+                            <th>WebGPU</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -313,6 +328,7 @@ public final class ScreenshotReportGenerator {
     private static String badgeLabel(TestResult result) {
         if (result.className.contains("OpenGl")) return "GL";
         if (result.className.contains("Vulkan")) return "VK";
+        if (result.className.contains("WebGpu")) return "WGPU";
         if (result.className.contains("CrossBackend")) return "Cross";
         return "?";
     }

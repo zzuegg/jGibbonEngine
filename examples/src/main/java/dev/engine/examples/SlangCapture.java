@@ -1,12 +1,12 @@
 package dev.engine.examples;
 
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
-import dev.engine.core.material.MaterialType;
 import dev.engine.graphics.opengl.GlRenderDevice;
-import dev.engine.graphics.opengl.GlfwWindowToolkit;
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.core.mesh.ComponentType;
 import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
@@ -14,9 +14,9 @@ import dev.engine.graphics.window.WindowDescriptor;
 
 public class SlangCapture {
     public static void main(String[] args) throws Exception {
-        var toolkit = new GlfwWindowToolkit();
+        var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Capture", 800, 600));
-        var renderer = new Renderer(new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window));
+        var renderer = new Renderer(new GlRenderDevice(window));
 
         var format = VertexFormat.of(
                 new VertexAttribute(0, 3, ComponentType.FLOAT, false, 0),
@@ -34,10 +34,10 @@ public class SlangCapture {
         scene.setMesh(c2, cubeMesh);
         scene.setMesh(c3, cubeMesh);
 
-        var mat = renderer.createMaterial(MaterialType.UNLIT);
-        scene.setMaterial(c1, mat);
-        scene.setMaterial(c2, mat);
-        scene.setMaterial(c3, mat);
+        var unlitMat = MaterialData.unlit(new Vec3(0.8f, 0.8f, 0.8f));
+        c1.add(unlitMat);
+        c2.add(unlitMat);
+        c3.add(unlitMat);
 
         var camera = renderer.createCamera();
         camera.lookAt(new Vec3(0f, 3f, 7f), Vec3.ZERO, Vec3.UNIT_Y);

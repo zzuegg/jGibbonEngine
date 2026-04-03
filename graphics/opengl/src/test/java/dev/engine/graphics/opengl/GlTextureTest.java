@@ -1,5 +1,7 @@
 package dev.engine.graphics.opengl;
 
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
+
 import dev.engine.core.handle.Handle;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureFormat;
@@ -21,9 +23,9 @@ class GlTextureTest {
 
     @BeforeAll
     static void setUp() {
-        toolkit = new GlfwWindowToolkit();
+        toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("GPU Test", 1, 1));
-        device = new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window);
+        device = new GlRenderDevice(window);
     }
 
     @AfterAll

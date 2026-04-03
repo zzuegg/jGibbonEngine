@@ -4,6 +4,7 @@ public interface TextureFormat {
     String name();
 
     TextureFormat RGBA8 = NamedFormat.of("RGBA8");
+    TextureFormat BGRA8 = NamedFormat.of("BGRA8");
     TextureFormat RGB8 = NamedFormat.of("RGB8");
     TextureFormat R8 = NamedFormat.of("R8");
     TextureFormat DEPTH24 = NamedFormat.of("DEPTH24");

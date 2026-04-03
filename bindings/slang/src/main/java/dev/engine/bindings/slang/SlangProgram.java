@@ -173,6 +173,92 @@ public class SlangProgram implements AutoCloseable {
         }
     }
 
+    /**
+     * Specializes this component type by providing concrete types for generic parameters.
+     *
+     * <p>Uses {@code SpecializationArg::Kind::Expr} (kind=2) to pass type names as strings,
+     * e.g., {@code specialize("UboMaterialParams")} to fill a generic {@code <M : IMaterialParams>}.
+     *
+     * @param typeNames the concrete type names, one per specialization parameter
+     * @return a new specialized program
+     */
+    public SlangProgram specialize(String... typeNames) {
+        try (var arena = Arena.ofConfined()) {
+            int count = typeNames.length;
+
+            // SpecializationArg layout: { int32_t kind, 4-byte pad, pointer }
+            long argSize = 16;
+            var argsSegment = arena.allocate(argSize * count, 8);
+
+            for (int i = 0; i < count; i++) {
+                long offset = i * argSize;
+                // kind = 2 (Expr)
+                argsSegment.set(ValueLayout.JAVA_INT, offset, 2);
+                // expr = pointer to type name string
+                var nameStr = arena.allocateFrom(typeNames[i]);
+                argsSegment.set(ValueLayout.ADDRESS, offset + 8, nameStr);
+            }
+
+            var outPtr = arena.allocate(ValueLayout.ADDRESS);
+            var outDiag = arena.allocate(ValueLayout.ADDRESS);
+            outDiag.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
+
+            // specialize — vtable index 9
+            var handle = com.methodHandle(9, FunctionDescriptor.of(
+                    ValueLayout.JAVA_INT,   // SlangResult
+                    ValueLayout.ADDRESS,    // this
+                    ValueLayout.ADDRESS,    // SpecializationArg const* args
+                    ValueLayout.JAVA_LONG,  // SlangInt argCount
+                    ValueLayout.ADDRESS,    // IComponentType** outSpecialized
+                    ValueLayout.ADDRESS     // IBlob** outDiag
+            ));
+
+            int result = (int) handle.invoke(com.ptr(), argsSegment, (long) count, outPtr, outDiag);
+
+            // Check diagnostics
+            var diagPtr = outDiag.get(ValueLayout.ADDRESS, 0);
+            if (!diagPtr.equals(MemorySegment.NULL)) {
+                var blob = new SlangBlob(diagPtr);
+                var msg = blob.string();
+                blob.close();
+                if (!msg.isBlank()) {
+                    System.err.println("[Slang specialize diagnostics] " + msg);
+                }
+            }
+
+            if (result < 0) {
+                throw new SlangException("IComponentType::specialize failed", result);
+            }
+
+            var specializedPtr = outPtr.get(ValueLayout.ADDRESS, 0);
+            if (specializedPtr.equals(MemorySegment.NULL)) {
+                throw new SlangException("specialize returned null");
+            }
+
+            return new SlangProgram(new ComPtr(specializedPtr));
+        } catch (SlangException e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new SlangException("specialize failed", t);
+        }
+    }
+
+    /**
+     * Gets the number of specialization parameters on this component type.
+     */
+    public int getSpecializationParamCount() {
+        try {
+            // getSpecializationParamCount — vtable index 5
+            var handle = com.methodHandle(5, FunctionDescriptor.of(
+                    ValueLayout.JAVA_LONG,  // SlangInt return
+                    ValueLayout.ADDRESS     // this
+            ));
+            return (int) (long) handle.invoke(com.ptr());
+        } catch (Throwable t) {
+            throw new SlangException("getSpecializationParamCount failed", t);
+        }
+    }
+
     @Override
     public void close() {
         com.close();

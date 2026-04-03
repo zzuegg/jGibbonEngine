@@ -1,12 +1,12 @@
 package dev.engine.examples;
 
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
-import dev.engine.core.material.MaterialType;
 import dev.engine.graphics.opengl.GlRenderDevice;
-import dev.engine.graphics.opengl.GlfwWindowToolkit;
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.core.mesh.ComponentType;
 import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
@@ -19,9 +19,9 @@ import dev.engine.graphics.window.WindowDescriptor;
 public class SlangExample {
 
     public static void main(String[] args) {
-        var toolkit = new GlfwWindowToolkit();
+        var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Engine - Slang Shaders", 1024, 768));
-        var renderer = new Renderer(new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window));
+        var renderer = new Renderer(new GlRenderDevice(window));
         window.show();
 
         System.out.println("Backend: " + renderer.backendName());
@@ -34,22 +34,23 @@ public class SlangExample {
                 HighLevelSceneExample.cubeVertices(0.5f),
                 HighLevelSceneExample.cubeIndices(), format);
 
-        // Create scene entities with unlit material (compiled from Slang)
+        // Create scene entities with unlit material
         var scene = (HierarchicalScene) renderer.scene();
         var root = scene.createEntity();
         var cube1 = scene.createEntity(); cube1.setParent(root);
         var cube2 = scene.createEntity(); cube2.setParent(root);
         var cube3 = scene.createEntity(); cube3.setParent(root);
 
-        // Assign meshes and materials
+        // Assign meshes
         scene.setMesh(cube1, cubeMesh);
         scene.setMesh(cube2, cubeMesh);
         scene.setMesh(cube3, cubeMesh);
 
-        var mat = renderer.createMaterial(MaterialType.UNLIT);
-        scene.setMaterial(cube1, mat);
-        scene.setMaterial(cube2, mat);
-        scene.setMaterial(cube3, mat);
+        // Assign unlit material directly to entities
+        var unlitMat = MaterialData.unlit(new Vec3(0.8f, 0.8f, 0.8f));
+        cube1.add(unlitMat);
+        cube2.add(unlitMat);
+        cube3.add(unlitMat);
 
         var camera = renderer.createCamera();
         camera.lookAt(new Vec3(0f, 3f, 7f), Vec3.ZERO, Vec3.UNIT_Y);

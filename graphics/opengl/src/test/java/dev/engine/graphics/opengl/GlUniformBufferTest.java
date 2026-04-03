@@ -1,5 +1,7 @@
 package dev.engine.graphics.opengl;
 
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
+
 import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
 import dev.engine.graphics.buffer.AccessPattern;
@@ -48,9 +50,9 @@ class GlUniformBufferTest {
 
     @BeforeAll
     static void setUp() {
-        toolkit = new GlfwWindowToolkit();
+        toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("GPU Test", 1, 1));
-        device = new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window);
+        device = new GlRenderDevice(window);
     }
 
     @AfterAll

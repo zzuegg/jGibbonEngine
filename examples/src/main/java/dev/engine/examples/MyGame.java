@@ -1,7 +1,6 @@
 package dev.engine.examples;
 
-import dev.engine.core.material.PbrMaterial;
-import dev.engine.core.material.UnlitMaterial;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.Entity;
 import dev.engine.core.scene.component.Transform;
@@ -9,6 +8,9 @@ import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.opengl.OpenGlBackend;
+import dev.engine.graphics.vulkan.VulkanBackend;
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
+import org.lwjgl.glfw.GLFWVulkan;
 
 public class MyGame extends BaseApplication {
 
@@ -23,27 +25,27 @@ public class MyGame extends BaseApplication {
         cube1 = scene().createEntity();
         cube1.setParent(root);
         cube1.add(PrimitiveMeshes.cube());
-        cube1.add(PbrMaterial.of(new Vec3(0.9f, 0.2f, 0.2f), 0.3f, 0.8f));
+        cube1.add(MaterialData.pbr(new Vec3(0.9f, 0.2f, 0.2f), 0.3f, 0.8f));
         cube1.add(Transform.at(-2, 0.5f, 0));
 
         // Green rough cube
         cube2 = scene().createEntity();
         cube2.setParent(root);
         cube2.add(PrimitiveMeshes.cube());
-        cube2.add(PbrMaterial.of(new Vec3(0.2f, 0.9f, 0.2f), 0.9f, 0.1f));
+        cube2.add(MaterialData.pbr(new Vec3(0.2f, 0.9f, 0.2f), 0.9f, 0.1f));
         cube2.add(Transform.at(2, 0.5f, 0));
 
         // Blue unlit sphere
         sphere = scene().createEntity();
         sphere.setParent(root);
         sphere.add(PrimitiveMeshes.sphere());
-        sphere.add(UnlitMaterial.color(new Vec3(0.3f, 0.3f, 1.0f)));
+        sphere.add(MaterialData.unlit(new Vec3(0.3f, 0.3f, 1.0f)));
         sphere.add(Transform.at(0, 1.5f, 0));
 
         // Ground plane
         plane = scene().createEntity();
         plane.add(PrimitiveMeshes.plane(10, 10));
-        plane.add(PbrMaterial.of(new Vec3(0.4f, 0.4f, 0.4f), 0.8f, 0f));
+        plane.add(MaterialData.pbr(new Vec3(0.4f, 0.4f, 0.4f), 0.8f, 0f));
         plane.add(Transform.at(0, 0, 0).withScale(10f));
 
         camera().lookAt(new Vec3(0, 4, 8), new Vec3(0, 1, 0), Vec3.UNIT_Y);
@@ -62,8 +64,28 @@ public class MyGame extends BaseApplication {
     }
 
     public static void main(String[] args) {
-        new MyGame().launch(
-                EngineConfig.builder().windowTitle("My Game").windowSize(1280, 720).build(),
-                OpenGlBackend.factory());
+        String backend = System.getProperty("engine.backend", "opengl");
+        var config = EngineConfig.builder()
+                .windowTitle("My Game (" + backend + ")")
+                .windowSize(1280, 720)
+                .maxFrames(Integer.getInteger("engine.maxFrames", 0))
+                .build();
+
+        var factory = switch (backend) {
+            case "vulkan" -> {
+                var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
+                yield VulkanBackend.factory(toolkit, new VulkanBackend.SurfaceCreator() {
+                    public org.lwjgl.PointerBuffer requiredInstanceExtensions() {
+                        return GLFWVulkan.glfwGetRequiredInstanceExtensions();
+                    }
+                    public long createSurface(org.lwjgl.vulkan.VkInstance instance, long windowHandle) {
+                        return GlfwWindowToolkit.createVulkanSurface(instance, windowHandle);
+                    }
+                });
+            }
+            default -> OpenGlBackend.factory();
+        };
+
+        new MyGame().launch(config, factory);
     }
 }

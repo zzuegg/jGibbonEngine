@@ -20,7 +20,7 @@ public final class SlangNative {
     // Compile targets (SlangCompileTarget enum values)
     public static final int SLANG_GLSL = 2;
     public static final int SLANG_SPIRV = 6;
-    public static final int SLANG_WGSL = 29;
+    public static final int SLANG_WGSL = 28;
 
     // Shader stages (SlangStage enum values)
     public static final int SLANG_STAGE_NONE = 0;

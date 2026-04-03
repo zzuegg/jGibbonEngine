@@ -1,6 +1,6 @@
 package dev.engine.graphics.common.material;
 
-import dev.engine.core.material.Material;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;
@@ -9,7 +9,6 @@ import dev.engine.core.property.PropertyKey;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -18,7 +17,7 @@ import java.util.stream.Collectors;
 /**
  * Compiles material properties into shader code and GPU-uploadable data.
  *
- * <p>This bridges the gap between the user's property bag (Material) and
+ * <p>This bridges the gap between the user's property bag (MaterialData) and
  * the GPU's typed buffers + shader structs. The user never writes shader code
  * for standard materials — this generates everything automatically.
  */
@@ -54,28 +53,30 @@ public final class MaterialCompiler {
     private MaterialCompiler() {}
 
     /**
-     * Derives a shader key from a material's type + property set.
+     * Derives a shader key from a material's shaderHint + property set.
      * Same key = same shader variant. Different properties = different key.
      */
-    public static String shaderKey(Material mat) {
-        var propNames = getPropertyList(mat).stream()
-                .map(e -> e.getKey().name())
+    public static String shaderKey(MaterialData mat) {
+        var hint = mat.shaderHint() != null ? mat.shaderHint() : "DEFAULT";
+        var propNames = mat.keys().stream()
+                .filter(k -> SLANG_TYPES.containsKey(k.type()))
+                .map(PropertyKey::name)
                 .sorted()
                 .collect(Collectors.joining("_"));
-        if (propNames.isEmpty()) return mat.type().name();
-        return mat.type().name() + "_" + propNames;
+        if (propNames.isEmpty()) return hint;
+        return hint + "_" + propNames;
     }
 
     /**
      * Generates a Slang struct definition from the material's actual properties.
      */
-    public static String generateMaterialStruct(Material mat) {
+    public static String generateMaterialStruct(MaterialData mat) {
         var sb = new StringBuilder();
         sb.append("struct MaterialData {\n");
-        for (var entry : getPropertyList(mat)) {
-            var slangType = SLANG_TYPES.get(entry.getKey().type());
+        for (var key : getScalarKeys(mat)) {
+            var slangType = SLANG_TYPES.get(key.type());
             if (slangType == null) continue;
-            sb.append("    ").append(slangType).append(" ").append(entry.getKey().name()).append(";\n");
+            sb.append("    ").append(slangType).append(" ").append(key.name()).append(";\n");
         }
         sb.append("};\n");
         return sb.toString();
@@ -84,13 +85,13 @@ public final class MaterialCompiler {
     /**
      * Generates a Slang cbuffer with the material's properties inlined.
      */
-    public static String generateMaterialCbuffer(Material mat, int binding) {
+    public static String generateMaterialCbuffer(MaterialData mat, int binding) {
         var sb = new StringBuilder();
         sb.append("cbuffer MaterialData : register(b").append(binding).append(") {\n");
-        for (var entry : getPropertyList(mat)) {
-            var slangType = SLANG_TYPES.get(entry.getKey().type());
+        for (var key : getScalarKeys(mat)) {
+            var slangType = SLANG_TYPES.get(key.type());
             if (slangType == null) continue;
-            sb.append("    ").append(slangType).append(" ").append(entry.getKey().name()).append(";\n");
+            sb.append("    ").append(slangType).append(" ").append(key.name()).append(";\n");
         }
         sb.append("};\n");
         return sb.toString();
@@ -100,25 +101,24 @@ public final class MaterialCompiler {
      * Serializes the material's property values into a ByteBuffer for GPU upload.
      * Properties are laid out in the same order as the generated struct.
      */
-    public static ByteBuffer serializeMaterialData(Material mat) {
-        var props = getPropertyList(mat);
+    public static ByteBuffer serializeMaterialData(MaterialData mat) {
+        var keys = getScalarKeys(mat);
         int totalSize = 0;
-        for (var entry : props) {
-            var size = TYPE_SIZES.getOrDefault(entry.getKey().type(), 0);
-            // Align Vec3 to 16 bytes in std140/std430
-            if (entry.getKey().type() == Vec3.class) {
+        for (var key : keys) {
+            if (key.type() == Vec3.class) {
                 totalSize = align(totalSize, 16);
                 totalSize += 16; // Vec3 takes 16 bytes with padding
             } else {
-                totalSize += size;
+                totalSize += TYPE_SIZES.getOrDefault(key.type(), 0);
             }
         }
 
         var buf = ByteBuffer.allocateDirect(Math.max(totalSize, 16)).order(ByteOrder.nativeOrder());
         int offset = 0;
-        for (var entry : props) {
-            var value = entry.getValue();
-            var type = entry.getKey().type();
+        for (var key : keys) {
+            var value = mat.get(key);
+            if (value == null) continue;
+            var type = key.type();
 
             if (type == Float.class || type == float.class) {
                 buf.putFloat(offset, (float) value);
@@ -145,7 +145,6 @@ public final class MaterialCompiler {
                 offset += 16;
             } else if (type == Mat4.class) {
                 var m = (Mat4) value;
-                // Write all 16 floats
                 float[] vals = {m.m00(),m.m01(),m.m02(),m.m03(),m.m10(),m.m11(),m.m12(),m.m13(),
                         m.m20(),m.m21(),m.m22(),m.m23(),m.m30(),m.m31(),m.m32(),m.m33()};
                 for (float v : vals) { buf.putFloat(offset, v); offset += 4; }
@@ -160,7 +159,7 @@ public final class MaterialCompiler {
      * Injects material struct/cbuffer into shader source, replacing the
      * {@code // __MATERIAL_DATA__} placeholder.
      */
-    public static String injectMaterialData(String source, Material mat, int binding) {
+    public static String injectMaterialData(String source, MaterialData mat, int binding) {
         var cbuffer = generateMaterialCbuffer(mat, binding);
         return source.replace("// __MATERIAL_DATA__", cbuffer);
     }
@@ -173,24 +172,11 @@ public final class MaterialCompiler {
         TYPE_SIZES.put(javaType, sizeInBytes);
     }
 
-    @SuppressWarnings("unchecked")
-    private static java.util.List<Map.Entry<PropertyKey<?>, Object>> getPropertyList(Material mat) {
-        var result = new ArrayList<Map.Entry<PropertyKey<?>, Object>>();
-        // Use reflection on the internal property map to get all set properties
-        // For now, use the known standard keys and check which are set
-        var knownKeys = new PropertyKey<?>[]{
-                Material.ALBEDO_COLOR, Material.ROUGHNESS, Material.METALLIC,
-                Material.EMISSIVE, Material.OPACITY, Material.COLOR
-        };
-        for (var key : knownKeys) {
-            var value = mat.get(key);
-            if (value != null) {
-                result.add(Map.entry(key, value));
-            }
-        }
-        // Sort by name for deterministic ordering
-        result.sort(Comparator.comparing(e -> e.getKey().name()));
-        return result;
+    private static java.util.List<PropertyKey<?>> getScalarKeys(MaterialData mat) {
+        return mat.keys().stream()
+                .filter(k -> SLANG_TYPES.containsKey(k.type()))
+                .sorted(Comparator.comparing(PropertyKey::name))
+                .toList();
     }
 
     private static int align(int offset, int alignment) {

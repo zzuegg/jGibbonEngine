@@ -3,8 +3,7 @@ package dev.engine.bindings.assimp;
 import dev.engine.core.asset.AssetLoader;
 import dev.engine.core.asset.AssetSource;
 import dev.engine.core.asset.Model;
-import dev.engine.core.material.Material;
-import dev.engine.core.material.MaterialType;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.mesh.ComponentType;
@@ -78,7 +77,7 @@ public class AssimpModelLoader implements AssetLoader<Model> {
 
         try {
             List<Model.SubMesh> meshes = extractMeshes(scene);
-            List<Material> materials = extractMaterials(scene);
+            List<MaterialData> materials = extractMaterials(scene);
             List<Model.Node> nodes = List.of(extractNode(scene.mRootNode()));
             return new Model(meshes, materials, nodes);
         } finally {
@@ -143,38 +142,36 @@ public class AssimpModelLoader implements AssetLoader<Model> {
         return meshes;
     }
 
-    private List<Material> extractMaterials(AIScene scene) {
+    private List<MaterialData> extractMaterials(AIScene scene) {
         int matCount = scene.mNumMaterials();
-        var materials = new ArrayList<Material>(matCount);
+        var materials = new ArrayList<MaterialData>(matCount);
 
         for (int i = 0; i < matCount; i++) {
             AIMaterial aiMat = AIMaterial.create(scene.mMaterials().get(i));
-            Material mat = Material.create(MaterialType.PBR);
+            var mat = MaterialData.create("PBR");
 
             // Diffuse color
             AIColor4D color = AIColor4D.create();
             if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_DIFFUSE, aiTextureType_NONE, 0, color) == aiReturn_SUCCESS) {
-                mat.set(Material.ALBEDO_COLOR, new Vec3(color.r(), color.g(), color.b()));
-                mat.set(Material.OPACITY, color.a());
+                mat = mat.set(MaterialData.ALBEDO_COLOR, new Vec3(color.r(), color.g(), color.b()))
+                         .set(MaterialData.OPACITY, color.a());
             }
 
-            // Specular color — store as-is in albedo if no diffuse was set
+            // Specular color — use specular intensity to approximate metallic
             AIColor4D specColor = AIColor4D.create();
             if (aiGetMaterialColor(aiMat, AI_MATKEY_COLOR_SPECULAR, aiTextureType_NONE, 0, specColor) == aiReturn_SUCCESS) {
-                // Use specular intensity to approximate metallic
                 float specIntensity = (specColor.r() + specColor.g() + specColor.b()) / 3.0f;
-                mat.set(Material.METALLIC, specIntensity);
+                mat = mat.set(MaterialData.METALLIC, specIntensity);
             }
 
             // Roughness (Assimp stores shininess; convert)
             float[] shininess = new float[1];
             int[] pMax = new int[]{1};
             if (aiGetMaterialFloatArray(aiMat, AI_MATKEY_SHININESS, aiTextureType_NONE, 0, shininess, pMax) == aiReturn_SUCCESS) {
-                // Convert shininess to roughness: roughness ~= sqrt(2 / (shininess + 2))
                 float roughness = (float) Math.sqrt(2.0 / (shininess[0] + 2.0));
-                mat.set(Material.ROUGHNESS, Math.min(1.0f, Math.max(0.0f, roughness)));
+                mat = mat.set(MaterialData.ROUGHNESS, Math.min(1.0f, Math.max(0.0f, roughness)));
             } else {
-                mat.set(Material.ROUGHNESS, 0.5f);
+                mat = mat.set(MaterialData.ROUGHNESS, 0.5f);
             }
 
             materials.add(mat);

@@ -1,7 +1,6 @@
 package dev.engine.core.transaction;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.core.material.Material;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.mesh.MeshData;
@@ -20,7 +19,6 @@ public sealed interface Transaction {
     record MaterialPropertyChanged(Handle<?> entity, PropertyKey<?> key, Object value) implements Transaction {}
     record MaterialReplaced(Handle<?> entity, PropertyMap material) implements Transaction {}
     record MeshChanged(Handle<?> entity, MeshData meshData) implements Transaction {}
-    record MaterialChanged(Handle<?> entity, Material material) implements Transaction {}
     record MaterialDataChanged(Handle<?> entity, MaterialData materialData) implements Transaction {}
 
     // Legacy handle-based (for pre-registered resources)

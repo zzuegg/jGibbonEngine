@@ -2,6 +2,7 @@ package dev.engine.graphics.common;
 
 import dev.engine.core.gpu.BufferWriter;
 import dev.engine.core.handle.Handle;
+import dev.engine.core.layout.LayoutMode;
 import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.handle.HandlePool;
@@ -126,9 +127,10 @@ public class Renderer implements AutoCloseable {
 
         this.shaderManager = new ShaderManager(device, globalParams);
 
-        // Create GPU buffers for each registered global
+        // Create GPU buffers for each registered global using STD140 layout
+        // (UBOs require std140 alignment for cross-backend compatibility)
         for (var entry : globalParams.entries()) {
-            var layout = StructLayout.of(entry.recordType());
+            var layout = StructLayout.of(entry.recordType(), LayoutMode.STD140);
             globalLayouts.put(entry.name(), layout);
             globalUbos.put(entry.name(), device.createBuffer(
                     new BufferDescriptor(layout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC)));
@@ -340,12 +342,15 @@ public class Renderer implements AutoCloseable {
             if (resolvedMesh == null) continue; // no mesh assigned yet
 
             // Resolve shader from MaterialData.shaderHint() + material keys
+            // Filter out render state keys — they control pipeline state, not shader uniforms.
             CompiledShader compiled = null;
             var mat = meshRenderer.getMaterialData(entity);
             if (mat != null && mat.shaderHint() != null) {
                 var hint = mat.shaderHint();
-                var materialKeys = mat.keys();
-                var keyNames = materialKeys.stream()
+                var shaderKeys = mat.keys().stream()
+                        .filter(k -> !isRenderStateKey(k))
+                        .collect(java.util.stream.Collectors.toSet());
+                var keyNames = shaderKeys.stream()
                         .map(dev.engine.core.property.PropertyKey::name)
                         .sorted()
                         .toList();
@@ -356,7 +361,7 @@ public class Renderer implements AutoCloseable {
                             return shaderManager.compileSlangSource(
                                     loadShaderFile(hint), hint);
                         }
-                        return shaderManager.getShaderWithMaterial(hint, materialKeys);
+                        return shaderManager.getShaderWithMaterial(hint, shaderKeys);
                     } catch (Exception e) {
                         return null;
                     }
@@ -511,7 +516,12 @@ public class Renderer implements AutoCloseable {
         return key == RenderState.DEPTH_TEST || key == RenderState.DEPTH_WRITE
             || key == RenderState.DEPTH_FUNC || key == RenderState.BLEND_MODE
             || key == RenderState.CULL_MODE || key == RenderState.FRONT_FACE
-            || key == RenderState.WIREFRAME || key == RenderState.LINE_WIDTH;
+            || key == RenderState.WIREFRAME || key == RenderState.LINE_WIDTH
+            || key == RenderState.SCISSOR_TEST
+            || key == RenderState.STENCIL_TEST || key == RenderState.STENCIL_FUNC
+            || key == RenderState.STENCIL_REF || key == RenderState.STENCIL_MASK
+            || key == RenderState.STENCIL_FAIL || key == RenderState.STENCIL_DEPTH_FAIL
+            || key == RenderState.STENCIL_PASS;
     }
 
     /**
@@ -522,9 +532,10 @@ public class Renderer implements AutoCloseable {
         var keys = matData.keys();
         if (keys.isEmpty()) return;
 
-        // Filter to BufferWriter-supported keys and sort for deterministic layout
+        // Filter to BufferWriter-supported keys, excluding render state keys (they
+        // control pipeline state, not shader uniforms), and sort for deterministic layout
         var scalarKeys = keys.stream()
-                .filter(k -> BufferWriter.supports(k.type()))
+                .filter(k -> BufferWriter.supports(k.type()) && !isRenderStateKey(k))
                 .sorted(Comparator.comparing(PropertyKey::name))
                 .toList();
 
@@ -532,14 +543,26 @@ public class Renderer implements AutoCloseable {
 
         // Calculate total size with std140-style alignment
         int totalSize = 0;
+        int maxAlign = 4; // minimum alignment for UBOs
         for (var key : scalarKeys) {
             if (key.type() == Vec3.class) {
                 totalSize = align(totalSize, 16);
                 totalSize += 16; // Vec3 padded to 16 bytes in std140
+                maxAlign = Math.max(maxAlign, 16);
+            } else if (key.type() == Vec4.class || key.type() == Mat4.class) {
+                totalSize = align(totalSize, 16);
+                totalSize += BufferWriter.sizeOf(key.type());
+                maxAlign = Math.max(maxAlign, 16);
+            } else if (key.type() == Vec2.class) {
+                totalSize = align(totalSize, 8);
+                totalSize += BufferWriter.sizeOf(key.type());
+                maxAlign = Math.max(maxAlign, 8);
             } else {
                 totalSize += BufferWriter.sizeOf(key.type());
             }
         }
+        // Round up to struct alignment (std140 requires struct size to be multiple of max alignment)
+        totalSize = align(totalSize, maxAlign);
 
         final int uboSize = Math.max(totalSize, 16);
         var uboKey = "mat_" + entity.index();
@@ -568,26 +591,36 @@ public class Renderer implements AutoCloseable {
     }
 
     /**
-     * Binds TextureData properties from MaterialData to the correct texture units
-     * based on shader reflection metadata.
+     * Binds TextureData properties from MaterialData to the correct texture units.
+     *
+     * <p>Texture bindings are resolved from shader reflection metadata.
+     * The order must match how {@link ShaderManager#prependParamBlocks} generates texture declarations.
      */
     private void bindMaterialTextures(MaterialData matData, CompiledShader shader, CommandRecorder draw) {
-        for (var key : matData.keys()) {
-            if (key.type() != TextureData.class) continue;
+        // Sort texture keys for deterministic binding order (must match ShaderManager.prependParamBlocks)
+        var sortedTexKeys = matData.keys().stream()
+                .filter(k -> k.type() == TextureData.class)
+                .sorted(java.util.Comparator.comparing(PropertyKey::name))
+                .toList();
 
+        int texUnit = 0;
+        for (var key : sortedTexKeys) {
             TextureData texData = (TextureData) matData.get(key);
-            if (texData == null) continue;
+            if (texData == null) {
+                texUnit++;
+                continue;
+            }
 
-            // Upload texture if not cached
             var texHandle = uploadTexture(texData);
 
-            // Find the texture binding from shader reflection
-            String paramName = mapTextureKeyToShaderParam(key);
-            var binding = shader.findBinding(paramName);
-            if (binding != null && binding.type() == CompiledShader.BindingType.TEXTURE) {
-                draw.bindTexture(binding.binding(), texHandle);
-                draw.bindSampler(binding.binding(), getOrCreateDefaultSampler());
-            }
+            // Try to resolve binding from shader reflection (GLSL-parsed or Slang reflection)
+            String texParamName = mapTextureKeyToShaderParam(key);
+            var texBinding = shader.findBinding(texParamName);
+            int unit = texBinding != null ? texBinding.binding() : texUnit;
+
+            draw.bindTexture(unit, texHandle);
+            draw.bindSampler(unit, getOrCreateDefaultSampler());
+            texUnit++;
         }
     }
 

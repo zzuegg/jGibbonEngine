@@ -332,6 +332,22 @@ public final class WgpuNative {
     );
 
     /**
+     * WGPUPopErrorScopeCallbackInfo: same layout as other callback info structs.
+     * { nextInChain(8), mode(4), pad(4), callback(8), userdata1(8), userdata2(8) } = 40
+     *
+     * Callback: void(WGPUPopErrorScopeStatus status, WGPUErrorType type,
+     *               WGPUStringView message, void* userdata1, void* userdata2)
+     */
+    public static final StructLayout POP_ERROR_SCOPE_CALLBACK_INFO_LAYOUT = MemoryLayout.structLayout(
+            ValueLayout.ADDRESS.withName("nextInChain"),
+            ValueLayout.JAVA_INT.withName("mode"),
+            MemoryLayout.paddingLayout(4),
+            ValueLayout.ADDRESS.withName("callback"),
+            ValueLayout.ADDRESS.withName("userdata1"),
+            ValueLayout.ADDRESS.withName("userdata2")
+    );
+
+    /**
      * WGPUBufferMapCallbackInfo: same layout as request adapter/device callback info.
      * { nextInChain(8), mode(4), pad(4), callback(8), userdata1(8), userdata2(8) } = 40
      */
@@ -451,6 +467,13 @@ public final class WgpuNative {
     private static MethodHandle h_wgpuSurfaceRelease;
     private static MethodHandle h_wgpuSurfaceGetCapabilities;
     private static MethodHandle h_wgpuSurfaceCapabilitiesFreeMembers;
+
+    // Pipeline introspection
+    private static MethodHandle h_wgpuRenderPipelineGetBindGroupLayout;
+
+    // Error scopes
+    private static MethodHandle h_wgpuDevicePushErrorScope;
+    private static MethodHandle h_wgpuDevicePopErrorScope;
 
     // Release functions
     private static MethodHandle h_wgpuShaderModuleRelease;
@@ -835,6 +858,46 @@ public final class WgpuNative {
     public static MemorySegment deviceCreatePipelineLayout(MemorySegment device, MemorySegment descriptor) {
         try {
             return (MemorySegment) h_wgpuDeviceCreatePipelineLayout.invokeExact(device, descriptor);
+        } catch (Throwable t) { throw rethrow(t); }
+    }
+
+    /**
+     * Returns the bind group layout at the given index from a render pipeline's auto-derived layout.
+     *
+     * @param pipeline the WGPURenderPipeline
+     * @param groupIndex the bind group index (e.g. 0 for @group(0))
+     * @return the WGPUBindGroupLayout handle (caller must release)
+     */
+    public static MemorySegment renderPipelineGetBindGroupLayout(MemorySegment pipeline, int groupIndex) {
+        try {
+            return (MemorySegment) h_wgpuRenderPipelineGetBindGroupLayout.invokeExact(pipeline, groupIndex);
+        } catch (Throwable t) { throw rethrow(t); }
+    }
+
+    /**
+     * Pushes a validation error scope onto the device's error scope stack.
+     * While an error scope is active, validation errors are captured by the scope
+     * instead of going to the uncaptured error handler (which panics by default).
+     *
+     * @param device the WGPUDevice
+     * @param filter the error filter (1 = Validation, 2 = OutOfMemory, 3 = Internal)
+     */
+    public static void devicePushErrorScope(MemorySegment device, int filter) {
+        try {
+            h_wgpuDevicePushErrorScope.invokeExact(device, filter);
+        } catch (Throwable t) { throw rethrow(t); }
+    }
+
+    /**
+     * Pops an error scope from the device's error scope stack.
+     * Uses AllowSpontaneous callback mode so the callback fires inline.
+     *
+     * @param device the WGPUDevice
+     * @param callbackInfo the pop error scope callback info struct (by value)
+     */
+    public static void devicePopErrorScope(MemorySegment device, MemorySegment callbackInfo) {
+        try {
+            h_wgpuDevicePopErrorScope.invokeExact(device, callbackInfo);
         } catch (Throwable t) { throw rethrow(t); }
     }
 
@@ -1658,6 +1721,18 @@ public final class WgpuNative {
                         ValueLayout.ADDRESS));   // capabilities*
         h_wgpuSurfaceCapabilitiesFreeMembers = bind(linker, "wgpuSurfaceCapabilitiesFreeMembers",
                 FunctionDescriptor.ofVoid(SURFACE_CAPABILITIES_LAYOUT));
+
+        // Pipeline introspection
+        h_wgpuRenderPipelineGetBindGroupLayout = bind(linker, "wgpuRenderPipelineGetBindGroupLayout",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+
+        // Error scopes
+        h_wgpuDevicePushErrorScope = bind(linker, "wgpuDevicePushErrorScope",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
+        h_wgpuDevicePopErrorScope = bind(linker, "wgpuDevicePopErrorScope",
+                FunctionDescriptor.of(FUTURE_LAYOUT,
+                        ValueLayout.ADDRESS,                            // device
+                        POP_ERROR_SCOPE_CALLBACK_INFO_LAYOUT));         // callbackInfo (by value)
 
         // Release functions
         h_wgpuShaderModuleRelease = bind(linker, "wgpuShaderModuleRelease", voidPtr);

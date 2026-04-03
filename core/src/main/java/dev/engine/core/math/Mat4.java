@@ -128,4 +128,27 @@ public record Mat4(
                 m03, m13, m23, m33
         );
     }
+
+    /**
+     * Writes this matrix to a MemorySegment in column-major order (GPU layout).
+     * GPU APIs (OpenGL, Vulkan) expect columns stored contiguously.
+     */
+    public void writeGpu(java.lang.foreign.MemorySegment segment, long offset) {
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset,      m00);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 4,  m10);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 8,  m20);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 12, m30);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 16, m01);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 20, m11);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 24, m21);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 28, m31);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 32, m02);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 36, m12);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 40, m22);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 44, m32);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 48, m03);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 52, m13);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 56, m23);
+        segment.set(java.lang.foreign.ValueLayout.JAVA_FLOAT, offset + 60, m33);
+    }
 }

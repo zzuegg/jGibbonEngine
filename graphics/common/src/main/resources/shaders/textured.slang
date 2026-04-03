@@ -1,4 +1,7 @@
-// Textured unlit shader — samples a texture using UVs
+// Textured material shader — samples albedo texture with directional lighting
+// Generated param blocks are prepended before compilation.
+// Uses generic specialization for camera/object params.
+// Texture declarations (albedoTexture) are generated from material keys.
 
 struct VertexInput {
     float3 position : POSITION;
@@ -10,28 +13,17 @@ struct VertexOutput {
     float4 position : SV_Position;
     float3 normal;
     float2 uv;
-    float3 worldPos;
 };
-
-cbuffer Matrices : register(b0) {
-    float4x4 mvp;
-};
-
-cbuffer LightParams : register(b2) {
-    float3 lightDir;
-    float3 lightColor;
-    float3 ambientColor;
-};
-
-Sampler2D albedoTexture : register(t0);
 
 [shader("vertex")]
-VertexOutput vertexMain(VertexInput input) {
+VertexOutput vertexMain<C : ICameraParams, O : IObjectParams>(VertexInput input) {
+    C camera;
+    O object;
     VertexOutput output;
+    float4x4 mvp = mul(object.world(), camera.viewProjection());
     output.position = mul(float4(input.position, 1.0), mvp);
-    output.normal = input.normal;
+    output.normal = mul(float4(input.normal, 0.0), object.world()).xyz;
     output.uv = input.uv;
-    output.worldPos = input.position;
     return output;
 }
 

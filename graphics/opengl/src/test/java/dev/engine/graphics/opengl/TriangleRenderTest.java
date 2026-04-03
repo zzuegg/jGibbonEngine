@@ -1,5 +1,7 @@
 package dev.engine.graphics.opengl;
 
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
+
 import dev.engine.core.layout.StructLayout;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
@@ -51,9 +53,9 @@ class TriangleRenderTest {
 
     @BeforeAll
     static void setUp() {
-        toolkit = new GlfwWindowToolkit();
+        toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Render Test", 64, 64));
-        device = new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window);
+        device = new GlRenderDevice(window);
     }
 
     @AfterAll

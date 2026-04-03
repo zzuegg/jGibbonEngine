@@ -1,5 +1,7 @@
 package dev.engine.graphics.opengl;
 
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
+
 import dev.engine.graphics.window.WindowDescriptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,7 +21,7 @@ class GlfwWindowToolkitTest {
 
     @BeforeEach
     void setUp() {
-        toolkit = new GlfwWindowToolkit();
+        toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
     }
 
     @AfterEach

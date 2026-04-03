@@ -1,6 +1,6 @@
 package dev.engine.core.asset;
 
-import dev.engine.core.material.Material;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.mesh.MeshData;
 
@@ -12,7 +12,7 @@ import java.util.List;
  */
 public record Model(
         List<SubMesh> meshes,
-        List<Material> materials,
+        List<MaterialData> materials,
         List<Node> nodes
 ) {
     /** A mesh + material index pair. */

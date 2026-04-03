@@ -5,9 +5,6 @@ import dev.engine.core.asset.FileSystemAssetSource;
 import dev.engine.core.asset.ImageLoader;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.scene.MeshTag;
-import dev.engine.core.scene.MaterialTag;
-import dev.engine.core.material.Material;
-import dev.engine.core.material.MaterialType;
 import dev.engine.core.mesh.MeshData;
 import dev.engine.core.module.ModuleManager;
 import dev.engine.core.module.Time;
@@ -112,20 +109,6 @@ public class Engine {
      */
     public Handle<MeshTag> registerMesh(MeshData data) {
         return renderer.createMeshFromData(data);
-    }
-
-    /**
-     * Creates a material and returns an opaque handle.
-     * Use {@code material(handle)} to set properties.
-     * Assign to entities via {@code scene().setMaterial(entity, handle)}.
-     */
-    public Handle<MaterialTag> createMaterial(MaterialType type) {
-        return renderer.createMaterial(type);
-    }
-
-    /** Gets the Material object for property setting. */
-    public Material material(Handle<MaterialTag> handle) {
-        return renderer.material(handle);
     }
 
     // --- Single-threaded mode ---

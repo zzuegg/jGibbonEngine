@@ -96,8 +96,10 @@ public abstract class BaseApplication {
 
             log.info("Application started: {}", config.windowTitle());
             long lastTime = System.nanoTime();
+            long frameCount = 0;
 
-            while (window.isOpen()) {
+            while (window.isOpen() && (config.maxFrames() <= 0 || frameCount < config.maxFrames())) {
+                frameCount++;
                 long now = System.nanoTime();
                 double delta = (now - lastTime) / 1_000_000_000.0;
                 lastTime = now;

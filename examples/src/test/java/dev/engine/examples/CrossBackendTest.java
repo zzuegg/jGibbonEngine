@@ -67,8 +67,9 @@ class CrossBackendTest {
     }
 
     @Test void stencilMasking() {
+        // Stencil geometry size varies between backends due to rasterization differences
         harness.assertCrossBackend(ScreenshotTestSuite.STENCIL_MASKING, "stencil_masking",
-            RenderTestHarness.Tolerance.loose());
+            new RenderTestHarness.Tolerance(10, 15.0));
     }
 
     @Test void depthFuncGreater() {

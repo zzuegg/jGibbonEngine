@@ -82,6 +82,8 @@ public class Sdl3WindowToolkit implements WindowToolkit {
 
         public long nativePtr() { return ptr; }
 
+        @Override public long nativeHandle() { return ptr; }
+
         void requestClose() { closeRequested = true; }
 
         @Override public boolean isOpen() { return ptr != 0 && !closeRequested; }

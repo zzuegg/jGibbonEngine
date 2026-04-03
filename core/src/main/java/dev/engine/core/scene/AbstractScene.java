@@ -1,7 +1,6 @@
 package dev.engine.core.scene;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.core.material.Material;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.mesh.MeshData;
@@ -42,8 +41,6 @@ public abstract class AbstractScene {
                 transactions.transformChanged(entity.handle(), t.toMatrix());
             case MeshData m ->
                 transactions.meshChanged(entity.handle(), m);
-            case Material m ->
-                transactions.materialChanged(entity.handle(), m);
             case MaterialData md ->
                 transactions.materialDataChanged(entity.handle(), md);
             default -> {

@@ -1,7 +1,6 @@
 package dev.engine.core.transaction;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.core.material.Material;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.mesh.MeshData;
@@ -24,7 +23,6 @@ public class TransactionBuffer {
     public <T> void materialPropertyChanged(Handle<?> entity, PropertyKey<T> key, T value) { transactions.add(new Transaction.MaterialPropertyChanged(entity, key, value)); }
     public void materialReplaced(Handle<?> entity, PropertyMap material) { transactions.add(new Transaction.MaterialReplaced(entity, material)); }
     public void meshChanged(Handle<?> entity, MeshData meshData) { transactions.add(new Transaction.MeshChanged(entity, meshData)); }
-    public void materialChanged(Handle<?> entity, Material material) { transactions.add(new Transaction.MaterialChanged(entity, material)); }
     public void materialDataChanged(Handle<?> entity, MaterialData materialData) { transactions.add(new Transaction.MaterialDataChanged(entity, materialData)); }
     public void meshAssigned(Handle<?> entity, Handle<MeshTag> mesh) { transactions.add(new Transaction.MeshAssigned(entity, mesh)); }
     public void materialAssigned(Handle<?> entity, Handle<MaterialTag> material) { transactions.add(new Transaction.MaterialAssigned(entity, material)); }

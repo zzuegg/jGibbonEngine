@@ -1,5 +1,6 @@
 package dev.engine.core.layout;
 
+import dev.engine.core.gpu.BufferWriter;
 import dev.engine.core.math.*;
 
 import java.lang.foreign.MemorySegment;
@@ -176,25 +177,16 @@ public final class StructLayout {
     // --- Writers ---
 
     private static FieldWriter createPrimitiveWriter(MethodHandle accessor, Class<?> type, int offset) {
-        if (type == float.class || type == Float.class) {
-            return (seg, base, rec) -> { try { seg.set(ValueLayout.JAVA_FLOAT, base + offset, (float) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
-        } else if (type == int.class || type == Integer.class) {
-            return (seg, base, rec) -> { try { seg.set(ValueLayout.JAVA_INT, base + offset, (int) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
-        } else if (type == Vec2.class) {
-            return (seg, base, rec) -> { try { var v = (Vec2) accessor.invoke(rec); seg.set(ValueLayout.JAVA_FLOAT, base+offset, v.x()); seg.set(ValueLayout.JAVA_FLOAT, base+offset+4, v.y()); } catch (Throwable t) { throw new RuntimeException(t); } };
-        } else if (type == Vec3.class) {
-            return (seg, base, rec) -> { try { var v = (Vec3) accessor.invoke(rec); seg.set(ValueLayout.JAVA_FLOAT, base+offset, v.x()); seg.set(ValueLayout.JAVA_FLOAT, base+offset+4, v.y()); seg.set(ValueLayout.JAVA_FLOAT, base+offset+8, v.z()); } catch (Throwable t) { throw new RuntimeException(t); } };
-        } else if (type == Vec4.class) {
-            return (seg, base, rec) -> { try { var v = (Vec4) accessor.invoke(rec); seg.set(ValueLayout.JAVA_FLOAT, base+offset, v.x()); seg.set(ValueLayout.JAVA_FLOAT, base+offset+4, v.y()); seg.set(ValueLayout.JAVA_FLOAT, base+offset+8, v.z()); seg.set(ValueLayout.JAVA_FLOAT, base+offset+12, v.w()); } catch (Throwable t) { throw new RuntimeException(t); } };
-        } else if (type == Mat4.class) {
+        // Delegate to BufferWriter for types it supports
+        if (BufferWriter.supports(type)) {
             return (seg, base, rec) -> {
                 try {
-                    var m = (Mat4) accessor.invoke(rec);
-                    float[] vals = {m.m00(),m.m01(),m.m02(),m.m03(),m.m10(),m.m11(),m.m12(),m.m13(),m.m20(),m.m21(),m.m22(),m.m23(),m.m30(),m.m31(),m.m32(),m.m33()};
-                    for (int i = 0; i < 16; i++) seg.set(ValueLayout.JAVA_FLOAT, base + offset + i * 4L, vals[i]);
+                    BufferWriter.write(seg, base + offset, accessor.invoke(rec));
                 } catch (Throwable t) { throw new RuntimeException(t); }
             };
-        } else if (type == double.class || type == Double.class) {
+        }
+        // Fallback for types BufferWriter doesn't handle (double, long, short, byte)
+        if (type == double.class || type == Double.class) {
             return (seg, base, rec) -> { try { seg.set(ValueLayout.JAVA_DOUBLE, base + offset, (double) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
         } else if (type == long.class || type == Long.class) {
             return (seg, base, rec) -> { try { seg.set(ValueLayout.JAVA_LONG, base + offset, (long) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };

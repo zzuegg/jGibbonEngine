@@ -5,7 +5,7 @@ import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.opengl.GlRenderDevice;
-import dev.engine.graphics.opengl.GlfwWindowToolkit;
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
@@ -41,9 +41,9 @@ public class HighLevelSceneExample {
 
     public static void main(String[] args) {
         // Create window + renderer
-        var toolkit = new GlfwWindowToolkit();
+        var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Engine - High Level", 1024, 768));
-        var renderer = new Renderer(new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window));
+        var renderer = new Renderer(new GlRenderDevice(window));
         window.show();
 
         // Create default pipeline

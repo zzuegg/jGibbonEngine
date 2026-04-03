@@ -1,9 +1,8 @@
 package dev.engine.graphics.common;
 
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.property.PropertyKey;
-import dev.engine.core.material.Material;
-import dev.engine.core.material.MaterialType;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -13,65 +12,75 @@ class MaterialTest {
 
     @Nested
     class MaterialCreation {
-        @Test void createUnlitMaterial() {
-            var mat = Material.create(MaterialType.UNLIT);
-            assertEquals(MaterialType.UNLIT, mat.type());
+        @Test void createEmptyMaterial() {
+            var mat = MaterialData.create();
+            assertEquals(0, mat.size());
+            assertNull(mat.shaderHint());
         }
 
         @Test void createPbrMaterial() {
-            var mat = Material.create(MaterialType.PBR);
-            assertEquals(MaterialType.PBR, mat.type());
+            var mat = MaterialData.pbr(new Vec3(1, 0, 0), 0.5f, 0.8f);
+            assertEquals("PBR", mat.shaderHint());
+            assertEquals(new Vec3(1, 0, 0), mat.get(MaterialData.ALBEDO_COLOR));
+            assertEquals(0.5f, mat.get(MaterialData.ROUGHNESS));
+            assertEquals(0.8f, mat.get(MaterialData.METALLIC));
         }
 
-        @Test void customMaterialType() {
-            var toon = MaterialType.of("TOON");
-            var mat = Material.create(toon);
-            assertEquals("TOON", mat.type().name());
+        @Test void createUnlitMaterial() {
+            var mat = MaterialData.unlit(new Vec3(0, 1, 0));
+            assertEquals("UNLIT", mat.shaderHint());
+            assertEquals(new Vec3(0, 1, 0), mat.get(MaterialData.COLOR));
+        }
+
+        @Test void createWithShaderHint() {
+            var mat = MaterialData.create("TOON");
+            assertEquals("TOON", mat.shaderHint());
         }
     }
 
     @Nested
     class MaterialProperties {
         @Test void setAndGetColor() {
-            var mat = Material.create(MaterialType.PBR);
-            mat.set(Material.ALBEDO_COLOR, new Vec3(1f, 0f, 0f));
-            assertEquals(new Vec3(1f, 0f, 0f), mat.get(Material.ALBEDO_COLOR));
+            var mat = MaterialData.create("PBR")
+                    .set(MaterialData.ALBEDO_COLOR, new Vec3(1f, 0f, 0f));
+            assertEquals(new Vec3(1f, 0f, 0f), mat.get(MaterialData.ALBEDO_COLOR));
         }
 
         @Test void setAndGetFloat() {
-            var mat = Material.create(MaterialType.PBR);
-            mat.set(Material.ROUGHNESS, 0.5f);
-            assertEquals(0.5f, mat.get(Material.ROUGHNESS));
+            var mat = MaterialData.create("PBR")
+                    .set(MaterialData.ROUGHNESS, 0.5f);
+            assertEquals(0.5f, mat.get(MaterialData.ROUGHNESS));
         }
 
-        @Test void defaultValues() {
-            var mat = Material.create(MaterialType.PBR);
-            // PBR defaults
-            assertNull(mat.get(Material.ROUGHNESS)); // not set until user sets it
+        @Test void immutableSet() {
+            var mat1 = MaterialData.create("PBR")
+                    .set(MaterialData.ROUGHNESS, 0.5f);
+            var mat2 = mat1.set(MaterialData.ROUGHNESS, 0.8f);
+            assertEquals(0.5f, mat1.get(MaterialData.ROUGHNESS));
+            assertEquals(0.8f, mat2.get(MaterialData.ROUGHNESS));
         }
 
         @Test void customProperties() {
             var TINT = PropertyKey.of("tint", Vec3.class);
-            var mat = Material.create(MaterialType.UNLIT);
-            mat.set(TINT, new Vec3(0f, 1f, 0f));
+            var mat = MaterialData.create("UNLIT")
+                    .set(TINT, new Vec3(0f, 1f, 0f));
             assertEquals(new Vec3(0f, 1f, 0f), mat.get(TINT));
         }
 
-        @Test void trackChanges() {
-            var mat = Material.create(MaterialType.PBR);
-            mat.set(Material.ROUGHNESS, 0.5f);
-            mat.clearChanges();
-            mat.set(Material.ROUGHNESS, 0.8f);
-            assertTrue(mat.changes().contains(Material.ROUGHNESS));
+        @Test void keysReturned() {
+            var mat = MaterialData.pbr(Vec3.ONE, 0.5f, 0.2f);
+            assertTrue(mat.keys().contains(MaterialData.ALBEDO_COLOR));
+            assertTrue(mat.keys().contains(MaterialData.ROUGHNESS));
+            assertTrue(mat.keys().contains(MaterialData.METALLIC));
         }
     }
 
     @Nested
-    class CustomShader {
-        @Test void assignCustomShaderSource() {
-            var mat = Material.create(MaterialType.CUSTOM);
-            mat.setShaderSource("my_shader.slang");
-            assertEquals("my_shader.slang", mat.shaderSource());
+    class ShaderHint {
+        @Test void withShaderOverride() {
+            var mat = MaterialData.create("PBR")
+                    .withShader("custom/toon.slang");
+            assertEquals("custom/toon.slang", mat.shaderHint());
         }
     }
 }

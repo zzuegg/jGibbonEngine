@@ -6,7 +6,7 @@ import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.opengl.GlRenderDevice;
-import dev.engine.graphics.opengl.GlfwWindowToolkit;
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
@@ -40,9 +40,9 @@ public class TriangleExample {
     record Vertex(float x, float y, float z, float r, float g, float b) {}
 
     public static void main(String[] args) {
-        var toolkit = new GlfwWindowToolkit();
+        var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Engine - Triangle", 800, 600));
-        var device = new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window);
+        var device = new GlRenderDevice(window);
 
         window.show();
 

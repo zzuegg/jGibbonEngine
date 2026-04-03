@@ -5,7 +5,7 @@ import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.HierarchicalScene;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.opengl.GlRenderDevice;
-import dev.engine.graphics.opengl.GlfwWindowToolkit;
+import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
@@ -35,9 +35,9 @@ public class SceneMultiCapture {
             """;
 
     public static void main(String[] args) throws Exception {
-        var toolkit = new GlfwWindowToolkit();
+        var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var window = toolkit.createWindow(new WindowDescriptor("Capture", 800, 600));
-        var renderer = new Renderer(new GlRenderDevice((GlfwWindowToolkit.GlfwWindowHandle) window));
+        var renderer = new Renderer(new GlRenderDevice(window));
 
         var pipeline = renderer.createPipeline(PipelineDescriptor.of(
                 new ShaderSource(ShaderStage.VERTEX, VS),
