@@ -1,0 +1,59 @@
+# Vulkan Backend Notes
+
+## Texture and Sampler Implementation
+
+### Descriptor Layout
+
+The Vulkan backend uses a single descriptor set layout with:
+- Bindings 0-15: `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER` (UBO slots)
+- Bindings 16-23: `VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER` (texture+sampler slots)
+
+Texture unit N maps to descriptor binding `16 + N`. This is handled by `VkDescriptorManager.textureBindingOffset()`.
+
+### Dummy Resources for Unused Bindings
+
+All descriptor set bindings must be valid in Vulkan (unlike OpenGL where unbound slots are silently ignored). The descriptor manager creates:
+- A 16-byte dummy UBO for unused uniform buffer bindings
+- A 1x1 RGBA8 dummy image + image view + sampler for unused texture bindings
+
+These are automatically bound when allocating a new descriptor set via `allocateSet()`.
+
+### Texture Format Mapping
+
+Formats use `_UNORM` variants (not `_SRGB`) to match OpenGL behavior where sRGB conversion is not automatic:
+- `RGBA8` -> `VK_FORMAT_R8G8B8A8_UNORM`
+- `RGB8` -> `VK_FORMAT_R8G8B8_UNORM` (note: RGB8 has poor hardware support on some GPUs)
+- `DEPTH24` -> `VK_FORMAT_D24_UNORM_S8_UINT` (includes stencil)
+- `DEPTH32F` -> `VK_FORMAT_D32_SFLOAT`
+
+### Layout Transitions
+
+Textures are created with `VK_IMAGE_LAYOUT_UNDEFINED` and immediately transitioned to `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL`. During upload, the sequence is:
+1. `SHADER_READ_ONLY` -> `TRANSFER_DST` (prepare for copy)
+2. Copy staging buffer to image
+3. `TRANSFER_DST` -> `SHADER_READ_ONLY` (ready for shader sampling)
+
+### Staging Buffer Pattern
+
+Texture uploads use a temporary HOST_VISIBLE staging buffer. The data is copied via `vkCmdCopyBufferToImage` inside a one-shot command buffer that blocks on `vkQueueWaitIdle`. This is simple but synchronous -- a production engine would use async transfer queues.
+
+### Sampler Mapping
+
+- `FilterMode.LINEAR` / `LINEAR_MIPMAP_LINEAR` -> `VK_FILTER_LINEAR`
+- `FilterMode.NEAREST` / `NEAREST_MIPMAP_NEAREST` -> `VK_FILTER_NEAREST`
+- Mipmap filter modes set `maxLod = 1000.0f` (effectively unlimited); non-mipmap modes set `maxLod = 0.0f`
+- `WrapMode.REPEAT` -> `VK_SAMPLER_ADDRESS_MODE_REPEAT` (default)
+- `WrapMode.CLAMP_TO_EDGE` -> `VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE`
+
+### Combined Image Sampler Binding
+
+BindTexture and BindSampler are tracked separately per unit (0-7). At draw time, `flushDescriptorSet()` pairs them: a texture unit is only written to the descriptor set if both an image view AND a sampler are pending for that unit. If only one is set, the dummy binding from `allocateSet()` remains.
+
+### Descriptor Pool Sizing
+
+Each per-frame pool allocates:
+- `16 * 256 = 4096` uniform buffer descriptors
+- `8 * 256 = 2048` combined image sampler descriptors
+- Max 256 descriptor sets per frame
+
+If exceeded, `vkAllocateDescriptorSets` will fail. Increase `MAX_SETS_PER_FRAME` in `VkDescriptorManager` if needed.
