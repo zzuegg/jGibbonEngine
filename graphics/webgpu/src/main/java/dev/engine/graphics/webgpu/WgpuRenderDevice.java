@@ -61,7 +61,7 @@ public class WgpuRenderDevice implements RenderDevice {
     public WgpuRenderDevice() {
         nativeAvailable = WgpuNative.isAvailable();
         if (nativeAvailable) {
-            wgpuInstance = WgpuNative.createInstance();
+            wgpuInstance = WgpuNative.createInstance(MemorySegment.NULL);
             log.info("WebGPU device created with wgpu-native instance");
         } else {
             wgpuInstance = null;
