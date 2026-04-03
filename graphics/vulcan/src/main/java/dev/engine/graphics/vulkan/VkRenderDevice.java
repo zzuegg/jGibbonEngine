@@ -9,6 +9,7 @@ import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.target.RenderTargetDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
+import dev.engine.graphics.texture.TextureType;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.renderstate.*;
 import org.lwjgl.PointerBuffer;
@@ -436,14 +437,28 @@ public class VkRenderDevice implements RenderDevice {
         }
 
         try (var stack = stackPush()) {
+            // Map texture type to Vulkan image/view types
+            int imageType = descriptor.type() == TextureType.TEXTURE_3D ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D;
+            int viewType = switch (descriptor.type().name()) {
+                case "TEXTURE_3D"       -> VK_IMAGE_VIEW_TYPE_3D;
+                case "TEXTURE_2D_ARRAY" -> VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+                case "TEXTURE_CUBE"     -> VK_IMAGE_VIEW_TYPE_CUBE;
+                default                 -> VK_IMAGE_VIEW_TYPE_2D;
+            };
+            int extentDepth = descriptor.type() == TextureType.TEXTURE_3D ? descriptor.depth() : 1;
+            int arrayLayers = (descriptor.type() == TextureType.TEXTURE_2D_ARRAY || descriptor.type() == TextureType.TEXTURE_CUBE)
+                    ? descriptor.layers() : 1;
+            int createFlags = descriptor.type() == TextureType.TEXTURE_CUBE ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0;
+
             // Create VkImage
             var imageInfo = VkImageCreateInfo.calloc(stack)
                     .sType$Default()
-                    .imageType(VK_IMAGE_TYPE_2D)
+                    .flags(createFlags)
+                    .imageType(imageType)
                     .format(vkFormat)
-                    .extent(e -> e.width(descriptor.width()).height(descriptor.height()).depth(1))
+                    .extent(e -> e.width(descriptor.width()).height(descriptor.height()).depth(extentDepth))
                     .mipLevels(mipLevels)
-                    .arrayLayers(1)
+                    .arrayLayers(arrayLayers)
                     .samples(VK_SAMPLE_COUNT_1_BIT)
                     .tiling(VK_IMAGE_TILING_OPTIMAL)
                     .usage(usage)
@@ -472,10 +487,10 @@ public class VkRenderDevice implements RenderDevice {
             var viewInfo = VkImageViewCreateInfo.calloc(stack)
                     .sType$Default()
                     .image(image)
-                    .viewType(VK_IMAGE_VIEW_TYPE_2D)
+                    .viewType(viewType)
                     .format(vkFormat)
                     .subresourceRange(sr -> sr.aspectMask(aspectMask)
-                            .baseMipLevel(0).levelCount(mipLevels).baseArrayLayer(0).layerCount(1));
+                            .baseMipLevel(0).levelCount(mipLevels).baseArrayLayer(0).layerCount(arrayLayers));
             var pView = stack.mallocLong(1);
             result = vkCreateImageView(device, viewInfo, null, pView);
             if (result != VK_SUCCESS) throw new RuntimeException("Failed to create image view: " + result);
@@ -1555,6 +1570,9 @@ public class VkRenderDevice implements RenderDevice {
                         pendingSsboSizes[bsb.binding()] = alloc.size();
                         descriptorDirty = true;
                     }
+                }
+                case dev.engine.graphics.command.RenderCommand.BindImage bi -> {
+                    log.debug("BindImage not yet implemented for Vulkan (needs storage image descriptors)");
                 }
                 case dev.engine.graphics.command.RenderCommand.SetDepthTest sdt -> {
                     VK13.vkCmdSetDepthTestEnable(cmd, sdt.enabled());

@@ -214,6 +214,30 @@ class CommandListTest {
         assertEquals(64, cmd.offset());
     }
 
+    @Test void bindImageCommand() {
+        var pool = new HandlePool<TextureResource>();
+        var tex = pool.allocate();
+        var recorder = new CommandRecorder();
+        recorder.bindImage(0, tex, 0, true, true);
+        var list = recorder.finish();
+        var cmd = (RenderCommand.BindImage) list.commands().getFirst();
+        assertEquals(0, cmd.unit());
+        assertTrue(cmd.read());
+        assertTrue(cmd.write());
+    }
+
+    @Test void bindImageConvenienceDefaults() {
+        var pool = new HandlePool<TextureResource>();
+        var tex = pool.allocate();
+        var recorder = new CommandRecorder();
+        recorder.bindImage(0, tex);
+        var list = recorder.finish();
+        var cmd = (RenderCommand.BindImage) list.commands().getFirst();
+        assertEquals(0, cmd.mipLevel());
+        assertTrue(cmd.read());
+        assertTrue(cmd.write());
+    }
+
     @Test void uniformAndTextureBindingRecorded() {
         var ctx = new CommandRecorder();
         ctx.bindUniformBuffer(0, new Handle<>(1, 0));

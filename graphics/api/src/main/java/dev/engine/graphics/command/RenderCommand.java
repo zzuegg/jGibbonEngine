@@ -23,6 +23,9 @@ public sealed interface RenderCommand {
     record BindSampler(int unit, Handle<SamplerResource> sampler) implements RenderCommand {}
     record BindStorageBuffer(int binding, Handle<BufferResource> buffer) implements RenderCommand {}
 
+    // --- Image binding (for compute shader imageLoad/imageStore) ---
+    record BindImage(int unit, Handle<TextureResource> texture, int mipLevel, boolean read, boolean write) implements RenderCommand {}
+
     // --- Draw commands ---
     record Draw(int vertexCount, int firstVertex) implements RenderCommand {}
     record DrawIndexed(int indexCount, int firstIndex) implements RenderCommand {}

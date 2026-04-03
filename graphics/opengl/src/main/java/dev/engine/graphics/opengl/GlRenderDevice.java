@@ -35,6 +35,7 @@ import dev.engine.graphics.renderstate.*;
 import dev.engine.graphics.texture.MipMode;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureFormat;
+import dev.engine.graphics.texture.TextureType;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL45;
@@ -72,9 +73,9 @@ public class GlRenderDevice implements RenderDevice {
     private final ResourceRegistry<SamplerResource, GlSampler> samplers = new ResourceRegistry<>("sampler");
 
     @SuppressWarnings("unchecked")
-    private final Handle<TextureResource>[] boundTextures = new Handle[16];
+    private final Handle<TextureResource>[] boundTextures = new Handle[32];
     @SuppressWarnings("unchecked")
-    private final Handle<SamplerResource>[] boundSamplers = new Handle[16];
+    private final Handle<SamplerResource>[] boundSamplers = new Handle[32];
     private Handle<RenderTargetResource> currentRenderTarget;
 
     private final ResourceRegistry<PipelineResource, Integer> pipelines = new ResourceRegistry<>("pipeline");
@@ -164,10 +165,27 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public Handle<TextureResource> createTexture(TextureDescriptor descriptor) {
-        int glTex = GL45.glCreateTextures(GL45.GL_TEXTURE_2D);
+        int glTarget = switch (descriptor.type().name()) {
+            case "TEXTURE_3D"       -> GL45.GL_TEXTURE_3D;
+            case "TEXTURE_2D_ARRAY" -> GL45.GL_TEXTURE_2D_ARRAY;
+            case "TEXTURE_CUBE"     -> GL45.GL_TEXTURE_CUBE_MAP;
+            default                 -> GL45.GL_TEXTURE_2D;
+        };
+
+        int glTex = GL45.glCreateTextures(glTarget);
         int internalFormat = mapTextureFormat(descriptor.format());
         int levels = computeMipLevels(descriptor);
-        GL45.glTextureStorage2D(glTex, levels, internalFormat, descriptor.width(), descriptor.height());
+
+        if (descriptor.type() == TextureType.TEXTURE_3D) {
+            GL45.glTextureStorage3D(glTex, levels, internalFormat,
+                    descriptor.width(), descriptor.height(), descriptor.depth());
+        } else if (descriptor.type() == TextureType.TEXTURE_2D_ARRAY) {
+            GL45.glTextureStorage3D(glTex, levels, internalFormat,
+                    descriptor.width(), descriptor.height(), descriptor.layers());
+        } else {
+            // TEXTURE_2D and TEXTURE_CUBE both use glTextureStorage2D
+            GL45.glTextureStorage2D(glTex, levels, internalFormat, descriptor.width(), descriptor.height());
+        }
 
         return textures.register(new GlTexture(glTex, descriptor));
     }
@@ -178,8 +196,19 @@ public class GlRenderDevice implements RenderDevice {
         int glName = tex.glName();
         var desc = tex.desc();
         int[] formatAndType = mapUploadFormat(desc.format());
-        GL45.glTextureSubImage2D(glName, 0, 0, 0, desc.width(), desc.height(),
-                formatAndType[0], formatAndType[1], pixels);
+
+        if (desc.type() == TextureType.TEXTURE_3D) {
+            GL45.glTextureSubImage3D(glName, 0, 0, 0, 0,
+                    desc.width(), desc.height(), desc.depth(),
+                    formatAndType[0], formatAndType[1], pixels);
+        } else if (desc.type() == TextureType.TEXTURE_2D_ARRAY) {
+            GL45.glTextureSubImage3D(glName, 0, 0, 0, 0,
+                    desc.width(), desc.height(), desc.layers(),
+                    formatAndType[0], formatAndType[1], pixels);
+        } else {
+            GL45.glTextureSubImage2D(glName, 0, 0, 0, desc.width(), desc.height(),
+                    formatAndType[0], formatAndType[1], pixels);
+        }
         textureMipsDirty.put(texture.index(), true);
     }
 
@@ -660,6 +689,18 @@ public class GlRenderDevice implements RenderDevice {
                     GL45.GL_COLOR_BUFFER_BIT, linear ? GL45.GL_LINEAR : GL45.GL_NEAREST);
                 GL45.glDeleteFramebuffers(srcFbo);
                 GL45.glDeleteFramebuffers(dstFbo);
+            }
+            case RenderCommand.BindImage(int unit, var texture, int mipLevel, boolean read, boolean write) -> {
+                var texInfo = textures.get(texture);
+                int glTex = texInfo.glName();
+                int internalFormat = mapTextureFormat(texInfo.desc().format());
+                int access = GL45.GL_READ_WRITE;
+                if (read && !write) access = GL45.GL_READ_ONLY;
+                else if (!read && write) access = GL45.GL_WRITE_ONLY;
+                boolean layered = texInfo.desc().type() == TextureType.TEXTURE_3D
+                        || texInfo.desc().type() == TextureType.TEXTURE_2D_ARRAY
+                        || texInfo.desc().type() == TextureType.TEXTURE_CUBE;
+                GL45.glBindImageTexture(unit, glTex, mipLevel, layered, 0, access, internalFormat);
             }
             case RenderCommand.MemoryBarrier(var scope) -> {
                 int bits;

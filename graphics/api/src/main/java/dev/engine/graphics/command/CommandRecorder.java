@@ -28,6 +28,15 @@ public class CommandRecorder {
     public void bindSampler(int unit, Handle<SamplerResource> sampler) { commands.add(new RenderCommand.BindSampler(unit, sampler)); }
     public void bindStorageBuffer(int binding, Handle<BufferResource> buffer) { commands.add(new RenderCommand.BindStorageBuffer(binding, buffer)); }
 
+    // --- Image binding (for compute shader imageLoad/imageStore) ---
+    public void bindImage(int unit, Handle<TextureResource> texture, int mipLevel, boolean read, boolean write) {
+        commands.add(new RenderCommand.BindImage(unit, texture, mipLevel, read, write));
+    }
+    /** Convenience: bind for read-write at mip 0. */
+    public void bindImage(int unit, Handle<TextureResource> texture) {
+        bindImage(unit, texture, 0, true, true);
+    }
+
     // --- Draw commands ---
     public void draw(DrawCall call) { commands.addAll(call.toCommands()); }
     public void draw(int vertexCount, int firstVertex) { commands.add(new RenderCommand.Draw(vertexCount, firstVertex)); }
