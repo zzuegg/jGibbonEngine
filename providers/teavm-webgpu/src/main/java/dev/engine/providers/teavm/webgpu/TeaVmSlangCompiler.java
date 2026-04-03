@@ -62,13 +62,11 @@ public class TeaVmSlangCompiler {
             var err = slang.getLastError();
             throw new Error('Slang compile error: ' + (err ? err.message : 'unknown'));
         }
-        if (!module) {
-            var err = slang.getLastError();
-            throw new Error('Slang compile error: ' + (err ? err.message : 'unknown'));
-        }
 
-        var vertexEP = module.findEntryPointByName(vertexEntry);
-        var fragmentEP = module.findEntryPointByName(fragmentEntry);
+        // Use findAndCheckEntryPoint (like Slang Playground) — handles generics automatically
+        // Stage constants: vertex=1, fragment=5
+        var vertexEP = module.findAndCheckEntryPoint(vertexEntry, 1);
+        var fragmentEP = module.findAndCheckEntryPoint(fragmentEntry, 5);
         if (!vertexEP) throw new Error('Vertex entry point not found: ' + vertexEntry);
         if (!fragmentEP) throw new Error('Fragment entry point not found: ' + fragmentEntry);
 

@@ -48,6 +48,12 @@ public class WebMain extends BaseApplication {
         cube2.add(Transform.at(1.5f, 0, 0));
     }
 
+    @org.teavm.jso.JSBody(script = "return document.getElementById('canvas').width;")
+    private static native int getCanvasWidth();
+
+    @org.teavm.jso.JSBody(script = "return document.getElementById('canvas').height;")
+    private static native int getCanvasHeight();
+
     public static void main(String[] args) {
         // Load generated @NativeStruct metadata (triggers RecordRegistry registration)
         dev.engine.core.shader.params.EngineParams_NativeStruct.init();
@@ -61,7 +67,7 @@ public class WebMain extends BaseApplication {
 
         var config = EngineConfig.builder()
                 .windowTitle("Engine - WebGPU")
-                .windowSize(800, 600)
+                .windowSize(getCanvasWidth(), getCanvasHeight())
                 .build();
 
         var app = new WebMain();
