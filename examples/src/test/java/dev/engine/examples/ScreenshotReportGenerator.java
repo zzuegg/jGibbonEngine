@@ -95,7 +95,9 @@ public final class ScreenshotReportGenerator {
     }
 
     private static String camelToSnake(String camel) {
-        return camel.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
+        // Strip JUnit method signature suffix like "()" before converting
+        var clean = camel.replaceAll("\\(.*\\)", "");
+        return clean.replaceAll("([a-z])([A-Z])", "$1_$2").toLowerCase();
     }
 
     private static void collectSceneNames(Path dir, Set<String> names) throws IOException {
