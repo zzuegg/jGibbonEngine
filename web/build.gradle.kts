@@ -25,3 +25,15 @@ teavm {
         obfuscated = false
     }
 }
+
+// Copy webapp resources (index.html) next to the generated JS
+tasks.register<Copy>("assembleWeb") {
+    dependsOn("generateJavaScript")
+    from("src/main/webapp")
+    into(layout.buildDirectory.dir("generated/js/teavm/js"))
+    // The TeaVM plugin writes web.js into a 'js' subdirectory of outputDir
+}
+
+tasks.named("generateJavaScript") {
+    finalizedBy("assembleWeb")
+}

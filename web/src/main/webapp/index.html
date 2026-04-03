@@ -30,7 +30,16 @@
         // Check WebGPU support before loading the engine
         if (!navigator.gpu) {
             document.getElementById('status').textContent =
-                'WebGPU is not supported in this browser.';
+                'WebGPU is not supported in this browser. Try Chrome 113+ or Edge 113+.';
+        } else {
+            // Resize canvas to match actual display size
+            var canvas = document.getElementById('canvas');
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
         }
     </script>
     <script src="web.js"></script>
