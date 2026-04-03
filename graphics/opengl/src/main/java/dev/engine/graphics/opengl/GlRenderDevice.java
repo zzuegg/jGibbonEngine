@@ -32,6 +32,7 @@ import dev.engine.graphics.sampler.FilterMode;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.sampler.WrapMode;
 import dev.engine.graphics.renderstate.*;
+import dev.engine.graphics.texture.MipMode;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureFormat;
 import org.lwjgl.glfw.GLFW;
@@ -65,8 +66,15 @@ public class GlRenderDevice implements RenderDevice {
     private final HandlePool<RenderTargetResource> renderTargetPool = new HandlePool<>();
     private final Map<Integer, Integer> renderTargetFbos = new HashMap<>();
     private final Map<Integer, List<Handle<TextureResource>>> renderTargetColorTextures = new HashMap<>();
+    private final Map<Integer, Boolean> textureMipsDirty = new HashMap<>();
     private final HandlePool<SamplerResource> samplerPool = new HandlePool<>();
     private final Map<Integer, Integer> samplerGlNames = new HashMap<>();
+    private final Map<Integer, SamplerDescriptor> samplerDescs = new HashMap<>();
+    @SuppressWarnings("unchecked")
+    private final Handle<TextureResource>[] boundTextures = new Handle[16];
+    @SuppressWarnings("unchecked")
+    private final Handle<SamplerResource>[] boundSamplers = new Handle[16];
+    private Handle<RenderTargetResource> currentRenderTarget;
     private final HandlePool<PipelineResource> pipelinePool = new HandlePool<>();
     private final Map<Integer, Integer> pipelineGlPrograms = new HashMap<>();
     private final AtomicLong frameCounter = new AtomicLong(0);
@@ -162,7 +170,8 @@ public class GlRenderDevice implements RenderDevice {
     public Handle<TextureResource> createTexture(TextureDescriptor descriptor) {
         int glTex = GL45.glCreateTextures(GL45.GL_TEXTURE_2D);
         int internalFormat = mapTextureFormat(descriptor.format());
-        GL45.glTextureStorage2D(glTex, 1, internalFormat, descriptor.width(), descriptor.height());
+        int levels = computeMipLevels(descriptor);
+        GL45.glTextureStorage2D(glTex, levels, internalFormat, descriptor.width(), descriptor.height());
 
         var handle = texturePool.allocate();
         textureGlNames.put(handle.index(), glTex);
@@ -177,6 +186,7 @@ public class GlRenderDevice implements RenderDevice {
         int[] formatAndType = mapUploadFormat(desc.format());
         GL45.glTextureSubImage2D(glName, 0, 0, 0, desc.width(), desc.height(),
                 formatAndType[0], formatAndType[1], pixels);
+        textureMipsDirty.put(texture.index(), true);
     }
 
     @Override
@@ -184,6 +194,7 @@ public class GlRenderDevice implements RenderDevice {
         if (!texturePool.isValid(texture)) return;
         Integer glName = textureGlNames.remove(texture.index());
         textureDescs.remove(texture.index());
+        textureMipsDirty.remove(texture.index());
         if (glName != null) GL45.glDeleteTextures(glName);
         texturePool.release(texture);
     }
@@ -289,6 +300,7 @@ public class GlRenderDevice implements RenderDevice {
 
         var handle = samplerPool.allocate();
         samplerGlNames.put(handle.index(), glSampler);
+        samplerDescs.put(handle.index(), descriptor);
         return handle;
     }
 
@@ -296,6 +308,7 @@ public class GlRenderDevice implements RenderDevice {
     public void destroySampler(Handle<SamplerResource> sampler) {
         if (!samplerPool.isValid(sampler)) return;
         Integer glName = samplerGlNames.remove(sampler.index());
+        samplerDescs.remove(sampler.index());
         if (glName != null) GL45.glDeleteSamplers(glName);
         samplerPool.release(sampler);
     }
@@ -475,9 +488,13 @@ public class GlRenderDevice implements RenderDevice {
             case RenderCommand.BindTexture cmd -> {
                 int glTex = getGlTextureName(cmd.texture());
                 GL45.glBindTextureUnit(cmd.unit(), glTex);
+                boundTextures[cmd.unit()] = cmd.texture();
+                maybeGenerateMipmaps(cmd.unit());
             }
             case RenderCommand.BindSampler cmd -> {
                 GL45.glBindSampler(cmd.unit(), getGlSamplerName(cmd.sampler()));
+                boundSamplers[cmd.unit()] = cmd.sampler();
+                maybeGenerateMipmaps(cmd.unit());
             }
             case RenderCommand.BindStorageBuffer cmd -> {
                 int ssbo = getGlBufferName(cmd.buffer());
@@ -493,9 +510,20 @@ public class GlRenderDevice implements RenderDevice {
             case RenderCommand.BindRenderTarget cmd -> {
                 int fbo = getGlFboName(cmd.renderTarget());
                 GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, fbo);
+                currentRenderTarget = cmd.renderTarget();
             }
             case RenderCommand.BindDefaultRenderTarget cmd -> {
+                // Mark all color attachment textures of the previous render target as mips-dirty
+                if (currentRenderTarget != null) {
+                    var colorTextures = renderTargetColorTextures.get(currentRenderTarget.index());
+                    if (colorTextures != null) {
+                        for (var tex : colorTextures) {
+                            textureMipsDirty.put(tex.index(), true);
+                        }
+                    }
+                }
                 GL45.glBindFramebuffer(GL45.GL_FRAMEBUFFER, 0);
+                currentRenderTarget = null;
             }
             case RenderCommand.SetDepthTest cmd -> {
                 if (cmd.enabled()) GL45.glEnable(GL45.GL_DEPTH_TEST);
@@ -653,6 +681,37 @@ public class GlRenderDevice implements RenderDevice {
             pixels.get(rgba, dstRow, width * 4);
         }
         return rgba;
+    }
+
+    private void maybeGenerateMipmaps(int unit) {
+        var texture = boundTextures[unit];
+        var sampler = boundSamplers[unit];
+        if (texture == null || sampler == null) return;
+
+        var desc = textureDescs.get(texture.index());
+        if (desc == null || desc.mipMode() == MipMode.NONE) return;
+
+        Boolean dirty = textureMipsDirty.get(texture.index());
+        if (dirty == null || !dirty) return;
+
+        SamplerDescriptor sd = samplerDescs.get(sampler.index());
+        if (sd != null && usesMipmaps(sd)) {
+            int glTex = getGlTextureName(texture);
+            GL45.glGenerateTextureMipmap(glTex);
+            textureMipsDirty.put(texture.index(), false);
+        }
+    }
+
+    private static boolean usesMipmaps(SamplerDescriptor desc) {
+        return desc.minFilter() == FilterMode.NEAREST_MIPMAP_NEAREST
+                || desc.minFilter() == FilterMode.LINEAR_MIPMAP_LINEAR;
+    }
+
+    private static int computeMipLevels(TextureDescriptor descriptor) {
+        if (descriptor.mipMode() == MipMode.AUTO) {
+            return (int) Math.floor(Math.log(Math.max(descriptor.width(), descriptor.height())) / Math.log(2)) + 1;
+        }
+        return descriptor.mipMode().levelCount();
     }
 
     @Override

@@ -564,6 +564,10 @@ public class VkRenderDevice implements RenderDevice {
                 }
             });
 
+            // TODO: Auto-mipmap generation via vkCmdBlitImage chain when MipMode.AUTO.
+            //       Requires iterating mip levels, blitting from level N-1 to N with
+            //       layout transitions per level. For now only level 0 is populated.
+
             // Cleanup staging resources
             vkFreeMemory(device, stagingMemory, null);
             vkDestroyBuffer(device, stagingBuffer, null);
