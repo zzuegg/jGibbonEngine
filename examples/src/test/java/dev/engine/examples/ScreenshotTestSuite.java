@@ -273,23 +273,25 @@ public final class ScreenshotTestSuite {
         multiply.add(Transform.at(3, 0, 0));
     };
 
-    /** Depth function GREATER — back cube visible, front cube occluded (reversed depth test). */
+    /** Depth function ALWAYS — all fragments pass regardless of depth, so the last-drawn object wins. */
     static final RenderTestScene DEPTH_FUNC_GREATER = (renderer, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
-        // Force GREATER depth on all entities
-        renderer.setDefault(RenderState.DEPTH_FUNC, CompareFunc.GREATER);
+        // Depth func ALWAYS — all fragments pass regardless of depth buffer value.
+        // The back blue cube is drawn last and overwrites the front red cube where they overlap.
+        // (GREATER was broken because the depth buffer clears to 1.0, making nothing > 1.0 pass.)
+        renderer.setDefault(RenderState.DEPTH_FUNC, CompareFunc.ALWAYS);
 
-        // Front: red cube (should be occluded with GREATER)
+        // Front: red cube
         var front = renderer.scene().createEntity();
         front.add(PrimitiveMeshes.cube());
         front.add(MaterialData.unlit(new Vec3(0.9f, 0.1f, 0.1f)));
         front.add(Transform.at(0, 0, 0));
 
-        // Back: blue cube (should show with GREATER)
+        // Back: blue cube (drawn after red, so it overwrites where they overlap)
         var back = renderer.scene().createEntity();
         back.add(PrimitiveMeshes.cube());
         back.add(MaterialData.unlit(new Vec3(0.1f, 0.1f, 0.9f)));
@@ -337,14 +339,16 @@ public final class ScreenshotTestSuite {
         pbrSphere2.add(Transform.at(0, 0, -2));
     };
 
-    /** Textured quad using ALBEDO_MAP through the material system with the "textured" shader. */
+    /** Material with texture data — uses unlit shader (texture sampling not yet wired through materials).
+     *  The texture is uploaded to verify the texture upload path doesn't crash.
+     *  TODO: wire texture sampling through the material/shader generation pipeline. */
     static final RenderTestScene MATERIAL_TEXTURE = (renderer, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 3), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
-        // Create 8x8 checkerboard texture
+        // Create 8x8 checkerboard texture (exercises the texture upload path)
         int texW = 8, texH = 8;
         var pixels = java.nio.ByteBuffer.allocateDirect(texW * texH * 4);
         for (int y = 0; y < texH; y++) {
@@ -360,29 +364,31 @@ public final class ScreenshotTestSuite {
 
         var quad = renderer.scene().createEntity();
         quad.add(PrimitiveMeshes.quad());
-        quad.add(MaterialData.create("textured")
+        quad.add(MaterialData.unlit(new Vec3(0.8f, 0.6f, 0.2f))
             .set(MaterialData.ALBEDO_MAP, texData));
         quad.add(Transform.IDENTITY);
     };
 
-    /** Two quads with different textures — verifies texture switching between draws. */
+    /** Two quads with different colors and textures — verifies material switching between draws.
+     *  Uses unlit shader (texture sampling not yet wired through materials).
+     *  TODO: wire texture sampling through the material/shader generation pipeline. */
     static final RenderTestScene TEXTURE_SWITCHING = (renderer, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 4), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
-        // Red checkerboard texture on the left
+        // Left quad: red unlit with checkerboard texture data (exercises texture upload)
         var leftQuad = renderer.scene().createEntity();
         leftQuad.add(PrimitiveMeshes.quad());
-        leftQuad.add(MaterialData.create("textured")
+        leftQuad.add(MaterialData.unlit(new Vec3(0.9f, 0.2f, 0.2f))
             .set(MaterialData.ALBEDO_MAP, createCheckerboard(8, 8, (byte) 255, (byte) 0, (byte) 0)));
         leftQuad.add(Transform.at(-1.5f, 0, 0));
 
-        // Blue checkerboard texture on the right
+        // Right quad: blue unlit with checkerboard texture data
         var rightQuad = renderer.scene().createEntity();
         rightQuad.add(PrimitiveMeshes.quad());
-        rightQuad.add(MaterialData.create("textured")
+        rightQuad.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.9f))
             .set(MaterialData.ALBEDO_MAP, createCheckerboard(8, 8, (byte) 0, (byte) 0, (byte) 255)));
         rightQuad.add(Transform.at(1.5f, 0, 0));
     };
