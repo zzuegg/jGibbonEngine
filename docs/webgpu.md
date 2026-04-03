@@ -191,6 +191,83 @@ The `ShaderManager` sets it to `"vertexMain"`/`"fragmentMain"` for WGSL targets,
 and `WgpuRenderDevice.buildRenderPipeline` reads the entry point from `ShaderSource`
 rather than hardcoding names.
 
+## WGSL Uniform Buffer: No `bool` Type
+
+WGSL does **not** allow `bool` in uniform buffers. The `bool` type is not
+"host-shareable" in the WebGPU spec, so any `cbuffer`/uniform struct containing
+a `bool` field will be rejected by wgpu-native's shader validator with:
+
+```
+Alignment requirements for address space Uniform are not met
+The type is not host-shareable
+```
+
+This means render state properties like `depthWrite` (Boolean), `depthTest`
+(Boolean), `stencilTest` (Boolean) etc. must be filtered out before they reach
+the Slang shader compiler. Slang maps `Boolean` to `bool`, which is valid GLSL
+but invalid WGSL for uniform buffers.
+
+**Fix:** The `Renderer` filters render state keys from `MaterialData.keys()`
+before passing them to `ShaderManager.getShaderWithMaterial()` and
+`uploadMaterialData()`. Render state keys control pipeline state, not shader
+uniforms.
+
+## Surface-Based Rendering (GLFW Window)
+
+`WgpuRenderDevice` now follows the same pattern as GL and VK backends: it takes
+a `WindowHandle` from GLFW and creates a `WGPUSurface` for presentation.
+
+### Architecture
+
+1. Constructor detects the platform (X11 or Wayland) and creates the appropriate surface
+2. Surface is configured with BGRA8Unorm format (standard for swap chains)
+3. Each frame: acquire surface texture, render to offscreen RT, copy to surface, present
+4. Readback reads from the offscreen BGRA8 RT and swaps B/R channels to produce RGBA
+
+### Surface Creation (X11 and Wayland)
+
+The constructor detects the GLFW platform via `GLFW.glfwGetPlatform()` and creates
+the appropriate surface:
+
+- **X11**: Uses `WGPUSurfaceSourceXlibWindow` (SType `0x00020003`) with
+  `GLFWNativeX11.glfwGetX11Display()` / `glfwGetX11Window()`.
+- **Wayland**: Uses `WGPUSurfaceSourceWaylandSurface` (SType `0x00020004`) with
+  `GLFWNativeWayland.glfwGetWaylandDisplay()` / `glfwGetWaylandWindow()`.
+
+On Wayland systems without XWayland, the old X11-only code would crash with
+"Unsupported Surface". The platform detection handles this automatically.
+
+### Default Render Target
+
+The offscreen render target uses **BGRA8** format (not RGBA8) to match the surface
+texture format. This enables direct texture-to-texture copy for presentation.
+`readFramebuffer()` swaps B and R channels when returning RGBA pixel data.
+
+### Key Behaviors
+
+- `ensureDefaultRenderTarget(w, h)` creates an offscreen RT matching the surface format + DEPTH32F
+- `beginFrame()` acquires the surface texture and creates a texture view
+- `endFrame()` copies offscreen RT to surface texture, then presents
+- `readFramebuffer()` reads from the offscreen RT with BGRA-to-RGBA conversion
+- `close()` releases the surface before releasing device/adapter/instance
+
+## Surface Format: Query Capabilities, Don't Hardcode
+
+**Never hardcode BGRA8 as the surface format.** The preferred format varies by platform
+and GPU driver. Hardcoding BGRA8 causes `Validation Error` on systems that only support
+RGBA8 (or vice versa).
+
+Use `wgpuSurfaceGetCapabilities` to query supported formats, then pick the first one
+(which is the preferred format per the WebGPU spec). The helper
+`WgpuNative.surfaceGetPreferredFormat(surface, adapter, arena)` does this.
+
+The offscreen render target must also use the matching format so that texture-to-texture
+copy to the surface works without format conversion.
+
+**Important:** `wgpuSurfaceCapabilitiesFreeMembers` takes the struct **by value** (64 bytes),
+not by pointer. In the FFM binding, the `FunctionDescriptor` must use `SURFACE_CAPABILITIES_LAYOUT`
+as the parameter type instead of `ValueLayout.ADDRESS`.
+
 ## Vulkan Backend Warning
 
 wgpu-native prints `WARNING: radv is not a conformant Vulkan implementation` on

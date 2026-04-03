@@ -236,9 +236,31 @@ public final class WgpuNative {
     public static final int WAIT_STATUS_UNSUPPORTED_COUNT = 0x00000004;
     public static final int WAIT_STATUS_UNSUPPORTED_MIXED_SOURCES = 0x00000005;
 
+    // WGPUPresentMode
+    public static final int PRESENT_MODE_FIFO         = 1;
+    public static final int PRESENT_MODE_FIFO_RELAXED  = 2;
+    public static final int PRESENT_MODE_IMMEDIATE     = 3;
+    public static final int PRESENT_MODE_MAILBOX       = 4;
+
+    // WGPUCompositeAlphaMode
+    public static final int COMPOSITE_ALPHA_MODE_AUTO            = 0;
+    public static final int COMPOSITE_ALPHA_MODE_OPAQUE          = 1;
+    public static final int COMPOSITE_ALPHA_MODE_PREMULTIPLIED   = 2;
+    public static final int COMPOSITE_ALPHA_MODE_UNPREMULTIPLIED = 3;
+    public static final int COMPOSITE_ALPHA_MODE_INHERIT         = 4;
+
+    // WGPUSurfaceGetCurrentTextureStatus
+    public static final int SURFACE_GET_CURRENT_TEXTURE_STATUS_SUCCESS       = 1;
+    public static final int SURFACE_GET_CURRENT_TEXTURE_STATUS_TIMEOUT       = 2;
+    public static final int SURFACE_GET_CURRENT_TEXTURE_STATUS_OUTDATED      = 3;
+    public static final int SURFACE_GET_CURRENT_TEXTURE_STATUS_LOST          = 4;
+    public static final int SURFACE_GET_CURRENT_TEXTURE_STATUS_DEVICE_LOST   = 5;
+
     // WGPUSType for chained structs
-    public static final int STYPE_SHADER_SOURCE_SPIRV = 0x00000001;
-    public static final int STYPE_SHADER_SOURCE_WGSL  = 0x00000002;
+    public static final int STYPE_SHADER_SOURCE_SPIRV           = 0x00000001;
+    public static final int STYPE_SHADER_SOURCE_WGSL            = 0x00000002;
+    public static final int STYPE_SURFACE_SOURCE_XLIB_WINDOW    = 0x00000006;
+    public static final int STYPE_SURFACE_SOURCE_WAYLAND_SURFACE = 0x00000007;
 
     // ── Struct layouts (for by-value passing) ──────────────────────────
 
@@ -322,6 +344,29 @@ public final class WgpuNative {
             ValueLayout.ADDRESS.withName("userdata2")
     );
 
+    /**
+     * WGPUSurfaceCapabilities: {
+     *     WGPUChainedStructOut* nextInChain;  // 8
+     *     WGPUTextureUsage usages;            // 8 (uint64)
+     *     size_t formatCount;                 // 8
+     *     WGPUTextureFormat const* formats;   // 8
+     *     size_t presentModeCount;            // 8
+     *     WGPUPresentMode const* presentModes;// 8
+     *     size_t alphaModeCount;              // 8
+     *     WGPUCompositeAlphaMode const* alphaModes; // 8
+     * } Total: 64 bytes
+     */
+    public static final StructLayout SURFACE_CAPABILITIES_LAYOUT = MemoryLayout.structLayout(
+            ValueLayout.ADDRESS.withName("nextInChain"),
+            ValueLayout.JAVA_LONG.withName("usages"),
+            ValueLayout.JAVA_LONG.withName("formatCount"),
+            ValueLayout.ADDRESS.withName("formats"),
+            ValueLayout.JAVA_LONG.withName("presentModeCount"),
+            ValueLayout.ADDRESS.withName("presentModes"),
+            ValueLayout.JAVA_LONG.withName("alphaModeCount"),
+            ValueLayout.ADDRESS.withName("alphaModes")
+    );
+
     // ── Library loading ────────────────────────────────────────────────
 
     private static volatile SymbolLookup library;
@@ -364,6 +409,7 @@ public final class WgpuNative {
     private static MethodHandle h_wgpuCommandEncoderFinish;
     private static MethodHandle h_wgpuCommandEncoderCopyBufferToBuffer;
     private static MethodHandle h_wgpuCommandEncoderCopyTextureToBuffer;
+    private static MethodHandle h_wgpuCommandEncoderCopyTextureToTexture;
     private static MethodHandle h_wgpuCommandEncoderRelease;
 
     // Render pass encoder
@@ -403,6 +449,8 @@ public final class WgpuNative {
     private static MethodHandle h_wgpuSurfaceConfigure;
     private static MethodHandle h_wgpuSurfacePresent;
     private static MethodHandle h_wgpuSurfaceRelease;
+    private static MethodHandle h_wgpuSurfaceGetCapabilities;
+    private static MethodHandle h_wgpuSurfaceCapabilitiesFreeMembers;
 
     // Release functions
     private static MethodHandle h_wgpuShaderModuleRelease;
@@ -874,6 +922,15 @@ public final class WgpuNative {
         } catch (Throwable t) { throw rethrow(t); }
     }
 
+    public static void commandEncoderCopyTextureToTexture(MemorySegment encoder,
+                                                           MemorySegment source,
+                                                           MemorySegment destination,
+                                                           MemorySegment copySize) {
+        try {
+            h_wgpuCommandEncoderCopyTextureToTexture.invokeExact(encoder, source, destination, copySize);
+        } catch (Throwable t) { throw rethrow(t); }
+    }
+
     public static void commandEncoderRelease(MemorySegment encoder) {
         try {
             h_wgpuCommandEncoderRelease.invokeExact(encoder);
@@ -1169,6 +1226,210 @@ public final class WgpuNative {
         } catch (Throwable t) { throw rethrow(t); }
     }
 
+    /**
+     * Queries surface capabilities for the given adapter.
+     *
+     * @param surface WGPUSurface
+     * @param adapter WGPUAdapter
+     * @param capabilities pre-allocated WGPUSurfaceCapabilities struct (64 bytes, zeroed)
+     * @return WGPUStatus (1 = Success)
+     */
+    public static int surfaceGetCapabilities(MemorySegment surface, MemorySegment adapter, MemorySegment capabilities) {
+        try {
+            return (int) h_wgpuSurfaceGetCapabilities.invokeExact(surface, adapter, capabilities);
+        } catch (Throwable t) { throw rethrow(t); }
+    }
+
+    /**
+     * Frees the internal arrays allocated by {@link #surfaceGetCapabilities}.
+     * The struct is passed by value (64 bytes).
+     */
+    public static void surfaceCapabilitiesFreeMembers(MemorySegment capabilities) {
+        try {
+            h_wgpuSurfaceCapabilitiesFreeMembers.invokeExact(capabilities);
+        } catch (Throwable t) { throw rethrow(t); }
+    }
+
+    /**
+     * Queries the surface capabilities and returns the first (preferred) texture format.
+     * Falls back to {@link #TEXTURE_FORMAT_BGRA8_UNORM} if no formats are reported.
+     *
+     * @param surface WGPUSurface
+     * @param adapter WGPUAdapter
+     * @param arena arena for temporary allocations
+     * @return the preferred WGPUTextureFormat
+     */
+    public static int surfaceGetPreferredFormat(MemorySegment surface, MemorySegment adapter, Arena arena) {
+        var caps = arena.allocate(SURFACE_CAPABILITIES_LAYOUT);
+        caps.fill((byte) 0);
+
+        surfaceGetCapabilities(surface, adapter, caps);
+
+        long formatCount = caps.get(ValueLayout.JAVA_LONG, 16); // formatCount offset
+        if (formatCount == 0) return TEXTURE_FORMAT_BGRA8_UNORM; // fallback
+
+        var formatsPtr = caps.get(ValueLayout.ADDRESS, 24).reinterpret(formatCount * 4);
+        int preferredFormat = formatsPtr.get(ValueLayout.JAVA_INT, 0); // first = preferred
+
+        surfaceCapabilitiesFreeMembers(caps);
+        return preferredFormat;
+    }
+
+    /**
+     * Creates a WGPUSurface from an X11 display and window.
+     *
+     * <p>Builds the required {@code WGPUSurfaceDescriptor} with a chained
+     * {@code WGPUSurfaceSourceXlibWindow} struct.
+     *
+     * @param instance WGPUInstance
+     * @param x11Display X11 Display pointer (from {@code glfwGetX11Display()})
+     * @param x11Window X11 Window ID (from {@code glfwGetX11Window()})
+     * @param arena arena for allocating descriptor memory
+     * @return WGPUSurface handle
+     */
+    public static MemorySegment createX11Surface(MemorySegment instance,
+                                                  long x11Display, long x11Window,
+                                                  Arena arena) {
+        // WGPUSurfaceSourceXlibWindow:
+        //   0: chain.next (ptr, 8)
+        //   8: chain.sType (uint32, 4) = WGPUSType_SurfaceSourceXlibWindow
+        //  12: padding (4)
+        //  16: display (ptr, 8)
+        //  24: window (uint64, 8)
+        // Total: 32
+        var xlibSource = arena.allocate(32, 8);
+        xlibSource.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);          // chain.next
+        xlibSource.set(ValueLayout.JAVA_INT, 8, STYPE_SURFACE_SOURCE_XLIB_WINDOW); // chain.sType
+        // padding at 12
+        xlibSource.set(ValueLayout.ADDRESS, 16, MemorySegment.ofAddress(x11Display)); // display
+        xlibSource.set(ValueLayout.JAVA_LONG, 24, x11Window);               // window
+
+        // WGPUSurfaceDescriptor:
+        //   0: nextInChain (ptr, 8) → points to WGPUSurfaceSourceXlibWindow
+        //   8: label.data (ptr, 8)
+        //  16: label.length (size_t, 8)
+        // Total: 24
+        var desc = arena.allocate(24, 8);
+        desc.set(ValueLayout.ADDRESS, 0, xlibSource);            // nextInChain
+        desc.set(ValueLayout.ADDRESS, 8, MemorySegment.NULL);   // label.data
+        desc.set(ValueLayout.JAVA_LONG, 16, 0L);                // label.length
+
+        return instanceCreateSurface(instance, desc);
+    }
+
+    /**
+     * Creates a WGPUSurface from a Wayland display and surface.
+     *
+     * <p>Builds the required {@code WGPUSurfaceDescriptor} with a chained
+     * {@code WGPUSurfaceSourceWaylandSurface} struct.
+     *
+     * @param instance WGPUInstance
+     * @param waylandDisplay Wayland display pointer (from {@code glfwGetWaylandDisplay()})
+     * @param waylandSurface Wayland surface pointer (from {@code glfwGetWaylandWindow()})
+     * @param arena arena for allocating descriptor memory
+     * @return WGPUSurface handle
+     */
+    public static MemorySegment createWaylandSurface(MemorySegment instance,
+                                                      long waylandDisplay, long waylandSurface,
+                                                      Arena arena) {
+        // WGPUSurfaceSourceWaylandSurface:
+        //   0: chain.next (ptr, 8)
+        //   8: chain.sType (uint32, 4) = WGPUSType_SurfaceSourceWaylandSurface
+        //  12: padding (4)
+        //  16: display (ptr, 8)
+        //  24: surface (ptr, 8)
+        // Total: 32
+        var waylandSource = arena.allocate(32, 8);
+        waylandSource.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);          // chain.next
+        waylandSource.set(ValueLayout.JAVA_INT, 8, STYPE_SURFACE_SOURCE_WAYLAND_SURFACE); // chain.sType
+        // padding at 12
+        waylandSource.set(ValueLayout.ADDRESS, 16, MemorySegment.ofAddress(waylandDisplay)); // display
+        waylandSource.set(ValueLayout.ADDRESS, 24, MemorySegment.ofAddress(waylandSurface)); // surface
+
+        // WGPUSurfaceDescriptor:
+        //   0: nextInChain (ptr, 8) → points to WGPUSurfaceSourceWaylandSurface
+        //   8: label.data (ptr, 8)
+        //  16: label.length (size_t, 8)
+        // Total: 24
+        var desc = arena.allocate(24, 8);
+        desc.set(ValueLayout.ADDRESS, 0, waylandSource);            // nextInChain
+        desc.set(ValueLayout.ADDRESS, 8, MemorySegment.NULL);      // label.data
+        desc.set(ValueLayout.JAVA_LONG, 16, 0L);                   // label.length
+
+        return instanceCreateSurface(instance, desc);
+    }
+
+    /**
+     * Configures a WGPUSurface with the given parameters.
+     *
+     * @param surface WGPUSurface
+     * @param device WGPUDevice
+     * @param format texture format (e.g. TEXTURE_FORMAT_BGRA8_UNORM)
+     * @param width surface width
+     * @param height surface height
+     * @param presentMode present mode (e.g. PRESENT_MODE_FIFO)
+     * @param arena arena for allocating configuration memory
+     */
+    public static void surfaceConfigureSimple(MemorySegment surface, MemorySegment device,
+                                               int format, int width, int height,
+                                               int presentMode, Arena arena) {
+        // WGPUSurfaceConfiguration (v24):
+        //   0: nextInChain (ptr, 8)
+        //   8: device (ptr, 8)
+        //  16: format (uint32, 4)
+        //  20: pad (4)
+        //  24: usage (uint64 WGPUFlags, 8)
+        //  32: width (uint32, 4)
+        //  36: height (uint32, 4)
+        //  40: viewFormatCount (size_t, 8)
+        //  48: viewFormats (ptr, 8)
+        //  56: alphaMode (uint32, 4)
+        //  60: presentMode (uint32, 4)
+        // Total: 64
+        var config = arena.allocate(64, 8);
+        config.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);   // nextInChain
+        config.set(ValueLayout.ADDRESS, 8, device);                // device
+        config.set(ValueLayout.JAVA_INT, 16, format);              // format
+        // pad at 20
+        config.set(ValueLayout.JAVA_LONG, 24, TEXTURE_USAGE_RENDER_ATTACHMENT | TEXTURE_USAGE_COPY_SRC); // usage
+        config.set(ValueLayout.JAVA_INT, 32, width);               // width
+        config.set(ValueLayout.JAVA_INT, 36, height);              // height
+        config.set(ValueLayout.JAVA_LONG, 40, 0L);                 // viewFormatCount
+        config.set(ValueLayout.ADDRESS, 48, MemorySegment.NULL);   // viewFormats
+        config.set(ValueLayout.JAVA_INT, 56, COMPOSITE_ALPHA_MODE_AUTO); // alphaMode
+        config.set(ValueLayout.JAVA_INT, 60, presentMode);         // presentMode
+
+        surfaceConfigure(surface, config);
+    }
+
+    /**
+     * Gets the current surface texture and its status.
+     *
+     * <p>Fills a {@code WGPUSurfaceTexture} struct and returns
+     * the texture handle. Check status via the returned struct.
+     *
+     * @param surface WGPUSurface
+     * @param arena arena for allocating the output struct
+     * @return array of [textureHandle, statusInt] where status 1 = success
+     */
+    public static SurfaceTextureResult surfaceGetCurrentTextureResult(MemorySegment surface, Arena arena) {
+        // WGPUSurfaceTexture (v24):
+        //   0: texture (ptr, 8)
+        //   8: status (uint32, 4)
+        //  12: pad (4)
+        // Total: 16
+        var surfTex = arena.allocate(16, 8);
+        surfaceGetCurrentTexture(surface, surfTex);
+        var texture = surfTex.get(ValueLayout.ADDRESS, 0);
+        int status = surfTex.get(ValueLayout.JAVA_INT, 8);
+        return new SurfaceTextureResult(texture, status);
+    }
+
+    /** Result of getting the current surface texture. */
+    public record SurfaceTextureResult(MemorySegment texture, int status) {
+        public boolean isSuccess() { return status == SURFACE_GET_CURRENT_TEXTURE_STATUS_SUCCESS; }
+    }
+
     // ── Release functions ──────────────────────────────────────────────
 
     public static void shaderModuleRelease(MemorySegment module) {
@@ -1301,6 +1562,10 @@ public final class WgpuNative {
                 FunctionDescriptor.ofVoid(
                         ValueLayout.ADDRESS, ValueLayout.ADDRESS,
                         ValueLayout.ADDRESS, ValueLayout.ADDRESS));
+        h_wgpuCommandEncoderCopyTextureToTexture = bind(linker, "wgpuCommandEncoderCopyTextureToTexture",
+                FunctionDescriptor.ofVoid(
+                        ValueLayout.ADDRESS, ValueLayout.ADDRESS,
+                        ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         h_wgpuCommandEncoderRelease = bind(linker, "wgpuCommandEncoderRelease", voidPtr);
 
         // Render pass encoder
@@ -1386,6 +1651,13 @@ public final class WgpuNative {
                 FunctionDescriptor.ofVoid(ValueLayout.ADDRESS, ValueLayout.ADDRESS));
         h_wgpuSurfacePresent = bind(linker, "wgpuSurfacePresent", voidPtr);
         h_wgpuSurfaceRelease = bind(linker, "wgpuSurfaceRelease", voidPtr);
+        h_wgpuSurfaceGetCapabilities = bind(linker, "wgpuSurfaceGetCapabilities",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT,
+                        ValueLayout.ADDRESS,     // surface
+                        ValueLayout.ADDRESS,     // adapter
+                        ValueLayout.ADDRESS));   // capabilities*
+        h_wgpuSurfaceCapabilitiesFreeMembers = bind(linker, "wgpuSurfaceCapabilitiesFreeMembers",
+                FunctionDescriptor.ofVoid(SURFACE_CAPABILITIES_LAYOUT));
 
         // Release functions
         h_wgpuShaderModuleRelease = bind(linker, "wgpuShaderModuleRelease", voidPtr);

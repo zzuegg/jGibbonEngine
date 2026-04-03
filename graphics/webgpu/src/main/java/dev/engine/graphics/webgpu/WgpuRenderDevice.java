@@ -34,6 +34,10 @@ import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureFormat;
 import dev.engine.graphics.texture.TextureType;
 import dev.engine.graphics.texture.MipMode;
+import dev.engine.graphics.window.WindowHandle;
+import org.lwjgl.glfw.GLFW;
+import org.lwjgl.glfw.GLFWNativeWayland;
+import org.lwjgl.glfw.GLFWNativeX11;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,15 +52,14 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * WebGPU render device backed by wgpu-native via FFM bindings.
  *
- * <p>Implements headless rendering to an off-screen texture with readback
- * support for screenshot tests. When wgpu-native is not available, all
- * resource management still works through {@link ResourceRegistry} but
- * no GPU operations are performed.
+ * <p>Takes a {@link WindowHandle} (from GLFW toolkit) and creates a WGPUSurface
+ * for rendering. The surface texture is acquired each frame and presented at
+ * the end. An offscreen render target is also maintained for readback support.
  *
  * <h3>Architecture</h3>
  * <ul>
- *   <li>Setup: Instance -> Adapter -> Device -> Queue</li>
- *   <li>Per-frame: CommandEncoder -> RenderPassEncoder -> CommandBuffer -> Queue.submit()</li>
+ *   <li>Setup: Instance -> Adapter -> Device -> Queue -> Surface</li>
+ *   <li>Per-frame: CommandEncoder -> RenderPassEncoder -> CommandBuffer -> Queue.submit() -> Present</li>
  *   <li>Bind groups created on-demand per draw call with currently bound resources</li>
  *   <li>Pipelines use "auto" layout — bind group layout derived from the shader</li>
  * </ul>
@@ -98,6 +101,14 @@ public class WgpuRenderDevice implements RenderDevice {
     private MemorySegment wgpuDevice;
     private MemorySegment wgpuQueue;
 
+    // ── Surface state ────────────────────────────────────────────────
+
+    private final WindowHandle window;
+    private MemorySegment wgpuSurface;
+    private int surfaceFormat = WgpuNative.TEXTURE_FORMAT_BGRA8_UNORM;
+    private MemorySegment surfaceTexture;        // current frame's surface texture
+    private MemorySegment surfaceTextureView;    // view for the current surface texture
+
     // ── Per-frame state ───────────────────────────────────────────────
 
     private MemorySegment commandEncoder;
@@ -107,6 +118,12 @@ public class WgpuRenderDevice implements RenderDevice {
     // ── Current render target tracking ────────────────────────────────
 
     private Handle<RenderTargetResource> currentRenderTarget;
+
+    // ── Default offscreen render target (lazy, resized on viewport) ──
+
+    private Handle<RenderTargetResource> defaultRenderTarget;
+    private int defaultRtWidth;
+    private int defaultRtHeight;
 
     // ── Pending bind state (flushed before each draw) ─────────────────
 
@@ -132,15 +149,51 @@ public class WgpuRenderDevice implements RenderDevice {
 
     // ── Constructor ───────────────────────────────────────────────────
 
-    public WgpuRenderDevice() {
+    /**
+     * Creates a WebGPU render device attached to the given window.
+     *
+     * <p>The window must have been created with {@code GLFW_NO_API} hints
+     * (same as Vulkan). A WGPUSurface is created from the window's
+     * native handle (X11 or Wayland, detected automatically).
+     *
+     * @param window the GLFW window handle
+     */
+    public WgpuRenderDevice(WindowHandle window) {
+        this.window = window;
         deviceArena = Arena.ofShared();
         nativeAvailable = WgpuNative.isAvailable();
 
         if (nativeAvailable) {
             wgpuInstance = WgpuNative.createInstance(MemorySegment.NULL);
+
+            // Create surface from GLFW window — detect platform (X11 vs Wayland)
+            long glfwHandle = window.nativeHandle();
+            int platform = GLFW.glfwGetPlatform();
+            if (platform == GLFW.GLFW_PLATFORM_WAYLAND) {
+                long wlDisplay = GLFWNativeWayland.glfwGetWaylandDisplay();
+                long wlSurface = GLFWNativeWayland.glfwGetWaylandWindow(glfwHandle);
+                wgpuSurface = WgpuNative.createWaylandSurface(wgpuInstance, wlDisplay, wlSurface, deviceArena);
+                log.info("WebGPU surface created from Wayland window: surface={}", wgpuSurface);
+            } else {
+                long x11Display = GLFWNativeX11.glfwGetX11Display();
+                long x11Window = GLFWNativeX11.glfwGetX11Window(glfwHandle);
+                wgpuSurface = WgpuNative.createX11Surface(wgpuInstance, x11Display, x11Window, deviceArena);
+                log.info("WebGPU surface created from X11 window: surface={}", wgpuSurface);
+            }
+
             wgpuAdapter = WgpuNative.requestAdapterSync(wgpuInstance, MemorySegment.NULL);
             wgpuDevice = WgpuNative.requestDeviceSync(wgpuInstance, wgpuAdapter, MemorySegment.NULL);
             wgpuQueue = WgpuNative.deviceGetQueue(wgpuDevice);
+
+            // Query preferred surface format
+            surfaceFormat = WgpuNative.surfaceGetPreferredFormat(wgpuSurface, wgpuAdapter, deviceArena);
+            log.info("WebGPU surface preferred format: {}", surfaceFormat);
+
+            // Configure the surface with the queried format
+            WgpuNative.surfaceConfigureSimple(wgpuSurface, wgpuDevice,
+                    surfaceFormat, window.width(), window.height(),
+                    WgpuNative.PRESENT_MODE_FIFO, deviceArena);
+
             log.info("WebGPU device created: instance={}, adapter={}, device={}, queue={}",
                     wgpuInstance, wgpuAdapter, wgpuDevice, wgpuQueue);
         } else {
@@ -650,7 +703,7 @@ public class WgpuRenderDevice implements RenderDevice {
             // Total: 32
             var colorTarget = arena.allocate(32, 8);
             colorTarget.set(ValueLayout.ADDRESS, 0, MemorySegment.NULL);
-            colorTarget.set(ValueLayout.JAVA_INT, 8, WgpuNative.TEXTURE_FORMAT_RGBA8_UNORM);
+            colorTarget.set(ValueLayout.JAVA_INT, 8, surfaceFormat); // match the render target format
             colorTarget.set(ValueLayout.ADDRESS, 16, blendState);
             colorTarget.set(ValueLayout.JAVA_LONG, 24, WgpuNative.COLOR_WRITE_MASK_ALL);
 
@@ -733,6 +786,35 @@ public class WgpuRenderDevice implements RenderDevice {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // Default Render Target
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Ensures a default offscreen render target exists at the given dimensions.
+     * Creates or recreates it when the viewport size changes.
+     *
+     * <p>Uses the queried surface format to match the surface texture, enabling
+     * direct texture-to-texture copy for presentation.
+     */
+    private void ensureDefaultRenderTarget(int width, int height) {
+        if (width <= 0 || height <= 0) return;
+        if (defaultRenderTarget != null && defaultRtWidth == width && defaultRtHeight == height) return;
+
+        if (defaultRenderTarget != null) {
+            destroyRenderTarget(defaultRenderTarget);
+        }
+        // Match the surface format for copy-compatible presentation
+        TextureFormat colorFormat = (surfaceFormat == WgpuNative.TEXTURE_FORMAT_RGBA8_UNORM
+                || surfaceFormat == WgpuNative.TEXTURE_FORMAT_RGBA8_UNORM_SRGB)
+                ? TextureFormat.RGBA8 : TextureFormat.BGRA8;
+        defaultRenderTarget = createRenderTarget(
+                RenderTargetDescriptor.colorDepth(width, height, colorFormat, TextureFormat.DEPTH32F));
+        defaultRtWidth = width;
+        defaultRtHeight = height;
+        log.debug("Created default render target {}x{}", width, height);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // Frame Lifecycle
     // ═══════════════════════════════════════════════════════════════════
 
@@ -742,6 +824,25 @@ public class WgpuRenderDevice implements RenderDevice {
         if (!nativeAvailable) return;
 
         frameArena = Arena.ofConfined();
+
+        // Acquire surface texture
+        if (wgpuSurface != null) {
+            var result = WgpuNative.surfaceGetCurrentTextureResult(wgpuSurface, frameArena);
+            if (!result.isSuccess()) {
+                log.warn("Failed to acquire surface texture, status={}", result.status());
+                // Reconfigure and retry
+                WgpuNative.surfaceConfigureSimple(wgpuSurface, wgpuDevice,
+                        surfaceFormat, window.width(), window.height(),
+                        WgpuNative.PRESENT_MODE_FIFO, frameArena);
+                result = WgpuNative.surfaceGetCurrentTextureResult(wgpuSurface, frameArena);
+                if (!result.isSuccess()) {
+                    log.error("Failed to acquire surface texture after reconfigure, status={}", result.status());
+                    return;
+                }
+            }
+            surfaceTexture = result.texture();
+            surfaceTextureView = WgpuNative.textureCreateView(surfaceTexture, MemorySegment.NULL);
+        }
 
         // Create command encoder
         // WGPUCommandEncoderDescriptor: { nextInChain(8), label{data(8),len(8)} } = 24
@@ -753,7 +854,7 @@ public class WgpuRenderDevice implements RenderDevice {
 
         // Reset render pass
         renderPassEncoder = null;
-        currentRenderTarget = null;
+        currentRenderTarget = defaultRenderTarget;
         currentPipeline = null;
         currentBindGroup = null;
         bindingsDirty = true;
@@ -771,6 +872,19 @@ public class WgpuRenderDevice implements RenderDevice {
 
         endCurrentRenderPass();
 
+        // Copy from offscreen render target to surface texture for display
+        if (wgpuSurface != null && surfaceTexture != null && defaultRenderTarget != null) {
+            var rt = renderTargets.get(defaultRenderTarget);
+            if (rt != null && !rt.colorTextures().isEmpty()) {
+                var colorTex = textures.get(rt.colorTextures().getFirst());
+                if (colorTex != null && !colorTex.handle().equals(MemorySegment.NULL)) {
+                    copyTextureToSurface(colorTex.handle(), surfaceTexture,
+                            Math.min(rt.width(), window.width()),
+                            Math.min(rt.height(), window.height()));
+                }
+            }
+        }
+
         // Finish and submit command buffer
         // WGPUCommandBufferDescriptor: { nextInChain(8), label{data(8),len(8)} } = 24
         var cmdBufDesc = frameArena.allocate(24, 8);
@@ -785,10 +899,22 @@ public class WgpuRenderDevice implements RenderDevice {
         cmdBufArray.set(ValueLayout.ADDRESS, 0, commandBuffer);
         WgpuNative.queueSubmit(wgpuQueue, 1, cmdBufArray);
 
+        // Present the surface
+        if (wgpuSurface != null && surfaceTexture != null) {
+            WgpuNative.surfacePresent(wgpuSurface);
+        }
+
         // Release
         WgpuNative.commandBufferRelease(commandBuffer);
         WgpuNative.commandEncoderRelease(commandEncoder);
         commandEncoder = null;
+
+        // Release surface texture view (texture itself is owned by the surface)
+        if (surfaceTextureView != null) {
+            WgpuNative.textureViewRelease(surfaceTextureView);
+            surfaceTextureView = null;
+        }
+        surfaceTexture = null;
 
         if (currentBindGroup != null && !currentBindGroup.equals(MemorySegment.NULL)) {
             WgpuNative.bindGroupRelease(currentBindGroup);
@@ -797,6 +923,37 @@ public class WgpuRenderDevice implements RenderDevice {
 
         frameArena.close();
         frameArena = null;
+    }
+
+    /**
+     * Copies from the offscreen RGBA8 render target to the BGRA8 surface texture.
+     * Uses a texture-to-texture copy command on the current command encoder.
+     */
+    private void copyTextureToSurface(MemorySegment srcTexture, MemorySegment dstTexture,
+                                       int width, int height) {
+        // WGPUTexelCopyTextureInfo: texture(8), mipLevel(4), origin{x,y,z}(12), aspect(4) = 28 padded to 32
+        var srcInfo = frameArena.allocate(32, 8);
+        srcInfo.set(ValueLayout.ADDRESS, 0, srcTexture);
+        srcInfo.set(ValueLayout.JAVA_INT, 8, 0);   // mipLevel
+        srcInfo.set(ValueLayout.JAVA_INT, 12, 0);  // origin.x
+        srcInfo.set(ValueLayout.JAVA_INT, 16, 0);  // origin.y
+        srcInfo.set(ValueLayout.JAVA_INT, 20, 0);  // origin.z
+        srcInfo.set(ValueLayout.JAVA_INT, 24, WgpuNative.TEXTURE_ASPECT_ALL);
+
+        var dstInfo = frameArena.allocate(32, 8);
+        dstInfo.set(ValueLayout.ADDRESS, 0, dstTexture);
+        dstInfo.set(ValueLayout.JAVA_INT, 8, 0);
+        dstInfo.set(ValueLayout.JAVA_INT, 12, 0);
+        dstInfo.set(ValueLayout.JAVA_INT, 16, 0);
+        dstInfo.set(ValueLayout.JAVA_INT, 20, 0);
+        dstInfo.set(ValueLayout.JAVA_INT, 24, WgpuNative.TEXTURE_ASPECT_ALL);
+
+        var copySize = frameArena.allocate(12, 4);
+        copySize.set(ValueLayout.JAVA_INT, 0, width);
+        copySize.set(ValueLayout.JAVA_INT, 4, height);
+        copySize.set(ValueLayout.JAVA_INT, 8, 1);
+
+        WgpuNative.commandEncoderCopyTextureToTexture(commandEncoder, srcInfo, dstInfo, copySize);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -819,8 +976,8 @@ public class WgpuRenderDevice implements RenderDevice {
             }
             case RenderCommand.BindDefaultRenderTarget cmd -> {
                 endCurrentRenderPass();
-                currentRenderTarget = null;
-                // No default render target in headless mode
+                currentRenderTarget = defaultRenderTarget;
+                // Don't begin render pass here — Clear or draw will start it
             }
             case RenderCommand.Clear cmd -> {
                 // Clear is handled by render pass loadOp.
@@ -831,6 +988,12 @@ public class WgpuRenderDevice implements RenderDevice {
                 }
             }
             case RenderCommand.Viewport cmd -> {
+                if (nativeAvailable) {
+                    ensureDefaultRenderTarget(cmd.width(), cmd.height());
+                    if (currentRenderTarget == null) {
+                        currentRenderTarget = defaultRenderTarget;
+                    }
+                }
                 if (renderPassEncoder != null && nativeAvailable) {
                     WgpuNative.renderPassEncoderSetViewport(renderPassEncoder,
                             (float) cmd.x(), (float) cmd.y(),
@@ -1145,9 +1308,10 @@ public class WgpuRenderDevice implements RenderDevice {
 
     @Override
     public byte[] readFramebuffer(int width, int height) {
-        if (!nativeAvailable || currentRenderTarget == null) return null;
+        var readTarget = currentRenderTarget != null ? currentRenderTarget : defaultRenderTarget;
+        if (!nativeAvailable || readTarget == null) return null;
 
-        var rt = renderTargets.get(currentRenderTarget);
+        var rt = renderTargets.get(readTarget);
         if (rt == null || rt.colorTextures().isEmpty()) return null;
 
         var colorTex = textures.get(rt.colorTextures().getFirst());
@@ -1220,13 +1384,23 @@ public class WgpuRenderDevice implements RenderDevice {
             var mapped = WgpuNative.bufferGetMappedRange(stagingBuf, 0, bufferSize);
             mapped = mapped.reinterpret(bufferSize);
 
-            // Copy to byte array, handling row alignment
+            // Copy to byte array, handling row alignment and BGRA→RGBA conversion
             byte[] rgba = new byte[width * height * 4];
             for (int y = 0; y < height; y++) {
                 long srcOffset = (long) y * bytesPerRow;
                 int dstOffset = y * width * 4;
                 MemorySegment.copy(mapped, ValueLayout.JAVA_BYTE, srcOffset,
                         rgba, dstOffset, width * 4);
+            }
+
+            // Swap B and R channels if the source texture is BGRA
+            if (colorTex.wgpuFormat() == WgpuNative.TEXTURE_FORMAT_BGRA8_UNORM
+                    || colorTex.wgpuFormat() == WgpuNative.TEXTURE_FORMAT_BGRA8_UNORM_SRGB) {
+                for (int i = 0; i < rgba.length; i += 4) {
+                    byte b = rgba[i];
+                    rgba[i] = rgba[i + 2];
+                    rgba[i + 2] = b;
+                }
             }
 
             WgpuNative.bufferUnmap(stagingBuf);
@@ -1265,7 +1439,15 @@ public class WgpuRenderDevice implements RenderDevice {
 
     @Override
     public void close() {
+        if (defaultRenderTarget != null) {
+            destroyRenderTarget(defaultRenderTarget);
+            defaultRenderTarget = null;
+        }
         if (nativeAvailable) {
+            if (wgpuSurface != null) {
+                WgpuNative.surfaceRelease(wgpuSurface);
+                wgpuSurface = null;
+            }
             if (wgpuDevice != null) {
                 WgpuNative.deviceRelease(wgpuDevice);
                 wgpuDevice = null;
@@ -1298,6 +1480,7 @@ public class WgpuRenderDevice implements RenderDevice {
 
     static int mapTextureFormat(TextureFormat format) {
         if (format == TextureFormat.RGBA8) return WgpuNative.TEXTURE_FORMAT_RGBA8_UNORM;
+        if (format == TextureFormat.BGRA8) return WgpuNative.TEXTURE_FORMAT_BGRA8_UNORM;
         if (format == TextureFormat.DEPTH32F) return WgpuNative.TEXTURE_FORMAT_DEPTH32_FLOAT;
         if (format == TextureFormat.DEPTH24) return WgpuNative.TEXTURE_FORMAT_DEPTH24_PLUS;
         if (format == TextureFormat.DEPTH24_STENCIL8) return WgpuNative.TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8;
@@ -1350,7 +1533,7 @@ public class WgpuRenderDevice implements RenderDevice {
     }
 
     private static int bytesPerPixel(TextureFormat format) {
-        if (format == TextureFormat.RGBA8 || format == TextureFormat.DEPTH32F) return 4;
+        if (format == TextureFormat.RGBA8 || format == TextureFormat.BGRA8 || format == TextureFormat.DEPTH32F) return 4;
         if (format == TextureFormat.RGB8) return 3;
         if (format == TextureFormat.R8) return 1;
         if (format == TextureFormat.RGBA16F) return 8;
