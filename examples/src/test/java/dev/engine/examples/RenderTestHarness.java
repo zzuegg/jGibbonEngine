@@ -5,7 +5,9 @@ import dev.engine.graphics.ScreenshotHelper;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.graphics.vulkan.VkRenderDevice;
+import dev.engine.graphics.webgpu.WgpuBindings;
 import dev.engine.graphics.webgpu.WgpuRenderDevice;
+import dev.engine.providers.jwebgpu.JWebGpuBindings;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.graphics.window.WindowDescriptor;
 import org.lwjgl.glfw.GLFWVulkan;
@@ -173,7 +175,7 @@ public class RenderTestHarness {
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         try {
             var window = toolkit.createWindow(new WindowDescriptor("GL Test", width, height));
-            var device = new GlRenderDevice(window);
+            var device = new GlRenderDevice(window, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
             return renderWith(device, scene);
         } finally {
             toolkit.close();
@@ -196,13 +198,14 @@ public class RenderTestHarness {
 
     /** Renders the scene on WebGPU with a GLFW window + surface. Returns null if wgpu-native is not available. */
     public byte[] renderWebGpu(RenderTestScene scene) {
-        if (!WgpuRenderDevice.isAvailable()) {
+        var gpu = new JWebGpuBindings();
+        if (!gpu.isAvailable()) {
             return null;
         }
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
         try {
             var window = toolkit.createWindow(new WindowDescriptor("WGPU Test", width, height));
-            var device = new WgpuRenderDevice(window);
+            var device = new WgpuRenderDevice(window, gpu);
             return renderWith(device, scene);
         } finally {
             toolkit.close();

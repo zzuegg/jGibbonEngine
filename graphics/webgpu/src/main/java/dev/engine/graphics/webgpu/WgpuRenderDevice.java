@@ -1,6 +1,5 @@
 package dev.engine.graphics.webgpu;
 
-import com.github.xpenatan.webgpu.*;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.mesh.ComponentType;
 import dev.engine.core.mesh.VertexAttribute;
@@ -46,12 +45,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 /**
- * WebGPU render device backed by jWebGPU (com.github.xpenatan.jWebGPU).
+ * WebGPU render device backed by {@link WgpuBindings}.
  *
  * <p>Takes a {@link WindowHandle} (from GLFW toolkit) and creates an offscreen
  * rendering context. All rendering goes to an offscreen render target, which
@@ -71,14 +69,14 @@ public class WgpuRenderDevice implements RenderDevice {
 
     // ── Native resource records ───────────────────────────────────────
 
-    private record WgpuBuffer(WGPUBuffer nativeBuffer, long size) {}
-    private record WgpuTexture(WGPUTexture nativeTexture, WGPUTextureView view,
-                               TextureDescriptor desc, WGPUTextureFormat wgpuFormat) {}
+    private record WgpuBuffer(long nativeBuffer, long size) {}
+    private record WgpuTexture(long nativeTexture, long view,
+                               TextureDescriptor desc, int wgpuFormat) {}
     private record WgpuVertexInput(VertexFormat format) {}
-    private record WgpuSampler(WGPUSampler nativeSampler, SamplerDescriptor desc) {}
+    private record WgpuSampler(long nativeSampler, SamplerDescriptor desc) {}
     private enum WgpuBindingType { UNIFORM, TEXTURE, SAMPLER, STORAGE }
-    private record WgpuPipeline(WGPURenderPipeline nativePipeline,
-                                WGPUBindGroupLayout bindGroupLayout,
+    private record WgpuPipeline(long nativePipeline,
+                                long bindGroupLayout,
                                 Map<Integer, WgpuBindingType> bindingTypes,
                                 List<ShaderSource> shaderSources,
                                 VertexFormat vertexFormat) {}
@@ -99,18 +97,22 @@ public class WgpuRenderDevice implements RenderDevice {
 
     private final AtomicLong frameCounter = new AtomicLong(0);
 
+    // ── Bindings ─────────────────────────────────────────────────────
+
+    private final WgpuBindings gpu;
+
     // ── Native state ──────────────────────────────────────────────────
 
     private final boolean nativeAvailable;
-    private WGPUInstance wgpuInstance;
-    private WGPUAdapter wgpuAdapter;
-    private WGPUDevice wgpuDevice;
-    private WGPUQueue wgpuQueue;
+    private long wgpuInstance;
+    private long wgpuAdapter;
+    private long wgpuDevice;
+    private long wgpuQueue;
 
     // ── Per-frame state ───────────────────────────────────────────────
 
-    private WGPUCommandEncoder commandEncoder;
-    private WGPURenderPassEncoder renderPassEncoder;
+    private long commandEncoder;
+    private long renderPassEncoder;
 
     // ── Current render target tracking ────────────────────────────────
 
@@ -134,15 +136,15 @@ public class WgpuRenderDevice implements RenderDevice {
     private final Handle<BufferResource>[] boundSsbos = new Handle[16];
     private Handle<PipelineResource> currentPipeline;
     private boolean bindingsDirty;
-    private WGPUBindGroup currentBindGroup;
+    private long currentBindGroup;
 
     // ── Render state tracking (for pipeline-baked state in WebGPU) ────
 
     private boolean depthTestEnabled = true;
     private boolean depthWriteEnabled = true;
     private boolean blendEnabled = false;
-    private WGPUCullMode wgpuCullMode = WGPUCullMode.Back;
-    private WGPUFrontFace wgpuFrontFace = WGPUFrontFace.CCW;
+    private int wgpuCullMode = WgpuBindings.CULL_MODE_BACK;
+    private int wgpuFrontFace = WgpuBindings.FRONT_FACE_CCW;
     private CompareFunc depthFunc = CompareFunc.LESS;
 
     // Stencil state
@@ -166,17 +168,17 @@ public class WgpuRenderDevice implements RenderDevice {
     private record PipelineStateKey(
             int basePipelineIndex,
             String blendMode,
-            String cullMode,
-            String frontFace,
+            int cullMode,
+            int frontFace,
             boolean depthTest,
             boolean depthWrite,
             String depthFunc
     ) {}
 
-    private final Map<PipelineStateKey, WGPURenderPipeline> pipelineVariants = new HashMap<>();
+    private final Map<PipelineStateKey, Long> pipelineVariants = new HashMap<>();
     private boolean pipelineStateDirty = false;
     /** Tracks the pipeline that was last set on the render pass encoder. */
-    private WGPURenderPipeline currentActivePipeline = null;
+    private long currentActivePipeline = 0;
 
     // ── Constructor ───────────────────────────────────────────────────
 
@@ -184,95 +186,39 @@ public class WgpuRenderDevice implements RenderDevice {
      * Creates a WebGPU render device in offscreen mode.
      *
      * @param window the GLFW window handle (kept for API compatibility)
+     * @param gpu    the WebGPU bindings implementation
      */
-    public WgpuRenderDevice(WindowHandle window) {
+    public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu) {
+        this.gpu = gpu;
         boolean available = false;
         try {
-            initJWebGPU();
-            available = true;
+            available = gpu.initialize();
         } catch (Throwable t) {
-            log.warn("jWebGPU native library not available: {}", t.getMessage());
+            log.warn("WebGPU native library not available: {}", t.getMessage());
         }
         this.nativeAvailable = available;
 
         if (nativeAvailable) {
-            wgpuInstance = WGPU.setupInstance();
+            wgpuInstance = gpu.createInstance();
 
-            // Request adapter synchronously
-            var adapterHolder = new WGPUAdapter[1];
-            var adapterOpts = WGPURequestAdapterOptions.obtain();
-            wgpuInstance.requestAdapter(adapterOpts, WGPUCallbackMode.AllowSpontaneous,
-                    new WGPURequestAdapterCallback() {
-                        @Override
-                        protected void onCallback(WGPURequestAdapterStatus status,
-                                                  WGPUAdapter adapter, String message) {
-                            adapterHolder[0] = adapter;
-                        }
-                    });
-            wgpuInstance.processEvents();
-            wgpuAdapter = adapterHolder[0];
-
-            if (wgpuAdapter == null) {
+            wgpuAdapter = gpu.instanceRequestAdapter(wgpuInstance);
+            if (wgpuAdapter == 0) {
                 throw new RuntimeException("Failed to get WebGPU adapter");
             }
 
-            // Request device synchronously
-            var deviceHolder = new WGPUDevice[1];
-            var deviceDesc = WGPUDeviceDescriptor.obtain();
-            wgpuAdapter.requestDevice(deviceDesc, WGPUCallbackMode.AllowSpontaneous,
-                    new WGPURequestDeviceCallback() {
-                        @Override
-                        protected void onCallback(WGPURequestDeviceStatus status,
-                                                  WGPUDevice device, String message) {
-                            deviceHolder[0] = device;
-                        }
-                    },
-                    new WGPUUncapturedErrorCallback() {
-                        @Override
-                        protected void onCallback(WGPUErrorType type, String message) {
-                            log.error("WebGPU error ({}): {}", type, message);
-                        }
-                    });
-            wgpuInstance.processEvents();
-            wgpuDevice = deviceHolder[0];
-
-            if (wgpuDevice == null) {
+            wgpuDevice = gpu.adapterRequestDevice(wgpuInstance, wgpuAdapter);
+            if (wgpuDevice == 0) {
                 throw new RuntimeException("Failed to get WebGPU device");
             }
 
-            wgpuQueue = wgpuDevice.getQueue();
-            log.info("WebGPU device created (offscreen mode) via jWebGPU");
+            wgpuQueue = gpu.deviceGetQueue(wgpuDevice);
+            log.info("WebGPU device created (offscreen mode)");
         } else {
-            wgpuInstance = null;
-            wgpuAdapter = null;
-            wgpuDevice = null;
-            wgpuQueue = null;
-            log.warn("jWebGPU not available; WebGPU device running without native backend");
-        }
-    }
-
-    private static final AtomicBoolean jwebgpuInitialized = new AtomicBoolean(false);
-
-    private static void initJWebGPU() {
-        if (jwebgpuInitialized.compareAndSet(false, true)) {
-            JWebGPULoader.init((result, error) -> {
-                if (!result) {
-                    throw new RuntimeException("Failed to load jWebGPU native library",
-                            error);
-                }
-            });
-        }
-    }
-
-    /**
-     * Returns true if the native WebGPU backend is available.
-     */
-    public static boolean isAvailable() {
-        try {
-            initJWebGPU();
-            return true;
-        } catch (Throwable t) {
-            return false;
+            wgpuInstance = 0;
+            wgpuAdapter = 0;
+            wgpuDevice = 0;
+            wgpuQueue = 0;
+            log.warn("WebGPU not available; WebGPU device running without native backend");
         }
     }
 
@@ -283,25 +229,19 @@ public class WgpuRenderDevice implements RenderDevice {
     @Override
     public Handle<BufferResource> createBuffer(BufferDescriptor descriptor) {
         if (nativeAvailable) {
-            var bufDesc = WGPUBufferDescriptor.obtain();
-            bufDesc.setSize(descriptor.size());
-            // Combine usage flags via setValue on CUSTOM
-            int usage = mapBufferUsage(descriptor.usage()).getValue()
-                    | WGPUBufferUsage.CopyDst.getValue();
-            bufDesc.setUsage(WGPUBufferUsage.CUSTOM.setValue(usage));
-
-            var buf = wgpuDevice.createBuffer(bufDesc);
+            int usage = mapBufferUsage(descriptor.usage()) | WgpuBindings.BUFFER_USAGE_COPY_DST;
+            long buf = gpu.deviceCreateBuffer(wgpuDevice, descriptor.size(), usage);
             return buffers.register(new WgpuBuffer(buf, descriptor.size()));
         }
-        return buffers.register(new WgpuBuffer(null, descriptor.size()));
+        return buffers.register(new WgpuBuffer(0, descriptor.size()));
     }
 
     @Override
     public void destroyBuffer(Handle<BufferResource> buffer) {
         if (!buffers.isValid(buffer)) return;
         var buf = buffers.remove(buffer);
-        if (buf != null && nativeAvailable && buf.nativeBuffer() != null) {
-            buf.nativeBuffer().release();
+        if (buf != null && nativeAvailable && buf.nativeBuffer() != 0) {
+            gpu.bufferRelease(buf.nativeBuffer());
         }
     }
 
@@ -328,14 +268,14 @@ public class WgpuRenderDevice implements RenderDevice {
 
             @Override
             public void close() {
-                if (nativeAvailable && buf != null && buf.nativeBuffer() != null) {
-                    // Copy from MemorySegment to a direct ByteBuffer for jWebGPU
+                if (nativeAvailable && buf != null && buf.nativeBuffer() != 0) {
+                    // Copy from MemorySegment to a direct ByteBuffer
                     ByteBuffer bb = ByteBuffer.allocateDirect((int) length);
                     for (int i = 0; i < length; i++) {
                         bb.put(segment.get(java.lang.foreign.ValueLayout.JAVA_BYTE, i));
                     }
                     bb.flip();
-                    wgpuQueue.writeBuffer(buf.nativeBuffer(), (int) offset, bb, (int) length);
+                    gpu.queueWriteBuffer(wgpuQueue, buf.nativeBuffer(), (int) offset, bb, (int) length);
                 }
                 arena.close();
             }
@@ -348,119 +288,78 @@ public class WgpuRenderDevice implements RenderDevice {
 
     @Override
     public Handle<TextureResource> createTexture(TextureDescriptor descriptor) {
-        WGPUTextureFormat wgpuFormat = mapTextureFormat(descriptor.format());
-        int usage = WGPUTextureUsage.TextureBinding.getValue()
-                | WGPUTextureUsage.CopyDst.getValue()
-                | WGPUTextureUsage.CopySrc.getValue();
+        int wgpuFormat = mapTextureFormat(descriptor.format());
+        int usage = WgpuBindings.TEXTURE_USAGE_TEXTURE_BINDING
+                | WgpuBindings.TEXTURE_USAGE_COPY_DST
+                | WgpuBindings.TEXTURE_USAGE_COPY_SRC;
 
         if (nativeAvailable) {
             var tex = createWgpuTexture(descriptor, wgpuFormat, usage);
             var view = createDefaultView(tex, descriptor, wgpuFormat);
             return textures.register(new WgpuTexture(tex, view, descriptor, wgpuFormat));
         }
-        return textures.register(new WgpuTexture(null, null, descriptor, wgpuFormat));
+        return textures.register(new WgpuTexture(0, 0, descriptor, wgpuFormat));
     }
 
     private Handle<TextureResource> createTextureForRenderTarget(TextureDescriptor descriptor, int extraUsage) {
-        WGPUTextureFormat wgpuFormat = mapTextureFormat(descriptor.format());
-        int usage = WGPUTextureUsage.CopySrc.getValue() | extraUsage;
+        int wgpuFormat = mapTextureFormat(descriptor.format());
+        int usage = WgpuBindings.TEXTURE_USAGE_COPY_SRC | extraUsage;
 
         if (nativeAvailable) {
             var tex = createWgpuTexture(descriptor, wgpuFormat, usage);
             var view = createDefaultView(tex, descriptor, wgpuFormat);
             return textures.register(new WgpuTexture(tex, view, descriptor, wgpuFormat));
         }
-        return textures.register(new WgpuTexture(null, null, descriptor, wgpuFormat));
+        return textures.register(new WgpuTexture(0, 0, descriptor, wgpuFormat));
     }
 
-    private WGPUTextureView createDefaultView(WGPUTexture tex, TextureDescriptor descriptor,
-                                               WGPUTextureFormat wgpuFormat) {
-        var viewDesc = WGPUTextureViewDescriptor.obtain();
-        viewDesc.setFormat(wgpuFormat);
-        viewDesc.setMipLevelCount(1);
-        viewDesc.setBaseMipLevel(0);
-        viewDesc.setBaseArrayLayer(0);
-
-        boolean isDepth = descriptor.format() == TextureFormat.DEPTH32F
-                || descriptor.format() == TextureFormat.DEPTH24
-                || descriptor.format() == TextureFormat.DEPTH24_STENCIL8
-                || descriptor.format() == TextureFormat.DEPTH32F_STENCIL8;
+    private long createDefaultView(long tex, TextureDescriptor descriptor, int wgpuFormat) {
+        int viewDimension;
+        int arrayLayerCount;
 
         if (descriptor.type() == TextureType.TEXTURE_3D) {
-            viewDesc.setDimension(WGPUTextureViewDimension._3D);
-            viewDesc.setArrayLayerCount(1);
+            viewDimension = WgpuBindings.TEXTURE_VIEW_DIMENSION_3D;
+            arrayLayerCount = 1;
         } else if (descriptor.type() == TextureType.TEXTURE_2D_ARRAY) {
-            viewDesc.setDimension(WGPUTextureViewDimension._2DArray);
-            viewDesc.setArrayLayerCount(descriptor.layers());
+            viewDimension = WgpuBindings.TEXTURE_VIEW_DIMENSION_2D_ARRAY;
+            arrayLayerCount = descriptor.layers();
         } else if (descriptor.type() == TextureType.TEXTURE_CUBE) {
-            viewDesc.setDimension(WGPUTextureViewDimension.Cube);
-            viewDesc.setArrayLayerCount(6);
+            viewDimension = WgpuBindings.TEXTURE_VIEW_DIMENSION_CUBE;
+            arrayLayerCount = 6;
         } else {
-            viewDesc.setDimension(WGPUTextureViewDimension._2D);
-            viewDesc.setArrayLayerCount(1);
+            viewDimension = WgpuBindings.TEXTURE_VIEW_DIMENSION_2D;
+            arrayLayerCount = 1;
         }
 
-        if (isDepth) {
-            viewDesc.setAspect(WGPUTextureAspect.All);
-        } else {
-            viewDesc.setAspect(WGPUTextureAspect.All);
-        }
-
-        var view = new WGPUTextureView();
-        tex.createView(viewDesc, view);
-        return view;
+        return gpu.textureCreateView(tex, wgpuFormat, viewDimension, arrayLayerCount);
     }
 
-    private WGPUTexture createWgpuTexture(TextureDescriptor descriptor, WGPUTextureFormat wgpuFormat, int usage) {
-        var texDesc = WGPUTextureDescriptor.obtain();
-        texDesc.setUsage(WGPUTextureUsage.CUSTOM.setValue(usage));
-        texDesc.setDimension(descriptor.type() == TextureType.TEXTURE_3D
-                ? WGPUTextureDimension._3D : WGPUTextureDimension._2D);
-        texDesc.setFormat(wgpuFormat);
-        texDesc.setMipLevelCount(1);
-        texDesc.setSampleCount(1);
-
-        var size = texDesc.getSize();
-        size.setWidth(descriptor.width());
-        size.setHeight(descriptor.height());
+    private long createWgpuTexture(TextureDescriptor descriptor, int wgpuFormat, int usage) {
         int depthOrLayers = 1;
         if (descriptor.type() == TextureType.TEXTURE_3D) depthOrLayers = descriptor.depth();
         else if (descriptor.type() == TextureType.TEXTURE_2D_ARRAY) depthOrLayers = descriptor.layers();
         else if (descriptor.type() == TextureType.TEXTURE_CUBE) depthOrLayers = 6;
-        size.setDepthOrArrayLayers(depthOrLayers);
 
-        var tex = new WGPUTexture();
-        wgpuDevice.createTexture(texDesc, tex);
-        return tex;
+        int dimension = descriptor.type() == TextureType.TEXTURE_3D
+                ? WgpuBindings.TEXTURE_DIMENSION_3D : WgpuBindings.TEXTURE_DIMENSION_2D;
+
+        return gpu.deviceCreateTexture(wgpuDevice, descriptor.width(), descriptor.height(),
+                depthOrLayers, wgpuFormat, dimension, usage);
     }
 
     @Override
     public void uploadTexture(Handle<TextureResource> texture, ByteBuffer pixels) {
         if (!nativeAvailable) return;
         var tex = textures.get(texture);
-        if (tex == null || tex.nativeTexture() == null) return;
+        if (tex == null || tex.nativeTexture() == 0) return;
 
         var desc = tex.desc();
         int bytesPerRow = desc.width() * bytesPerPixel(desc.format());
 
-        var destination = WGPUTexelCopyTextureInfo.obtain();
-        destination.setTexture(tex.nativeTexture());
-        destination.setMipLevel(0);
-        destination.setAspect(WGPUTextureAspect.All);
-
-        var dataLayout = WGPUTexelCopyBufferLayout.obtain();
-        dataLayout.setOffset(0);
-        dataLayout.setBytesPerRow(bytesPerRow);
-        dataLayout.setRowsPerImage(desc.height());
-
-        var writeSize = WGPUExtent3D.obtain();
-        writeSize.setWidth(desc.width());
-        writeSize.setHeight(desc.height());
         int depthOrLayers = 1;
         if (desc.type() == TextureType.TEXTURE_3D) depthOrLayers = desc.depth();
         else if (desc.type() == TextureType.TEXTURE_2D_ARRAY) depthOrLayers = desc.layers();
         else if (desc.type() == TextureType.TEXTURE_CUBE) depthOrLayers = 6;
-        writeSize.setDepthOrArrayLayers(depthOrLayers);
 
         // Ensure we have a direct ByteBuffer
         ByteBuffer direct;
@@ -472,7 +371,8 @@ public class WgpuRenderDevice implements RenderDevice {
             direct.flip();
         }
 
-        wgpuQueue.writeTexture(destination, direct, direct.remaining(), dataLayout, writeSize);
+        gpu.queueWriteTexture(wgpuQueue, tex.nativeTexture(),
+                desc.width(), desc.height(), depthOrLayers, bytesPerRow, direct);
     }
 
     @Override
@@ -480,8 +380,8 @@ public class WgpuRenderDevice implements RenderDevice {
         if (!textures.isValid(texture)) return;
         var tex = textures.remove(texture);
         if (tex != null && nativeAvailable) {
-            if (tex.view() != null) tex.view().release();
-            if (tex.nativeTexture() != null) tex.nativeTexture().release();
+            if (tex.view() != 0) gpu.textureViewRelease(tex.view());
+            if (tex.nativeTexture() != 0) gpu.textureRelease(tex.nativeTexture());
         }
     }
 
@@ -507,8 +407,8 @@ public class WgpuRenderDevice implements RenderDevice {
             var format = descriptor.colorAttachments().get(i);
             var texDesc = new TextureDescriptor(descriptor.width(), descriptor.height(), format, MipMode.NONE);
             var texHandle = createTextureForRenderTarget(texDesc,
-                    WGPUTextureUsage.RenderAttachment.getValue()
-                            | WGPUTextureUsage.TextureBinding.getValue());
+                    WgpuBindings.TEXTURE_USAGE_RENDER_ATTACHMENT
+                            | WgpuBindings.TEXTURE_USAGE_TEXTURE_BINDING);
             colorTextures.add(texHandle);
         }
 
@@ -517,7 +417,7 @@ public class WgpuRenderDevice implements RenderDevice {
             var depthDesc = new TextureDescriptor(descriptor.width(), descriptor.height(),
                     descriptor.depthFormat(), MipMode.NONE);
             depthTexture = createTextureForRenderTarget(depthDesc,
-                    WGPUTextureUsage.RenderAttachment.getValue());
+                    WgpuBindings.TEXTURE_USAGE_RENDER_ATTACHMENT);
         }
 
         return renderTargets.register(new WgpuRenderTarget(
@@ -562,30 +462,24 @@ public class WgpuRenderDevice implements RenderDevice {
     @Override
     public Handle<SamplerResource> createSampler(SamplerDescriptor descriptor) {
         if (nativeAvailable) {
-            var desc = WGPUSamplerDescriptor.obtain();
-            desc.setAddressModeU(mapWrapMode(descriptor.wrapS()));
-            desc.setAddressModeV(mapWrapMode(descriptor.wrapT()));
-            desc.setAddressModeW(mapWrapMode(descriptor.wrapS()));
-            desc.setMagFilter(mapFilterMode(descriptor.magFilter()));
-            desc.setMinFilter(mapFilterMode(descriptor.minFilter()));
-            desc.setMipmapFilter(mapMipmapFilterMode(descriptor.minFilter()));
-            desc.setLodMinClamp(0.0f);
-            desc.setLodMaxClamp(32.0f);
-            desc.setMaxAnisotropy(1);
-
-            var sampler = new WGPUSampler();
-            wgpuDevice.createSampler(desc, sampler);
+            long sampler = gpu.deviceCreateSampler(wgpuDevice,
+                    mapWrapMode(descriptor.wrapS()),
+                    mapWrapMode(descriptor.wrapT()),
+                    mapWrapMode(descriptor.wrapS()),
+                    mapFilterMode(descriptor.magFilter()),
+                    mapFilterMode(descriptor.minFilter()),
+                    mapMipmapFilterMode(descriptor.minFilter()));
             return samplers.register(new WgpuSampler(sampler, descriptor));
         }
-        return samplers.register(new WgpuSampler(null, descriptor));
+        return samplers.register(new WgpuSampler(0, descriptor));
     }
 
     @Override
     public void destroySampler(Handle<SamplerResource> sampler) {
         if (!samplers.isValid(sampler)) return;
         var s = samplers.remove(sampler);
-        if (s != null && nativeAvailable && s.nativeSampler() != null) {
-            s.nativeSampler().release();
+        if (s != null && nativeAvailable && s.nativeSampler() != 0) {
+            gpu.samplerRelease(s.nativeSampler());
         }
     }
 
@@ -596,7 +490,7 @@ public class WgpuRenderDevice implements RenderDevice {
     @Override
     public Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor) {
         if (!nativeAvailable) {
-            return pipelines.register(new WgpuPipeline(null, null, Map.of(),
+            return pipelines.register(new WgpuPipeline(0, 0, Map.of(),
                     descriptor.shaders(), descriptor.vertexFormat()));
         }
 
@@ -620,207 +514,61 @@ public class WgpuRenderDevice implements RenderDevice {
         }
 
         // Create shader modules
-        var vertModule = createShaderModule(vertexShader.source());
-        WGPUShaderModule fragModule = null;
+        long vertModule = createShaderModule(vertexShader.source());
+        long fragModule = 0;
         if (fragmentShader != null) {
             fragModule = createShaderModule(fragmentShader.source());
         }
 
         // Build explicit bind group layout from binding types
-        var bgLayout = createBindGroupLayout(bindingTypes);
+        long bgLayout = createBindGroupLayout(bindingTypes);
 
         // Build pipeline layout
-        var pipelineLayout = new WGPUPipelineLayout();
-        var plDesc = WGPUPipelineLayoutDescriptor.obtain();
-        var bgLayouts = WGPUVectorBindGroupLayout.obtain();
-        bgLayouts.push_back(bgLayout);
-        plDesc.setBindGroupLayouts(bgLayouts);
-        wgpuDevice.createPipelineLayout(plDesc, pipelineLayout);
+        long pipelineLayout = gpu.deviceCreatePipelineLayout(wgpuDevice, new long[]{bgLayout});
 
-        // Build render pipeline descriptor
-        var rpDesc = new WGPURenderPipelineDescriptor();
-        rpDesc.setLayout(pipelineLayout);
-
-        // Vertex state
-        var vertexState = rpDesc.getVertex();
-        vertexState.setModule(vertModule);
-        vertexState.setEntryPoint(vertexShader.entryPoint());
-        vertexState.setConstants(WGPUVectorConstantEntry.NULL);
-
-        if (descriptor.vertexFormat() != null) {
-            var format = descriptor.vertexFormat();
-            var attrs = format.attributes();
-
-            var attrVec = WGPUVectorVertexAttribute.obtain();
-            for (var attr : attrs) {
-                var wgpuAttr = WGPUVertexAttribute.obtain();
-                wgpuAttr.setFormat(mapVertexFormat(attr));
-                wgpuAttr.setOffset(attr.offset());
-                wgpuAttr.setShaderLocation(attr.location());
-                attrVec.push_back(wgpuAttr);
-            }
-
-            var bufLayout = WGPUVertexBufferLayout.obtain();
-            bufLayout.setArrayStride(format.stride());
-            bufLayout.setStepMode(WGPUVertexStepMode.Vertex);
-            bufLayout.setAttributes(attrVec);
-
-            var bufLayoutVec = WGPUVectorVertexBufferLayout.obtain();
-            bufLayoutVec.push_back(bufLayout);
-            vertexState.setBuffers(bufLayoutVec);
-        } else {
-            vertexState.setBuffers(WGPUVectorVertexBufferLayout.NULL);
-        }
-
-        // Primitive state
-        var primitiveState = rpDesc.getPrimitive();
-        primitiveState.setTopology(WGPUPrimitiveTopology.TriangleList);
-        primitiveState.setStripIndexFormat(WGPUIndexFormat.Undefined);
-        primitiveState.setFrontFace(wgpuFrontFace);
-        primitiveState.setCullMode(wgpuCullMode);
-
-        // Depth stencil state
-        var depthStencil = WGPUDepthStencilState.obtain();
-        depthStencil.setFormat(WGPUTextureFormat.Depth24PlusStencil8);
-        depthStencil.setDepthWriteEnabled(depthWriteEnabled ? WGPUOptionalBool.True : WGPUOptionalBool.False);
-        depthStencil.setDepthCompare(mapCompareFunc(depthFunc));
-        depthStencil.setStencilReadMask(stencilMask);
-        depthStencil.setStencilWriteMask(stencilMask);
-
-        // Stencil face states
-        var stencilFront = depthStencil.getStencilFront();
-        var stencilBack = depthStencil.getStencilBack();
-        if (stencilTestEnabled) {
-            stencilFront.setCompare(mapCompareFunc(stencilFunc));
-            stencilFront.setPassOp(mapStencilOp(stencilPassOp));
-            stencilFront.setFailOp(mapStencilOp(stencilFailOp));
-            stencilFront.setDepthFailOp(mapStencilOp(stencilDepthFailOp));
-            stencilBack.setCompare(mapCompareFunc(stencilFunc));
-            stencilBack.setPassOp(mapStencilOp(stencilPassOp));
-            stencilBack.setFailOp(mapStencilOp(stencilFailOp));
-            stencilBack.setDepthFailOp(mapStencilOp(stencilDepthFailOp));
-        } else {
-            stencilFront.setCompare(WGPUCompareFunction.Always);
-            stencilFront.setPassOp(WGPUStencilOperation.Keep);
-            stencilFront.setFailOp(WGPUStencilOperation.Keep);
-            stencilFront.setDepthFailOp(WGPUStencilOperation.Keep);
-            stencilBack.setCompare(WGPUCompareFunction.Always);
-            stencilBack.setPassOp(WGPUStencilOperation.Keep);
-            stencilBack.setFailOp(WGPUStencilOperation.Keep);
-            stencilBack.setDepthFailOp(WGPUStencilOperation.Keep);
-        }
-
-        rpDesc.setDepthStencil(depthStencil);
-
-        // Multisample state
-        var multisample = rpDesc.getMultisample();
-        multisample.setCount(1);
-        multisample.setMask(0xFFFFFFFF);
-        multisample.setAlphaToCoverageEnabled(false);
-
-        // Fragment state
-        if (fragModule != null) {
-            var fragState = WGPUFragmentState.obtain();
-            fragState.setNextInChain(WGPUChainedStruct.NULL);
-            fragState.setModule(fragModule);
-            fragState.setEntryPoint(fragmentShader.entryPoint());
-            fragState.setConstants(WGPUVectorConstantEntry.NULL);
-
-            var colorTarget = WGPUColorTargetState.obtain();
-            colorTarget.setFormat(WGPUTextureFormat.RGBA8Unorm);
-            colorTarget.setWriteMask(WGPUColorWriteMask.All);
-
-            // Blend state
-            var blendState = WGPUBlendState.obtain();
-            configureBlendState(blendState, currentBlendMode);
-            colorTarget.setBlend(blendState);
-
-            var colorTargets = WGPUVectorColorTargetState.obtain();
-            colorTargets.push_back(colorTarget);
-            fragState.setTargets(colorTargets);
-            rpDesc.setFragment(fragState);
-        }
-
-        var pipeline = new WGPURenderPipeline();
-        wgpuDevice.createRenderPipeline(rpDesc, pipeline);
+        // Build render pipeline
+        long pipeline = buildRenderPipeline(pipelineLayout, vertModule, vertexShader,
+                fragModule, fragmentShader, descriptor.vertexFormat());
 
         // Release shader modules
-        vertModule.release();
-        if (fragModule != null) fragModule.release();
+        gpu.shaderModuleRelease(vertModule);
+        if (fragModule != 0) gpu.shaderModuleRelease(fragModule);
 
         // Release pipeline layout (pipeline retains reference)
-        pipelineLayout.release();
+        gpu.pipelineLayoutRelease(pipelineLayout);
 
         log.debug("Pipeline created with {} bind group bindings: {}", bindingTypes.size(), bindingTypes);
         return pipelines.register(new WgpuPipeline(pipeline, bgLayout, bindingTypes,
                 descriptor.shaders(), descriptor.vertexFormat()));
     }
 
-    private WGPUShaderModule createShaderModule(String wgslSource) {
+    private long createShaderModule(String wgslSource) {
         if (wgslSource == null || wgslSource.isEmpty()) {
             throw new ShaderCompilationException("WGSL shader source is null or empty");
         }
-        var wgslDesc = WGPUShaderSourceWGSL.obtain();
-        wgslDesc.setCode(wgslSource);
-        wgslDesc.getChain().setSType(WGPUSType.ShaderSourceWGSL);
-
-        var shaderDesc = WGPUShaderModuleDescriptor.obtain();
-        shaderDesc.setNextInChain(wgslDesc.getChain());
-
-        var module = new WGPUShaderModule();
-        wgpuDevice.createShaderModule(shaderDesc, module);
-
-        if (!module.isValid()) {
+        long module = gpu.deviceCreateShaderModule(wgpuDevice, wgslSource);
+        if (!gpu.shaderModuleIsValid(module)) {
             throw new ShaderCompilationException("WebGPU shader module creation failed");
         }
         return module;
     }
 
-    private WGPUBindGroupLayout createBindGroupLayout(Map<Integer, WgpuBindingType> bindingTypes) {
-        var entries = WGPUVectorBindGroupLayoutEntry.obtain();
+    private long createBindGroupLayout(Map<Integer, WgpuBindingType> bindingTypes) {
+        int visibility = WgpuBindings.SHADER_STAGE_VERTEX | WgpuBindings.SHADER_STAGE_FRAGMENT;
 
-        int visibility = WGPUShaderStage.Vertex.getValue() | WGPUShaderStage.Fragment.getValue();
-
+        var entries = new WgpuBindings.BindGroupLayoutEntry[bindingTypes.size()];
+        int i = 0;
         for (var entry : bindingTypes.entrySet()) {
-            var layoutEntry = WGPUBindGroupLayoutEntry.obtain();
-            layoutEntry.setBinding(entry.getKey());
-            layoutEntry.setVisibility(WGPUShaderStage.CUSTOM.setValue(visibility));
-
-            switch (entry.getValue()) {
-                case UNIFORM -> {
-                    var bufLayout = WGPUBufferBindingLayout.obtain();
-                    bufLayout.setType(WGPUBufferBindingType.Uniform);
-                    bufLayout.setMinBindingSize(0);
-                    layoutEntry.setBuffer(bufLayout);
-                }
-                case STORAGE -> {
-                    var bufLayout = WGPUBufferBindingLayout.obtain();
-                    bufLayout.setType(WGPUBufferBindingType.ReadOnlyStorage);
-                    bufLayout.setMinBindingSize(0);
-                    layoutEntry.setBuffer(bufLayout);
-                }
-                case TEXTURE -> {
-                    var texLayout = WGPUTextureBindingLayout.obtain();
-                    texLayout.setSampleType(WGPUTextureSampleType.Float);
-                    texLayout.setViewDimension(WGPUTextureViewDimension._2D);
-                    layoutEntry.setTexture(texLayout);
-                }
-                case SAMPLER -> {
-                    var smpLayout = WGPUSamplerBindingLayout.obtain();
-                    smpLayout.setType(WGPUSamplerBindingType.Filtering);
-                    layoutEntry.setSampler(smpLayout);
-                }
-            }
-
-            entries.push_back(layoutEntry);
+            var type = switch (entry.getValue()) {
+                case UNIFORM -> WgpuBindings.BindingType.UNIFORM_BUFFER;
+                case STORAGE -> WgpuBindings.BindingType.READ_ONLY_STORAGE_BUFFER;
+                case TEXTURE -> WgpuBindings.BindingType.SAMPLED_TEXTURE;
+                case SAMPLER -> WgpuBindings.BindingType.FILTERING_SAMPLER;
+            };
+            entries[i++] = new WgpuBindings.BindGroupLayoutEntry(entry.getKey(), visibility, type);
         }
 
-        var bgLayoutDesc = WGPUBindGroupLayoutDescriptor.obtain();
-        bgLayoutDesc.setEntries(entries);
-
-        var bgLayout = new WGPUBindGroupLayout();
-        wgpuDevice.createBindGroupLayout(bgLayoutDesc, bgLayout);
-        return bgLayout;
+        return gpu.deviceCreateBindGroupLayout(wgpuDevice, entries);
     }
 
     /**
@@ -859,11 +607,105 @@ public class WgpuRenderDevice implements RenderDevice {
     }
 
     /**
-     * Builds a pipeline variant with current render state (blend, cull, depth, etc.)
-     * using the shader sources and vertex format from the base pipeline.
+     * Builds a render pipeline with the current render state.
      */
-    private WGPURenderPipeline buildPipelineVariant(WgpuPipeline basePipeline) {
-        // Find vertex and fragment shader sources
+    private long buildRenderPipeline(long pipelineLayout, long vertModule, ShaderSource vertexShader,
+                                     long fragModule, ShaderSource fragmentShader,
+                                     VertexFormat vertexFormat) {
+        WgpuBindings.VertexBufferLayoutDesc vbl = null;
+        if (vertexFormat != null) {
+            var attrs = vertexFormat.attributes();
+            var attrDescs = new WgpuBindings.VertexAttributeDesc[attrs.size()];
+            for (int i = 0; i < attrs.size(); i++) {
+                var attr = attrs.get(i);
+                attrDescs[i] = new WgpuBindings.VertexAttributeDesc(
+                        mapVertexFormat(attr), attr.offset(), attr.location());
+            }
+            vbl = new WgpuBindings.VertexBufferLayoutDesc(
+                    vertexFormat.stride(), WgpuBindings.VERTEX_STEP_MODE_VERTEX, attrDescs);
+        }
+
+        // Map blend state
+        int blendColorSrc, blendColorDst, blendAlphaSrc, blendAlphaDst;
+        getBlendFactors(currentBlendMode);
+        var blend = getBlendFactors(currentBlendMode);
+
+        // Map stencil state
+        var stencilFront = buildStencilFaceState(stencilTestEnabled);
+        var stencilBack = buildStencilFaceState(stencilTestEnabled);
+
+        var desc = new WgpuBindings.RenderPipelineDescriptor(
+                pipelineLayout,
+                vertModule,
+                vertexShader.entryPoint(),
+                fragModule,
+                fragmentShader != null ? fragmentShader.entryPoint() : null,
+                vbl,
+                WgpuBindings.PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                wgpuFrontFace,
+                wgpuCullMode,
+                WgpuBindings.TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8,
+                depthWriteEnabled ? WgpuBindings.OPTIONAL_BOOL_TRUE : WgpuBindings.OPTIONAL_BOOL_FALSE,
+                depthTestEnabled ? mapCompareFunc(depthFunc) : WgpuBindings.COMPARE_ALWAYS,
+                stencilMask,
+                stencilMask,
+                stencilFront,
+                stencilBack,
+                WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM,
+                blend[0], blend[1], WgpuBindings.BLEND_OP_ADD,
+                blend[2], blend[3], WgpuBindings.BLEND_OP_ADD
+        );
+
+        return gpu.deviceCreateRenderPipeline(wgpuDevice, desc);
+    }
+
+    private WgpuBindings.StencilFaceState buildStencilFaceState(boolean enabled) {
+        if (enabled) {
+            return new WgpuBindings.StencilFaceState(
+                    mapCompareFunc(stencilFunc),
+                    mapStencilOp(stencilPassOp),
+                    mapStencilOp(stencilFailOp),
+                    mapStencilOp(stencilDepthFailOp));
+        } else {
+            return new WgpuBindings.StencilFaceState(
+                    WgpuBindings.COMPARE_ALWAYS,
+                    WgpuBindings.STENCIL_OP_KEEP,
+                    WgpuBindings.STENCIL_OP_KEEP,
+                    WgpuBindings.STENCIL_OP_KEEP);
+        }
+    }
+
+    /** Returns [colorSrc, colorDst, alphaSrc, alphaDst]. */
+    private static int[] getBlendFactors(BlendMode mode) {
+        if (mode == BlendMode.ALPHA) {
+            return new int[]{
+                    WgpuBindings.BLEND_FACTOR_SRC_ALPHA, WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA};
+        } else if (mode == BlendMode.ADDITIVE) {
+            return new int[]{
+                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE,
+                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE};
+        } else if (mode == BlendMode.MULTIPLY) {
+            return new int[]{
+                    WgpuBindings.BLEND_FACTOR_DST, WgpuBindings.BLEND_FACTOR_ZERO,
+                    WgpuBindings.BLEND_FACTOR_DST_ALPHA, WgpuBindings.BLEND_FACTOR_ZERO};
+        } else if (mode == BlendMode.PREMULTIPLIED) {
+            return new int[]{
+                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA};
+        } else {
+            // NONE
+            return new int[]{
+                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ZERO,
+                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ZERO};
+        }
+    }
+
+    /**
+     * Builds a pipeline variant with current render state using the shader sources
+     * and vertex format from the base pipeline.
+     */
+    private long buildPipelineVariant(WgpuPipeline basePipeline) {
         ShaderSource vertexShader = null;
         ShaderSource fragmentShader = null;
         for (var shader : basePipeline.shaderSources()) {
@@ -875,131 +717,21 @@ public class WgpuRenderDevice implements RenderDevice {
             throw new ShaderCompilationException("WebGPU pipeline variant requires a vertex shader");
         }
 
-        // Create shader modules
-        var vertModule = createShaderModule(vertexShader.source());
-        WGPUShaderModule fragModule = null;
+        long vertModule = createShaderModule(vertexShader.source());
+        long fragModule = 0;
         if (fragmentShader != null) {
             fragModule = createShaderModule(fragmentShader.source());
         }
 
-        // Build pipeline layout using the same bind group layout
-        var pipelineLayout = new WGPUPipelineLayout();
-        var plDesc = WGPUPipelineLayoutDescriptor.obtain();
-        var bgLayouts = WGPUVectorBindGroupLayout.obtain();
-        bgLayouts.push_back(basePipeline.bindGroupLayout());
-        plDesc.setBindGroupLayouts(bgLayouts);
-        wgpuDevice.createPipelineLayout(plDesc, pipelineLayout);
+        long pipelineLayout = gpu.deviceCreatePipelineLayout(wgpuDevice,
+                new long[]{basePipeline.bindGroupLayout()});
 
-        // Build render pipeline descriptor
-        var rpDesc = new WGPURenderPipelineDescriptor();
-        rpDesc.setLayout(pipelineLayout);
+        long pipeline = buildRenderPipeline(pipelineLayout, vertModule, vertexShader,
+                fragModule, fragmentShader, basePipeline.vertexFormat());
 
-        // Vertex state
-        var vertexState = rpDesc.getVertex();
-        vertexState.setModule(vertModule);
-        vertexState.setEntryPoint(vertexShader.entryPoint());
-        vertexState.setConstants(WGPUVectorConstantEntry.NULL);
-
-        if (basePipeline.vertexFormat() != null) {
-            var format = basePipeline.vertexFormat();
-            var attrs = format.attributes();
-
-            var attrVec = WGPUVectorVertexAttribute.obtain();
-            for (var attr : attrs) {
-                var wgpuAttr = WGPUVertexAttribute.obtain();
-                wgpuAttr.setFormat(mapVertexFormat(attr));
-                wgpuAttr.setOffset(attr.offset());
-                wgpuAttr.setShaderLocation(attr.location());
-                attrVec.push_back(wgpuAttr);
-            }
-
-            var bufLayout = WGPUVertexBufferLayout.obtain();
-            bufLayout.setArrayStride(format.stride());
-            bufLayout.setStepMode(WGPUVertexStepMode.Vertex);
-            bufLayout.setAttributes(attrVec);
-
-            var bufLayoutVec = WGPUVectorVertexBufferLayout.obtain();
-            bufLayoutVec.push_back(bufLayout);
-            vertexState.setBuffers(bufLayoutVec);
-        } else {
-            vertexState.setBuffers(WGPUVectorVertexBufferLayout.NULL);
-        }
-
-        // Primitive state — use current render state
-        var primitiveState = rpDesc.getPrimitive();
-        primitiveState.setTopology(WGPUPrimitiveTopology.TriangleList);
-        primitiveState.setStripIndexFormat(WGPUIndexFormat.Undefined);
-        primitiveState.setFrontFace(wgpuFrontFace);
-        primitiveState.setCullMode(wgpuCullMode);
-
-        // Depth stencil state — use current render state
-        var depthStencil = WGPUDepthStencilState.obtain();
-        depthStencil.setFormat(WGPUTextureFormat.Depth24PlusStencil8);
-        depthStencil.setDepthWriteEnabled(depthWriteEnabled ? WGPUOptionalBool.True : WGPUOptionalBool.False);
-        depthStencil.setDepthCompare(depthTestEnabled ? mapCompareFunc(depthFunc) : WGPUCompareFunction.Always);
-
-        depthStencil.setStencilReadMask(stencilMask);
-        depthStencil.setStencilWriteMask(stencilMask);
-
-        var stencilFront = depthStencil.getStencilFront();
-        var stencilBack = depthStencil.getStencilBack();
-        if (stencilTestEnabled) {
-            stencilFront.setCompare(mapCompareFunc(stencilFunc));
-            stencilFront.setPassOp(mapStencilOp(stencilPassOp));
-            stencilFront.setFailOp(mapStencilOp(stencilFailOp));
-            stencilFront.setDepthFailOp(mapStencilOp(stencilDepthFailOp));
-            stencilBack.setCompare(mapCompareFunc(stencilFunc));
-            stencilBack.setPassOp(mapStencilOp(stencilPassOp));
-            stencilBack.setFailOp(mapStencilOp(stencilFailOp));
-            stencilBack.setDepthFailOp(mapStencilOp(stencilDepthFailOp));
-        } else {
-            stencilFront.setCompare(WGPUCompareFunction.Always);
-            stencilFront.setPassOp(WGPUStencilOperation.Keep);
-            stencilFront.setFailOp(WGPUStencilOperation.Keep);
-            stencilFront.setDepthFailOp(WGPUStencilOperation.Keep);
-            stencilBack.setCompare(WGPUCompareFunction.Always);
-            stencilBack.setPassOp(WGPUStencilOperation.Keep);
-            stencilBack.setFailOp(WGPUStencilOperation.Keep);
-            stencilBack.setDepthFailOp(WGPUStencilOperation.Keep);
-        }
-
-        rpDesc.setDepthStencil(depthStencil);
-
-        // Multisample state
-        var multisample = rpDesc.getMultisample();
-        multisample.setCount(1);
-        multisample.setMask(0xFFFFFFFF);
-        multisample.setAlphaToCoverageEnabled(false);
-
-        // Fragment state — use current blend mode
-        if (fragModule != null) {
-            var fragState = WGPUFragmentState.obtain();
-            fragState.setNextInChain(WGPUChainedStruct.NULL);
-            fragState.setModule(fragModule);
-            fragState.setEntryPoint(fragmentShader.entryPoint());
-            fragState.setConstants(WGPUVectorConstantEntry.NULL);
-
-            var colorTarget = WGPUColorTargetState.obtain();
-            colorTarget.setFormat(WGPUTextureFormat.RGBA8Unorm);
-            colorTarget.setWriteMask(WGPUColorWriteMask.All);
-
-            var blendState = WGPUBlendState.obtain();
-            configureBlendState(blendState, currentBlendMode);
-            colorTarget.setBlend(blendState);
-
-            var colorTargets = WGPUVectorColorTargetState.obtain();
-            colorTargets.push_back(colorTarget);
-            fragState.setTargets(colorTargets);
-            rpDesc.setFragment(fragState);
-        }
-
-        var pipeline = new WGPURenderPipeline();
-        wgpuDevice.createRenderPipeline(rpDesc, pipeline);
-
-        // Release shader modules (pipeline retains reference)
-        vertModule.release();
-        if (fragModule != null) fragModule.release();
-        pipelineLayout.release();
+        gpu.shaderModuleRelease(vertModule);
+        if (fragModule != 0) gpu.shaderModuleRelease(fragModule);
+        gpu.pipelineLayoutRelease(pipelineLayout);
 
         log.debug("Pipeline variant created: blend={}, cull={}, frontFace={}, depthTest={}, depthWrite={}, depthFunc={}",
                 currentBlendMode, wgpuCullMode, wgpuFrontFace, depthTestEnabled, depthWriteEnabled, depthFunc);
@@ -1008,17 +740,17 @@ public class WgpuRenderDevice implements RenderDevice {
 
     /**
      * Returns the appropriate pipeline variant for the current render state,
-     * creating one if needed. Returns null if no pipeline is bound.
+     * creating one if needed. Returns 0 if no pipeline is bound.
      */
-    private WGPURenderPipeline getOrCreateVariant(Handle<PipelineResource> basePipelineHandle) {
+    private long getOrCreateVariant(Handle<PipelineResource> basePipelineHandle) {
         var basePipeline = pipelines.get(basePipelineHandle);
-        if (basePipeline == null || basePipeline.nativePipeline() == null) return null;
+        if (basePipeline == null || basePipeline.nativePipeline() == 0) return 0;
 
         var key = new PipelineStateKey(
                 basePipelineHandle.index(),
                 currentBlendMode.name(),
-                wgpuCullMode.name(),
-                wgpuFrontFace.name(),
+                wgpuCullMode,
+                wgpuFrontFace,
                 depthTestEnabled,
                 depthWriteEnabled,
                 depthFunc.name()
@@ -1032,16 +764,16 @@ public class WgpuRenderDevice implements RenderDevice {
         if (!pipelines.isValid(pipeline)) return;
         var p = pipelines.remove(pipeline);
         if (p != null && nativeAvailable) {
-            if (p.nativePipeline() != null) p.nativePipeline().release();
-            if (p.bindGroupLayout() != null) p.bindGroupLayout().release();
+            if (p.nativePipeline() != 0) gpu.renderPipelineRelease(p.nativePipeline());
+            if (p.bindGroupLayout() != 0) gpu.bindGroupLayoutRelease(p.bindGroupLayout());
         }
         // Clean up any pipeline variants for this pipeline
         var it = pipelineVariants.entrySet().iterator();
         while (it.hasNext()) {
             var entry = it.next();
             if (entry.getKey().basePipelineIndex() == pipeline.index()) {
-                if (nativeAvailable && entry.getValue() != null) {
-                    entry.getValue().release();
+                if (nativeAvailable && entry.getValue() != 0) {
+                    gpu.renderPipelineRelease(entry.getValue());
                 }
                 it.remove();
             }
@@ -1104,18 +836,15 @@ public class WgpuRenderDevice implements RenderDevice {
         frameCounter.incrementAndGet();
         if (!nativeAvailable) return;
 
-        // Create command encoder
-        var encoderDesc = WGPUCommandEncoderDescriptor.obtain();
-        commandEncoder = WGPUCommandEncoder.obtain();
-        wgpuDevice.createCommandEncoder(encoderDesc, commandEncoder);
+        commandEncoder = gpu.deviceCreateCommandEncoder(wgpuDevice);
 
         // Reset render pass
-        renderPassEncoder = null;
+        renderPassEncoder = 0;
         currentRenderTarget = defaultRenderTarget;
         currentPipeline = null;
         bindingsDirty = true;
         pipelineStateDirty = false;
-        currentActivePipeline = null;
+        currentActivePipeline = 0;
 
         // Clear binding state
         java.util.Arrays.fill(boundUbos, null);
@@ -1131,20 +860,17 @@ public class WgpuRenderDevice implements RenderDevice {
         endCurrentRenderPass();
 
         // Finish and submit command buffer
-        var cmdBufDesc = WGPUCommandBufferDescriptor.obtain();
-        var commandBuffer = WGPUCommandBuffer.obtain();
-        commandEncoder.finish(cmdBufDesc, commandBuffer);
-
-        wgpuQueue.submit(commandBuffer);
+        long commandBuffer = gpu.commandEncoderFinish(commandEncoder);
+        gpu.queueSubmit(wgpuQueue, commandBuffer);
 
         // Release
-        commandBuffer.release();
-        commandEncoder.release();
-        commandEncoder = null;
+        gpu.commandBufferRelease(commandBuffer);
+        gpu.commandEncoderRelease(commandEncoder);
+        commandEncoder = 0;
 
-        if (currentBindGroup != null) {
-            currentBindGroup.release();
-            currentBindGroup = null;
+        if (currentBindGroup != 0) {
+            gpu.bindGroupRelease(currentBindGroup);
+            currentBindGroup = 0;
         }
     }
 
@@ -1183,46 +909,46 @@ public class WgpuRenderDevice implements RenderDevice {
                         currentRenderTarget = defaultRenderTarget;
                     }
                 }
-                if (renderPassEncoder != null && nativeAvailable) {
-                    renderPassEncoder.setViewport(
+                if (renderPassEncoder != 0 && nativeAvailable) {
+                    gpu.renderPassSetViewport(renderPassEncoder,
                             (float) cmd.x(), (float) cmd.y(),
                             (float) cmd.width(), (float) cmd.height(), 0.0f, 1.0f);
                 }
             }
             case RenderCommand.Scissor cmd -> {
-                if (renderPassEncoder != null && nativeAvailable) {
-                    renderPassEncoder.setScissorRect(
+                if (renderPassEncoder != 0 && nativeAvailable) {
+                    gpu.renderPassSetScissorRect(renderPassEncoder,
                             cmd.x(), cmd.y(), cmd.width(), cmd.height());
                 }
             }
             case RenderCommand.BindPipeline cmd -> {
                 currentPipeline = cmd.pipeline();
-                if (renderPassEncoder != null && nativeAvailable) {
+                if (renderPassEncoder != 0 && nativeAvailable) {
                     var p = pipelines.get(cmd.pipeline());
-                    if (p != null && p.nativePipeline() != null) {
-                        renderPassEncoder.setPipeline(p.nativePipeline());
+                    if (p != null && p.nativePipeline() != 0) {
+                        gpu.renderPassSetPipeline(renderPassEncoder, p.nativePipeline());
                         currentActivePipeline = p.nativePipeline();
                     }
                 }
                 bindingsDirty = true;
-                // Pipeline bind resets state — next draw should check for variant
                 pipelineStateDirty = true;
             }
             case RenderCommand.BindVertexBuffer cmd -> {
-                if (renderPassEncoder != null && nativeAvailable) {
+                if (renderPassEncoder != 0 && nativeAvailable) {
                     var buf = buffers.get(cmd.buffer());
-                    if (buf != null && buf.nativeBuffer() != null) {
-                        renderPassEncoder.setVertexBuffer(
+                    if (buf != null && buf.nativeBuffer() != 0) {
+                        gpu.renderPassSetVertexBuffer(renderPassEncoder,
                                 0, buf.nativeBuffer(), 0, (int) buf.size());
                     }
                 }
             }
             case RenderCommand.BindIndexBuffer cmd -> {
-                if (renderPassEncoder != null && nativeAvailable) {
+                if (renderPassEncoder != 0 && nativeAvailable) {
                     var buf = buffers.get(cmd.buffer());
-                    if (buf != null && buf.nativeBuffer() != null) {
-                        renderPassEncoder.setIndexBuffer(
-                                buf.nativeBuffer(), WGPUIndexFormat.Uint32, 0, (int) buf.size());
+                    if (buf != null && buf.nativeBuffer() != 0) {
+                        gpu.renderPassSetIndexBuffer(renderPassEncoder,
+                                buf.nativeBuffer(), WgpuBindings.INDEX_FORMAT_UINT32,
+                                0, (int) buf.size());
                     }
                 }
             }
@@ -1249,32 +975,32 @@ public class WgpuRenderDevice implements RenderDevice {
                 }
             }
             case RenderCommand.Draw cmd -> {
-                if (renderPassEncoder != null && nativeAvailable) {
+                if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    renderPassEncoder.draw(cmd.vertexCount(), 1, cmd.firstVertex(), 0);
+                    gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), 1, cmd.firstVertex(), 0);
                 }
             }
             case RenderCommand.DrawIndexed cmd -> {
-                if (renderPassEncoder != null && nativeAvailable) {
+                if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    renderPassEncoder.drawIndexed(cmd.indexCount(), 1, cmd.firstIndex(), 0, 0);
+                    gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), 1, cmd.firstIndex(), 0, 0);
                 }
             }
             case RenderCommand.DrawInstanced cmd -> {
-                if (renderPassEncoder != null && nativeAvailable) {
+                if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    renderPassEncoder.draw(cmd.vertexCount(), cmd.instanceCount(),
+                    gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), cmd.instanceCount(),
                             cmd.firstVertex(), cmd.firstInstance());
                 }
             }
             case RenderCommand.DrawIndexedInstanced cmd -> {
-                if (renderPassEncoder != null && nativeAvailable) {
+                if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    renderPassEncoder.drawIndexed(cmd.indexCount(), cmd.instanceCount(),
+                    gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), cmd.instanceCount(),
                             cmd.firstIndex(), 0, cmd.firstInstance());
                 }
             }
@@ -1288,7 +1014,7 @@ public class WgpuRenderDevice implements RenderDevice {
                 pipelineStateDirty = true;
             }
             case RenderCommand.SetCullFace cmd -> {
-                wgpuCullMode = cmd.enabled() ? WGPUCullMode.Back : WGPUCullMode.None;
+                wgpuCullMode = cmd.enabled() ? WgpuBindings.CULL_MODE_BACK : WgpuBindings.CULL_MODE_NONE;
                 pipelineStateDirty = true;
             }
             case RenderCommand.SetWireframe cmd -> {
@@ -1301,13 +1027,13 @@ public class WgpuRenderDevice implements RenderDevice {
                 if (props.contains(RenderState.DEPTH_FUNC)) depthFunc = props.get(RenderState.DEPTH_FUNC);
                 if (props.contains(RenderState.CULL_MODE)) {
                     var mode = props.get(RenderState.CULL_MODE);
-                    if (mode == CullMode.NONE) wgpuCullMode = WGPUCullMode.None;
-                    else if (mode == CullMode.FRONT) wgpuCullMode = WGPUCullMode.Front;
-                    else wgpuCullMode = WGPUCullMode.Back;
+                    if (mode == CullMode.NONE) wgpuCullMode = WgpuBindings.CULL_MODE_NONE;
+                    else if (mode == CullMode.FRONT) wgpuCullMode = WgpuBindings.CULL_MODE_FRONT;
+                    else wgpuCullMode = WgpuBindings.CULL_MODE_BACK;
                 }
                 if (props.contains(RenderState.FRONT_FACE)) {
                     wgpuFrontFace = props.get(RenderState.FRONT_FACE) == FrontFace.CCW
-                            ? WGPUFrontFace.CCW : WGPUFrontFace.CW;
+                            ? WgpuBindings.FRONT_FACE_CCW : WgpuBindings.FRONT_FACE_CW;
                 }
                 if (props.contains(RenderState.BLEND_MODE)) {
                     var mode = props.get(RenderState.BLEND_MODE);
@@ -1322,7 +1048,6 @@ public class WgpuRenderDevice implements RenderDevice {
                 if (props.contains(RenderState.STENCIL_PASS)) stencilPassOp = props.get(RenderState.STENCIL_PASS);
                 if (props.contains(RenderState.STENCIL_FAIL)) stencilFailOp = props.get(RenderState.STENCIL_FAIL);
                 if (props.contains(RenderState.STENCIL_DEPTH_FAIL)) stencilDepthFailOp = props.get(RenderState.STENCIL_DEPTH_FAIL);
-                // Mark pipeline state dirty — next draw will check for variant
                 pipelineStateDirty = true;
             }
             case RenderCommand.PushConstants cmd -> {
@@ -1341,12 +1066,12 @@ public class WgpuRenderDevice implements RenderDevice {
                 // WebGPU handles barriers implicitly
             }
             case RenderCommand.CopyBuffer cmd -> {
-                if (nativeAvailable && commandEncoder != null) {
+                if (nativeAvailable && commandEncoder != 0) {
                     var src = buffers.get(cmd.src());
                     var dst = buffers.get(cmd.dst());
                     if (src != null && dst != null
-                            && src.nativeBuffer() != null && dst.nativeBuffer() != null) {
-                        commandEncoder.copyBufferToBuffer(
+                            && src.nativeBuffer() != 0 && dst.nativeBuffer() != 0) {
+                        gpu.commandEncoderCopyBufferToBuffer(commandEncoder,
                                 src.nativeBuffer(), (int) cmd.srcOffset(),
                                 dst.nativeBuffer(), (int) cmd.dstOffset(), (int) cmd.size());
                     }
@@ -1376,72 +1101,51 @@ public class WgpuRenderDevice implements RenderDevice {
     }
 
     private void beginRenderPassWithClear(float r, float g, float b, float a) {
-        if (!nativeAvailable || commandEncoder == null || currentRenderTarget == null) return;
+        if (!nativeAvailable || commandEncoder == 0 || currentRenderTarget == null) return;
 
         var rt = renderTargets.get(currentRenderTarget);
         if (rt == null) return;
 
-        var rpDesc = WGPURenderPassDescriptor.obtain();
-
-        // Color attachments
-        var colorVec = WGPUVectorRenderPassColorAttachment.obtain();
-        for (var texHandle : rt.colorTextures()) {
-            var colorTex = textures.get(texHandle);
-            var colorAttachment = WGPURenderPassColorAttachment.obtain();
-            colorAttachment.setView(colorTex.view());
-            colorAttachment.setResolveTarget(WGPUTextureView.NULL);
-            colorAttachment.setLoadOp(WGPULoadOp.Clear);
-            colorAttachment.setStoreOp(WGPUStoreOp.Store);
-            colorAttachment.getClearValue().setColor(r, g, b, a);
-            colorVec.push_back(colorAttachment);
+        // Build color attachments
+        var colorAttachments = new WgpuBindings.ColorAttachment[rt.colorTextures().size()];
+        for (int i = 0; i < rt.colorTextures().size(); i++) {
+            var colorTex = textures.get(rt.colorTextures().get(i));
+            colorAttachments[i] = new WgpuBindings.ColorAttachment(colorTex.view(), r, g, b, a);
         }
-        rpDesc.setColorAttachments(colorVec);
 
-        // Depth/stencil attachment
+        // Build depth/stencil attachment
+        WgpuBindings.DepthStencilAttachment depthAttachment = null;
         if (rt.depthTexture() != null) {
             var depthTex = textures.get(rt.depthTexture());
-            var depthAttachment = WGPURenderPassDepthStencilAttachment.obtain();
-            depthAttachment.setView(depthTex.view());
-            depthAttachment.setDepthLoadOp(WGPULoadOp.Clear);
-            depthAttachment.setDepthStoreOp(WGPUStoreOp.Store);
-            depthAttachment.setDepthClearValue(1.0f);
-            depthAttachment.setDepthReadOnly(false);
-            depthAttachment.setStencilLoadOp(WGPULoadOp.Clear);
-            depthAttachment.setStencilStoreOp(WGPUStoreOp.Store);
-            depthAttachment.setStencilClearValue(0);
-            depthAttachment.setStencilReadOnly(false);
-            rpDesc.setDepthStencilAttachment(depthAttachment);
-        } else {
-            rpDesc.setDepthStencilAttachment(WGPURenderPassDepthStencilAttachment.NULL);
+            depthAttachment = new WgpuBindings.DepthStencilAttachment(depthTex.view(), 1.0f, 0);
         }
-        rpDesc.setTimestampWrites(WGPURenderPassTimestampWrites.NULL);
 
-        renderPassEncoder = WGPURenderPassEncoder.obtain();
-        commandEncoder.beginRenderPass(rpDesc, renderPassEncoder);
+        var desc = new WgpuBindings.RenderPassDescriptor(colorAttachments, depthAttachment);
+        renderPassEncoder = gpu.commandEncoderBeginRenderPass(commandEncoder, desc);
 
         // Set default viewport
-        renderPassEncoder.setViewport(0, 0, rt.width(), rt.height(), 0.0f, 1.0f);
-        renderPassEncoder.setScissorRect(0, 0, rt.width(), rt.height());
+        gpu.renderPassSetViewport(renderPassEncoder, 0, 0, rt.width(), rt.height(), 0.0f, 1.0f);
+        gpu.renderPassSetScissorRect(renderPassEncoder, 0, 0, rt.width(), rt.height());
 
         // Set stencil reference
         if (stencilTestEnabled) {
-            renderPassEncoder.setStencilReference(stencilRef);
+            gpu.renderPassSetStencilReference(renderPassEncoder, stencilRef);
         }
 
         // Re-bind current pipeline if any
         if (currentPipeline != null) {
             var p = pipelines.get(currentPipeline);
-            if (p != null && p.nativePipeline() != null) {
-                renderPassEncoder.setPipeline(p.nativePipeline());
+            if (p != null && p.nativePipeline() != 0) {
+                gpu.renderPassSetPipeline(renderPassEncoder, p.nativePipeline());
             }
         }
     }
 
     private void endCurrentRenderPass() {
-        if (renderPassEncoder != null && nativeAvailable) {
-            renderPassEncoder.end();
-            renderPassEncoder.release();
-            renderPassEncoder = null;
+        if (renderPassEncoder != 0 && nativeAvailable) {
+            gpu.renderPassEnd(renderPassEncoder);
+            gpu.renderPassRelease(renderPassEncoder);
+            renderPassEncoder = 0;
         }
     }
 
@@ -1457,32 +1161,30 @@ public class WgpuRenderDevice implements RenderDevice {
         if (!pipelineStateDirty || currentPipeline == null) return;
         pipelineStateDirty = false;
 
-        var variant = getOrCreateVariant(currentPipeline);
-        if (variant != null && variant != currentActivePipeline) {
-            renderPassEncoder.setPipeline(variant);
+        long variant = getOrCreateVariant(currentPipeline);
+        if (variant != 0 && variant != currentActivePipeline) {
+            gpu.renderPassSetPipeline(renderPassEncoder, variant);
             currentActivePipeline = variant;
             bindingsDirty = true; // rebind after pipeline change
         }
     }
 
     private void flushBindings() {
-        if (!bindingsDirty || renderPassEncoder == null || !nativeAvailable) return;
+        if (!bindingsDirty || renderPassEncoder == 0 || !nativeAvailable) return;
         bindingsDirty = false;
 
         if (currentPipeline == null) return;
         var pipelineInfo = pipelines.get(currentPipeline);
-        if (pipelineInfo == null || pipelineInfo.nativePipeline() == null) return;
+        if (pipelineInfo == null || pipelineInfo.nativePipeline() == 0) return;
 
         var bindingTypes = pipelineInfo.bindingTypes();
         if (bindingTypes.isEmpty()) return;
 
         // Release previous bind group
-        if (currentBindGroup != null) {
-            currentBindGroup.release();
-            currentBindGroup = null;
+        if (currentBindGroup != 0) {
+            gpu.bindGroupRelease(currentBindGroup);
+            currentBindGroup = 0;
         }
-
-        var entries = WGPUVectorBindGroupEntry.obtain();
 
         // Track Nth texture/sampler
         int texIdx = 0;
@@ -1493,30 +1195,30 @@ public class WgpuRenderDevice implements RenderDevice {
         for (var bt : boundTextures) { if (bt != null) boundTexList.add(bt); }
         for (var bs : boundSamplers) { if (bs != null) boundSmpList.add(bs); }
 
+        var entries = new WgpuBindings.BindGroupEntry[bindingTypes.size()];
+        int i = 0;
         for (var entry : bindingTypes.entrySet()) {
             int binding = entry.getKey();
             var type = entry.getValue();
-
-            var bgEntry = WGPUBindGroupEntry.obtain();
-            bgEntry.reset();
-            bgEntry.setBinding(binding);
 
             switch (type) {
                 case UNIFORM -> {
                     if (binding < boundUbos.length && boundUbos[binding] != null) {
                         var buf = buffers.get(boundUbos[binding]);
-                        if (buf != null && buf.nativeBuffer() != null) {
-                            bgEntry.setBuffer(buf.nativeBuffer());
-                            bgEntry.setOffset(0);
-                            bgEntry.setSize(buf.size());
+                        if (buf != null && buf.nativeBuffer() != 0) {
+                            entries[i] = new WgpuBindings.BindGroupEntry(binding,
+                                    WgpuBindings.BindingResourceType.BUFFER,
+                                    buf.nativeBuffer(), 0, buf.size());
                         }
                     }
                 }
                 case TEXTURE -> {
                     if (texIdx < boundTexList.size()) {
                         var tex = textures.get(boundTexList.get(texIdx));
-                        if (tex != null && tex.view() != null) {
-                            bgEntry.setTextureView(tex.view());
+                        if (tex != null && tex.view() != 0) {
+                            entries[i] = new WgpuBindings.BindGroupEntry(binding,
+                                    WgpuBindings.BindingResourceType.TEXTURE_VIEW,
+                                    tex.view(), 0, 0);
                         }
                         texIdx++;
                     }
@@ -1524,8 +1226,10 @@ public class WgpuRenderDevice implements RenderDevice {
                 case SAMPLER -> {
                     if (smpIdx < boundSmpList.size()) {
                         var smp = samplers.get(boundSmpList.get(smpIdx));
-                        if (smp != null && smp.nativeSampler() != null) {
-                            bgEntry.setSampler(smp.nativeSampler());
+                        if (smp != null && smp.nativeSampler() != 0) {
+                            entries[i] = new WgpuBindings.BindGroupEntry(binding,
+                                    WgpuBindings.BindingResourceType.SAMPLER,
+                                    smp.nativeSampler(), 0, 0);
                         }
                         smpIdx++;
                     }
@@ -1533,30 +1237,29 @@ public class WgpuRenderDevice implements RenderDevice {
                 case STORAGE -> {
                     if (binding < boundSsbos.length && boundSsbos[binding] != null) {
                         var buf = buffers.get(boundSsbos[binding]);
-                        if (buf != null && buf.nativeBuffer() != null) {
-                            bgEntry.setBuffer(buf.nativeBuffer());
-                            bgEntry.setOffset(0);
-                            bgEntry.setSize(buf.size());
+                        if (buf != null && buf.nativeBuffer() != 0) {
+                            entries[i] = new WgpuBindings.BindGroupEntry(binding,
+                                    WgpuBindings.BindingResourceType.BUFFER,
+                                    buf.nativeBuffer(), 0, buf.size());
                         }
                     }
                 }
             }
 
-            entries.push_back(bgEntry);
+            // Fill null entries with a placeholder
+            if (entries[i] == null) {
+                entries[i] = new WgpuBindings.BindGroupEntry(binding,
+                        WgpuBindings.BindingResourceType.BUFFER, 0, 0, 0);
+            }
+            i++;
         }
 
-        var bgDesc = WGPUBindGroupDescriptor.obtain();
-        bgDesc.setLayout(pipelineInfo.bindGroupLayout());
-        bgDesc.setEntries(entries);
-
-        currentBindGroup = new WGPUBindGroup();
-        wgpuDevice.createBindGroup(bgDesc, currentBindGroup);
-
-        renderPassEncoder.setBindGroup(0, currentBindGroup);
+        currentBindGroup = gpu.deviceCreateBindGroup(wgpuDevice, pipelineInfo.bindGroupLayout(), entries);
+        gpu.renderPassSetBindGroup(renderPassEncoder, 0, currentBindGroup);
 
         // Set stencil reference if needed
         if (stencilTestEnabled) {
-            renderPassEncoder.setStencilReference(stencilRef);
+            gpu.renderPassSetStencilReference(renderPassEncoder, stencilRef);
         }
     }
 
@@ -1573,72 +1276,33 @@ public class WgpuRenderDevice implements RenderDevice {
         if (rt == null || rt.colorTextures().isEmpty()) return null;
 
         var colorTex = textures.get(rt.colorTextures().getFirst());
-        if (colorTex == null || colorTex.nativeTexture() == null) return null;
+        if (colorTex == null || colorTex.nativeTexture() == 0) return null;
 
         // Create staging buffer
         int bytesPerRow = alignTo256(width * 4);
         long bufferSize = (long) bytesPerRow * height;
 
-        var stagingDesc = WGPUBufferDescriptor.obtain();
-        stagingDesc.setSize(bufferSize);
-        int stagingUsage = WGPUBufferUsage.MapRead.getValue() | WGPUBufferUsage.CopyDst.getValue();
-        stagingDesc.setUsage(WGPUBufferUsage.CUSTOM.setValue(stagingUsage));
-
-        var stagingBuf = wgpuDevice.createBuffer(stagingDesc);
+        int stagingUsage = WgpuBindings.BUFFER_USAGE_MAP_READ | WgpuBindings.BUFFER_USAGE_COPY_DST;
+        long stagingBuf = gpu.deviceCreateBuffer(wgpuDevice, bufferSize, stagingUsage);
 
         // Create command encoder for copy
-        var encDesc = WGPUCommandEncoderDescriptor.obtain();
-        var encoder = WGPUCommandEncoder.obtain();
-        wgpuDevice.createCommandEncoder(encDesc, encoder);
+        long encoder = gpu.deviceCreateCommandEncoder(wgpuDevice);
 
-        // Source texture info
-        var srcInfo = WGPUTexelCopyTextureInfo.obtain();
-        srcInfo.setTexture(colorTex.nativeTexture());
-        srcInfo.setMipLevel(0);
-        srcInfo.setAspect(WGPUTextureAspect.All);
-
-        // Dest buffer info
-        var dstInfo = WGPUTexelCopyBufferInfo.obtain();
-        dstInfo.setBuffer(stagingBuf);
-        var layout = dstInfo.getLayout();
-        layout.setOffset(0);
-        layout.setBytesPerRow(bytesPerRow);
-        layout.setRowsPerImage(height);
-
-        var copySize = WGPUExtent3D.obtain();
-        copySize.setWidth(width);
-        copySize.setHeight(height);
-        copySize.setDepthOrArrayLayers(1);
-
-        encoder.copyTextureToBuffer(srcInfo, dstInfo, copySize);
+        gpu.commandEncoderCopyTextureToBuffer(encoder, colorTex.nativeTexture(), stagingBuf,
+                width, height, bytesPerRow, height);
 
         // Finish and submit
-        var cmdBufDesc = WGPUCommandBufferDescriptor.obtain();
-        var cmdBuf = WGPUCommandBuffer.obtain();
-        encoder.finish(cmdBufDesc, cmdBuf);
-        wgpuQueue.submit(cmdBuf);
-        cmdBuf.release();
-        encoder.release();
+        long cmdBuf = gpu.commandEncoderFinish(encoder);
+        gpu.queueSubmit(wgpuQueue, cmdBuf);
+        gpu.commandBufferRelease(cmdBuf);
+        gpu.commandEncoderRelease(encoder);
 
         // Map the staging buffer synchronously
-        final boolean[] mapDone = {false};
-        stagingBuf.mapAsync(WGPUMapMode.Read, 0, (int) bufferSize,
-                WGPUCallbackMode.AllowSpontaneous,
-                new WGPUBufferMapCallback() {
-                    @Override
-                    protected void onCallback(WGPUMapAsyncStatus status, String message) {
-                        mapDone[0] = true;
-                    }
-                });
-
-        // Poll until map completes
-        for (int i = 0; i < 1000 && !mapDone[0]; i++) {
-            wgpuInstance.processEvents();
-        }
+        gpu.bufferMapReadSync(wgpuInstance, stagingBuf, (int) bufferSize, 1000);
 
         // Read back via getConstMappedRange
         ByteBuffer mapped = ByteBuffer.allocateDirect((int) bufferSize);
-        stagingBuf.getConstMappedRange(0, (int) bufferSize, mapped);
+        gpu.bufferGetConstMappedRange(stagingBuf, 0, (int) bufferSize, mapped);
 
         // Copy to byte array, handling row alignment
         byte[] rgba = new byte[width * height * 4];
@@ -1650,8 +1314,8 @@ public class WgpuRenderDevice implements RenderDevice {
             }
         }
 
-        stagingBuf.unmap();
-        stagingBuf.release();
+        gpu.bufferUnmap(stagingBuf);
+        gpu.bufferRelease(stagingBuf);
 
         return rgba;
     }
@@ -1667,7 +1331,7 @@ public class WgpuRenderDevice implements RenderDevice {
         if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) return (T) Integer.valueOf(8192);
         if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) return (T) Integer.valueOf(8192);
         if (capability == DeviceCapability.BACKEND_NAME) return (T) "WebGPU";
-        if (capability == DeviceCapability.DEVICE_NAME) return (T) "jWebGPU";
+        if (capability == DeviceCapability.DEVICE_NAME) return (T) "WebGPU";
         if (capability == DeviceCapability.API_VERSION) return (T) "WebGPU";
         if (capability == DeviceCapability.COMPUTE_SHADERS) return (T) Boolean.TRUE;
         if (capability == DeviceCapability.GEOMETRY_SHADERS) return (T) Boolean.FALSE;
@@ -1688,7 +1352,7 @@ public class WgpuRenderDevice implements RenderDevice {
         // Destroy pipeline variants
         if (nativeAvailable) {
             for (var variant : pipelineVariants.values()) {
-                if (variant != null) variant.release();
+                if (variant != 0) gpu.renderPipelineRelease(variant);
             }
         }
         pipelineVariants.clear();
@@ -1698,17 +1362,17 @@ public class WgpuRenderDevice implements RenderDevice {
             defaultRenderTarget = null;
         }
         if (nativeAvailable) {
-            if (wgpuDevice != null) {
-                wgpuDevice.release();
-                wgpuDevice = null;
+            if (wgpuDevice != 0) {
+                gpu.deviceRelease(wgpuDevice);
+                wgpuDevice = 0;
             }
-            if (wgpuAdapter != null) {
-                wgpuAdapter.release();
-                wgpuAdapter = null;
+            if (wgpuAdapter != 0) {
+                gpu.adapterRelease(wgpuAdapter);
+                wgpuAdapter = 0;
             }
-            if (wgpuInstance != null) {
-                wgpuInstance.release();
-                wgpuInstance = null;
+            if (wgpuInstance != 0) {
+                gpu.instanceRelease(wgpuInstance);
+                wgpuInstance = 0;
             }
             log.info("WebGPU device released");
         }
@@ -1719,131 +1383,88 @@ public class WgpuRenderDevice implements RenderDevice {
     // Format Mapping Helpers
     // ═══════════════════════════════════════════════════════════════════
 
-    private static WGPUBufferUsage mapBufferUsage(BufferUsage usage) {
-        if (usage == BufferUsage.VERTEX) return WGPUBufferUsage.Vertex;
-        if (usage == BufferUsage.INDEX) return WGPUBufferUsage.Index;
-        if (usage == BufferUsage.UNIFORM) return WGPUBufferUsage.Uniform;
-        if (usage == BufferUsage.STORAGE) return WGPUBufferUsage.Storage;
-        return WGPUBufferUsage.Vertex;
+    private static int mapBufferUsage(BufferUsage usage) {
+        if (usage == BufferUsage.VERTEX) return WgpuBindings.BUFFER_USAGE_VERTEX;
+        if (usage == BufferUsage.INDEX) return WgpuBindings.BUFFER_USAGE_INDEX;
+        if (usage == BufferUsage.UNIFORM) return WgpuBindings.BUFFER_USAGE_UNIFORM;
+        if (usage == BufferUsage.STORAGE) return WgpuBindings.BUFFER_USAGE_STORAGE;
+        return WgpuBindings.BUFFER_USAGE_VERTEX;
     }
 
-    static WGPUTextureFormat mapTextureFormat(TextureFormat format) {
-        if (format == TextureFormat.RGBA8) return WGPUTextureFormat.RGBA8Unorm;
-        if (format == TextureFormat.BGRA8) return WGPUTextureFormat.BGRA8Unorm;
-        if (format == TextureFormat.DEPTH32F) return WGPUTextureFormat.Depth32Float;
-        if (format == TextureFormat.DEPTH24) return WGPUTextureFormat.Depth24Plus;
-        if (format == TextureFormat.DEPTH24_STENCIL8) return WGPUTextureFormat.Depth24PlusStencil8;
-        if (format == TextureFormat.RGB8) return WGPUTextureFormat.RGBA8Unorm;
-        if (format == TextureFormat.R8) return WGPUTextureFormat.R8Unorm;
-        if (format == TextureFormat.RGBA16F) return WGPUTextureFormat.RGBA16Float;
-        if (format == TextureFormat.RGBA32F) return WGPUTextureFormat.RGBA32Float;
-        if (format == TextureFormat.RG16F) return WGPUTextureFormat.RG16Float;
-        if (format == TextureFormat.RG32F) return WGPUTextureFormat.RG32Float;
-        if (format == TextureFormat.R16F) return WGPUTextureFormat.R16Float;
-        if (format == TextureFormat.R32F) return WGPUTextureFormat.R32Float;
-        if (format == TextureFormat.R32UI) return WGPUTextureFormat.R32Uint;
-        if (format == TextureFormat.R32I) return WGPUTextureFormat.R32Sint;
-        return WGPUTextureFormat.RGBA8Unorm;
+    static int mapTextureFormat(TextureFormat format) {
+        if (format == TextureFormat.RGBA8) return WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM;
+        if (format == TextureFormat.BGRA8) return WgpuBindings.TEXTURE_FORMAT_BGRA8_UNORM;
+        if (format == TextureFormat.DEPTH32F) return WgpuBindings.TEXTURE_FORMAT_DEPTH32_FLOAT;
+        if (format == TextureFormat.DEPTH24) return WgpuBindings.TEXTURE_FORMAT_DEPTH24_PLUS;
+        if (format == TextureFormat.DEPTH24_STENCIL8) return WgpuBindings.TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8;
+        if (format == TextureFormat.RGB8) return WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM;
+        if (format == TextureFormat.R8) return WgpuBindings.TEXTURE_FORMAT_R8_UNORM;
+        if (format == TextureFormat.RGBA16F) return WgpuBindings.TEXTURE_FORMAT_RGBA16_FLOAT;
+        if (format == TextureFormat.RGBA32F) return WgpuBindings.TEXTURE_FORMAT_RGBA32_FLOAT;
+        if (format == TextureFormat.RG16F) return WgpuBindings.TEXTURE_FORMAT_RG16_FLOAT;
+        if (format == TextureFormat.RG32F) return WgpuBindings.TEXTURE_FORMAT_RG32_FLOAT;
+        if (format == TextureFormat.R16F) return WgpuBindings.TEXTURE_FORMAT_R16_FLOAT;
+        if (format == TextureFormat.R32F) return WgpuBindings.TEXTURE_FORMAT_R32_FLOAT;
+        if (format == TextureFormat.R32UI) return WgpuBindings.TEXTURE_FORMAT_R32_UINT;
+        if (format == TextureFormat.R32I) return WgpuBindings.TEXTURE_FORMAT_R32_SINT;
+        return WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM;
     }
 
-    private static WGPUVertexFormat mapVertexFormat(VertexAttribute attr) {
+    private static int mapVertexFormat(VertexAttribute attr) {
         if (attr.componentType() == ComponentType.FLOAT) {
             return switch (attr.componentCount()) {
-                case 1 -> WGPUVertexFormat.Float32;
-                case 2 -> WGPUVertexFormat.Float32x2;
-                case 3 -> WGPUVertexFormat.Float32x3;
-                case 4 -> WGPUVertexFormat.Float32x4;
-                default -> WGPUVertexFormat.Float32x4;
+                case 1 -> WgpuBindings.VERTEX_FORMAT_FLOAT32;
+                case 2 -> WgpuBindings.VERTEX_FORMAT_FLOAT32X2;
+                case 3 -> WgpuBindings.VERTEX_FORMAT_FLOAT32X3;
+                case 4 -> WgpuBindings.VERTEX_FORMAT_FLOAT32X4;
+                default -> WgpuBindings.VERTEX_FORMAT_FLOAT32X4;
             };
         }
-        return WGPUVertexFormat.Float32x4;
+        return WgpuBindings.VERTEX_FORMAT_FLOAT32X4;
     }
 
-    private static WGPUFilterMode mapFilterMode(FilterMode mode) {
+    private static int mapFilterMode(FilterMode mode) {
         if (mode == FilterMode.NEAREST || mode == FilterMode.NEAREST_MIPMAP_NEAREST) {
-            return WGPUFilterMode.Nearest;
+            return WgpuBindings.FILTER_MODE_NEAREST;
         }
-        return WGPUFilterMode.Linear;
+        return WgpuBindings.FILTER_MODE_LINEAR;
     }
 
-    private static WGPUMipmapFilterMode mapMipmapFilterMode(FilterMode mode) {
-        if (mode == FilterMode.LINEAR_MIPMAP_LINEAR) return WGPUMipmapFilterMode.Linear;
-        if (mode == FilterMode.NEAREST_MIPMAP_NEAREST) return WGPUMipmapFilterMode.Nearest;
-        return WGPUMipmapFilterMode.Nearest;
+    private static int mapMipmapFilterMode(FilterMode mode) {
+        if (mode == FilterMode.LINEAR_MIPMAP_LINEAR) return WgpuBindings.MIPMAP_FILTER_MODE_LINEAR;
+        if (mode == FilterMode.NEAREST_MIPMAP_NEAREST) return WgpuBindings.MIPMAP_FILTER_MODE_NEAREST;
+        return WgpuBindings.MIPMAP_FILTER_MODE_NEAREST;
     }
 
-    private static WGPUAddressMode mapWrapMode(WrapMode mode) {
-        if (mode == WrapMode.REPEAT) return WGPUAddressMode.Repeat;
-        if (mode == WrapMode.CLAMP_TO_EDGE) return WGPUAddressMode.ClampToEdge;
-        if (mode == WrapMode.MIRRORED_REPEAT) return WGPUAddressMode.MirrorRepeat;
-        return WGPUAddressMode.Repeat;
+    private static int mapWrapMode(WrapMode mode) {
+        if (mode == WrapMode.REPEAT) return WgpuBindings.ADDRESS_MODE_REPEAT;
+        if (mode == WrapMode.CLAMP_TO_EDGE) return WgpuBindings.ADDRESS_MODE_CLAMP_TO_EDGE;
+        if (mode == WrapMode.MIRRORED_REPEAT) return WgpuBindings.ADDRESS_MODE_MIRROR_REPEAT;
+        return WgpuBindings.ADDRESS_MODE_REPEAT;
     }
 
-    private static WGPUCompareFunction mapCompareFunc(CompareFunc func) {
-        if (func == CompareFunc.LESS) return WGPUCompareFunction.Less;
-        if (func == CompareFunc.LEQUAL) return WGPUCompareFunction.LessEqual;
-        if (func == CompareFunc.GREATER) return WGPUCompareFunction.Greater;
-        if (func == CompareFunc.GEQUAL) return WGPUCompareFunction.GreaterEqual;
-        if (func == CompareFunc.EQUAL) return WGPUCompareFunction.Equal;
-        if (func == CompareFunc.NOT_EQUAL) return WGPUCompareFunction.NotEqual;
-        if (func == CompareFunc.ALWAYS) return WGPUCompareFunction.Always;
-        if (func == CompareFunc.NEVER) return WGPUCompareFunction.Never;
-        return WGPUCompareFunction.Less;
+    private static int mapCompareFunc(CompareFunc func) {
+        if (func == CompareFunc.LESS) return WgpuBindings.COMPARE_LESS;
+        if (func == CompareFunc.LEQUAL) return WgpuBindings.COMPARE_LESS_EQUAL;
+        if (func == CompareFunc.GREATER) return WgpuBindings.COMPARE_GREATER;
+        if (func == CompareFunc.GEQUAL) return WgpuBindings.COMPARE_GREATER_EQUAL;
+        if (func == CompareFunc.EQUAL) return WgpuBindings.COMPARE_EQUAL;
+        if (func == CompareFunc.NOT_EQUAL) return WgpuBindings.COMPARE_NOT_EQUAL;
+        if (func == CompareFunc.ALWAYS) return WgpuBindings.COMPARE_ALWAYS;
+        if (func == CompareFunc.NEVER) return WgpuBindings.COMPARE_NEVER;
+        return WgpuBindings.COMPARE_LESS;
     }
 
-    private static WGPUStencilOperation mapStencilOp(StencilOp op) {
-        if (op == StencilOp.KEEP) return WGPUStencilOperation.Keep;
-        if (op == StencilOp.ZERO) return WGPUStencilOperation.Zero;
-        if (op == StencilOp.REPLACE) return WGPUStencilOperation.Replace;
-        if (op == StencilOp.INCR) return WGPUStencilOperation.IncrementClamp;
-        if (op == StencilOp.DECR) return WGPUStencilOperation.DecrementClamp;
-        if (op == StencilOp.INVERT) return WGPUStencilOperation.Invert;
-        if (op == StencilOp.INCR_WRAP) return WGPUStencilOperation.IncrementWrap;
-        if (op == StencilOp.DECR_WRAP) return WGPUStencilOperation.DecrementWrap;
-        return WGPUStencilOperation.Keep;
-    }
-
-    private static void configureBlendState(WGPUBlendState blendState, BlendMode mode) {
-        var color = blendState.getColor();
-        var alpha = blendState.getAlpha();
-
-        if (mode == BlendMode.ALPHA) {
-            color.setOperation(WGPUBlendOperation.Add);
-            color.setSrcFactor(WGPUBlendFactor.SrcAlpha);
-            color.setDstFactor(WGPUBlendFactor.OneMinusSrcAlpha);
-            alpha.setOperation(WGPUBlendOperation.Add);
-            alpha.setSrcFactor(WGPUBlendFactor.One);
-            alpha.setDstFactor(WGPUBlendFactor.OneMinusSrcAlpha);
-        } else if (mode == BlendMode.ADDITIVE) {
-            color.setOperation(WGPUBlendOperation.Add);
-            color.setSrcFactor(WGPUBlendFactor.One);
-            color.setDstFactor(WGPUBlendFactor.One);
-            alpha.setOperation(WGPUBlendOperation.Add);
-            alpha.setSrcFactor(WGPUBlendFactor.One);
-            alpha.setDstFactor(WGPUBlendFactor.One);
-        } else if (mode == BlendMode.MULTIPLY) {
-            color.setOperation(WGPUBlendOperation.Add);
-            color.setSrcFactor(WGPUBlendFactor.Dst);
-            color.setDstFactor(WGPUBlendFactor.Zero);
-            alpha.setOperation(WGPUBlendOperation.Add);
-            alpha.setSrcFactor(WGPUBlendFactor.DstAlpha);
-            alpha.setDstFactor(WGPUBlendFactor.Zero);
-        } else if (mode == BlendMode.PREMULTIPLIED) {
-            color.setOperation(WGPUBlendOperation.Add);
-            color.setSrcFactor(WGPUBlendFactor.One);
-            color.setDstFactor(WGPUBlendFactor.OneMinusSrcAlpha);
-            alpha.setOperation(WGPUBlendOperation.Add);
-            alpha.setSrcFactor(WGPUBlendFactor.One);
-            alpha.setDstFactor(WGPUBlendFactor.OneMinusSrcAlpha);
-        } else {
-            // NONE — no blending
-            color.setOperation(WGPUBlendOperation.Add);
-            color.setSrcFactor(WGPUBlendFactor.One);
-            color.setDstFactor(WGPUBlendFactor.Zero);
-            alpha.setOperation(WGPUBlendOperation.Add);
-            alpha.setSrcFactor(WGPUBlendFactor.One);
-            alpha.setDstFactor(WGPUBlendFactor.Zero);
-        }
+    private static int mapStencilOp(StencilOp op) {
+        if (op == StencilOp.KEEP) return WgpuBindings.STENCIL_OP_KEEP;
+        if (op == StencilOp.ZERO) return WgpuBindings.STENCIL_OP_ZERO;
+        if (op == StencilOp.REPLACE) return WgpuBindings.STENCIL_OP_REPLACE;
+        if (op == StencilOp.INCR) return WgpuBindings.STENCIL_OP_INCREMENT_CLAMP;
+        if (op == StencilOp.DECR) return WgpuBindings.STENCIL_OP_DECREMENT_CLAMP;
+        if (op == StencilOp.INVERT) return WgpuBindings.STENCIL_OP_INVERT;
+        if (op == StencilOp.INCR_WRAP) return WgpuBindings.STENCIL_OP_INCREMENT_WRAP;
+        if (op == StencilOp.DECR_WRAP) return WgpuBindings.STENCIL_OP_DECREMENT_WRAP;
+        return WgpuBindings.STENCIL_OP_KEEP;
     }
 
     private static int bytesPerPixel(TextureFormat format) {

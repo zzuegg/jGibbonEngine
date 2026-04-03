@@ -1,6 +1,7 @@
 package dev.engine.examples;
 
-import dev.engine.graphics.webgpu.WgpuRenderDevice;
+import dev.engine.graphics.webgpu.WgpuBindings;
+import dev.engine.providers.jwebgpu.JWebGpuBindings;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -10,10 +11,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /** WebGPU visual regression tests. Skips entirely if jWebGPU is not available. */
 class WebGpuRenderTest {
+    private static final WgpuBindings gpu = new JWebGpuBindings();
     private final RenderTestHarness harness = new RenderTestHarness(256, 256);
 
     @BeforeAll static void checkAvailable() {
-        assumeTrue(WgpuRenderDevice.isAvailable(), "jWebGPU not available");
+        assumeTrue(gpu.isAvailable(), "jWebGPU not available");
     }
 
     @Test void twoCubesUnlit() throws IOException {

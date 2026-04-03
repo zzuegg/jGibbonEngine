@@ -16,6 +16,7 @@ import dev.engine.graphics.target.RenderTargetDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureFormat;
 import dev.engine.graphics.window.WindowDescriptor;
+import dev.engine.providers.jwebgpu.JWebGpuBindings;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -32,11 +33,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class WgpuRenderDeviceTest {
 
     private static GlfwWindowToolkit toolkit;
+    private static final WgpuBindings gpu = new JWebGpuBindings();
     private WgpuRenderDevice device;
 
     @BeforeAll
     static void initGlfw() {
-        assumeTrue(WgpuRenderDevice.isAvailable(), "jWebGPU not available");
+        assumeTrue(gpu.isAvailable(), "jWebGPU not available");
         toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
     }
 
@@ -50,9 +52,9 @@ class WgpuRenderDeviceTest {
 
     @BeforeEach
     void setUp() {
-        assumeTrue(WgpuRenderDevice.isAvailable(), "jWebGPU not available");
+        assumeTrue(gpu.isAvailable(), "jWebGPU not available");
         var window = toolkit.createWindow(new WindowDescriptor("WGPU Test", 256, 256));
-        device = new WgpuRenderDevice(window);
+        device = new WgpuRenderDevice(window, gpu);
     }
 
     @AfterEach

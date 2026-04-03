@@ -9,8 +9,7 @@ dependencies {
     implementation(project(":graphics:common"))
     implementation(project(":windowing:glfw"))
 
-    implementation("com.github.xpenatan.jWebGPU:webgpu-core:0.1.15")
-    implementation("com.github.xpenatan.jWebGPU:webgpu-desktop:0.1.15")
+    testImplementation(project(":providers:jwebgpu"))
 
     implementation(platform(libs.lwjgl.bom))
     implementation(libs.lwjgl.core)
