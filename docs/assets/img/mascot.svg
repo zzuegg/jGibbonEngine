@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Outer gear ring -->
+  <g transform="translate(100,100)">
+    <!-- Gear teeth -->
+    <g fill="#f97316" opacity="0.9">
+      <rect x="-8" y="-98" width="16" height="20" rx="3"/>
+      <rect x="-8" y="78" width="16" height="20" rx="3"/>
+      <rect x="78" y="-8" width="20" height="16" rx="3"/>
+      <rect x="-98" y="-8" width="20" height="16" rx="3"/>
+      <!-- Diagonal teeth -->
+      <g transform="rotate(45)">
+        <rect x="-8" y="-98" width="16" height="20" rx="3"/>
+        <rect x="-8" y="78" width="16" height="20" rx="3"/>
+        <rect x="78" y="-8" width="20" height="16" rx="3"/>
+        <rect x="-98" y="-8" width="20" height="16" rx="3"/>
+      </g>
+    </g>
+    <!-- Gear ring body -->
+    <circle r="80" fill="#1c2128" stroke="#f97316" stroke-width="3"/>
+    <!-- Inner gear hole ring -->
+    <circle r="64" fill="none" stroke="#30363d" stroke-width="1"/>
+  </g>
+
+  <!-- Gibbon head - dark fur base -->
+  <ellipse cx="100" cy="105" rx="54" ry="58" fill="#2a1f1a"/>
+
+  <!-- Gibbon forehead / brow ridge -->
+  <ellipse cx="100" cy="82" rx="46" ry="28" fill="#3d2b22"/>
+
+  <!-- Face pad (lighter area) -->
+  <ellipse cx="100" cy="115" rx="34" ry="30" fill="#f5e6d3"/>
+
+  <!-- Cheek patches -->
+  <ellipse cx="76" cy="118" rx="12" ry="14" fill="#e8d5bc"/>
+  <ellipse cx="124" cy="118" rx="12" ry="14" fill="#e8d5bc"/>
+
+  <!-- Eyes -->
+  <!-- Left eye -->
+  <circle cx="87" cy="105" r="11" fill="#1a1a2e"/>
+  <circle cx="87" cy="105" r="8" fill="#2d1a0e"/>
+  <circle cx="87" cy="105" r="5" fill="#0d1117"/>
+  <circle cx="89.5" cy="103" r="2" fill="white" opacity="0.9"/>
+  <!-- Right eye -->
+  <circle cx="113" cy="105" r="11" fill="#1a1a2e"/>
+  <circle cx="113" cy="105" r="8" fill="#2d1a0e"/>
+  <circle cx="113" cy="105" r="5" fill="#0d1117"/>
+  <circle cx="115.5" cy="103" r="2" fill="white" opacity="0.9"/>
+
+  <!-- Brow lines -->
+  <path d="M78 96 Q87 92 96 96" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M104 96 Q113 92 122 96" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+
+  <!-- Nose -->
+  <ellipse cx="100" cy="122" rx="7" ry="5" fill="#c4a882"/>
+  <circle cx="97" cy="122" r="2.5" fill="#8a6040"/>
+  <circle cx="103" cy="122" r="2.5" fill="#8a6040"/>
+
+  <!-- Mouth - slight smile -->
+  <path d="M90 132 Q100 140 110 132" stroke="#8a6040" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+  <!-- Ears -->
+  <ellipse cx="47" cy="105" rx="13" ry="16" fill="#3d2b22"/>
+  <ellipse cx="47" cy="105" rx="8" ry="10" fill="#c4a882"/>
+  <ellipse cx="153" cy="105" rx="13" ry="16" fill="#3d2b22"/>
+  <ellipse cx="153" cy="105" rx="8" ry="10" fill="#c4a882"/>
+
+  <!-- Small gear on top of head (engine motif) -->
+  <g transform="translate(100, 62)">
+    <g fill="#f97316">
+      <rect x="-4" y="-16" width="8" height="10" rx="2"/>
+      <rect x="-4" y="6" width="8" height="10" rx="2"/>
+      <rect x="6" y="-4" width="10" height="8" rx="2"/>
+      <rect x="-16" y="-4" width="10" height="8" rx="2"/>
+      <g transform="rotate(45)">
+        <rect x="-4" y="-16" width="8" height="10" rx="2"/>
+        <rect x="-4" y="6" width="8" height="10" rx="2"/>
+        <rect x="6" y="-4" width="10" height="8" rx="2"/>
+        <rect x="-16" y="-4" width="10" height="8" rx="2"/>
+      </g>
+    </g>
+    <circle r="13" fill="#161b22" stroke="#f97316" stroke-width="2"/>
+    <circle r="6" fill="#f97316" opacity="0.2"/>
+    <circle r="4" fill="#f97316" opacity="0.6"/>
+    <circle r="2" fill="white"/>
+  </g>
+</svg>

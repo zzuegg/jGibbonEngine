@@ -1,0 +1,38 @@
+title: "jGibbonEngine"
+description: "The next-generation Java/Kotlin 3D game engine – spiritual successor of jMonkeyEngine."
+baseurl: "/jGibbonEngine"
+url: "https://zzuegg.github.io"
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+plugins:
+  - jekyll-seo-tag
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+
+# Navigation
+nav:
+  - title: "Tutorials"
+    url: "/tutorials/"
+  - title: "Examples"
+    url: "/examples/"
+  - title: "Showcase"
+    url: "/showcase/"
+  - title: "Javadoc / API"
+    url: "/javadoc/"
+  - title: "GitHub"
+    url: "https://github.com/zzuegg/jGibbonEngine"
+    external: true
+
+# Kramdown settings
+kramdown:
+  syntax_highlighter: rouge
+  syntax_highlighter_opts:
+    block:
+      line_numbers: true
