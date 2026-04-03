@@ -4,6 +4,13 @@ plugins {
 
 val teavmVersion = "0.13.1"
 
+configurations.all {
+    // SLF4J uses SecurityManager, LinkedBlockingQueue, and ClassLoader.getResources()
+    // — none of which exist in TeaVM's classlib. We provide our own minimal shim
+    // in web/src/main/java/org/slf4j/ that routes to console.log instead.
+    exclude(group = "org.slf4j", module = "slf4j-api")
+}
+
 dependencies {
     implementation(project(":core"))
     implementation(project(":graphics:api"))

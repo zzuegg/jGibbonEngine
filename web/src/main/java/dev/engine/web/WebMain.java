@@ -54,9 +54,7 @@ public class WebMain {
     private static native int getCanvasHeight();
 
     public static void main(String[] args) {
-        // TeaVM has no reflection — disable it.
-        // Generated _Layout classes register themselves in static {} blocks.
-        dev.engine.core.layout.StructLayout.disableReflection();
+        // Force-load generated _Layout classes (triggers static registration)
         dev.engine.core.shader.params.EngineParams_Layout.init();
         dev.engine.core.shader.params.CameraParams_Layout.init();
         dev.engine.core.shader.params.ObjectParams_Layout.init();

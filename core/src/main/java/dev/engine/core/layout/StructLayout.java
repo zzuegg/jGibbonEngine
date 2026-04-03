@@ -1,12 +1,7 @@
 package dev.engine.core.layout;
 
-import dev.engine.core.gpu.BufferWriter;
 import dev.engine.core.memory.NativeMemory;
-import dev.engine.core.math.*;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -36,21 +31,6 @@ public final class StructLayout {
         return of(recordType, LayoutMode.PACKED);
     }
 
-    /**
-     * Strategy for building layouts from types. Default uses reflection.
-     * Set to null on platforms without reflection (TeaVM) — all types must be pre-registered.
-     */
-    private static volatile java.util.function.BiFunction<Class<?>, LayoutMode, StructLayout> buildStrategy = StructLayout::build;
-
-    /**
-     * Disables reflection-based layout building.
-     * All struct types must be pre-registered via {@link #register} before use.
-     * Call this on platforms without reflection (e.g., TeaVM).
-     */
-    public static void disableReflection() {
-        buildStrategy = null;
-    }
-
     /** Layout with specific mode (PACKED, STD140, STD430). */
     public static synchronized StructLayout of(Class<?> recordType, LayoutMode mode) {
         var key = recordType.getName() + ":" + mode.name();
@@ -64,16 +44,22 @@ public final class StructLayout {
             if (cached != null) return cached;
         } catch (ClassNotFoundException ignored) {}
 
-        // Fallback to reflection (desktop only)
-        if (buildStrategy != null) {
-            var layout = buildStrategy.apply(recordType, mode);
+        // Fallback: try reflection-based builder (desktop only, not available on TeaVM)
+        try {
+            var builderClass = Class.forName("dev.engine.core.layout.ReflectiveLayoutBuilder");
+            var buildMethod = builderClass.getMethod("build", Class.class, LayoutMode.class);
+            var layout = (StructLayout) buildMethod.invoke(null, recordType, mode);
             CACHE.put(key, layout);
             return layout;
+        } catch (ClassNotFoundException e) {
+            // ReflectiveLayoutBuilder not available (e.g., TeaVM)
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to build layout for " + recordType.getName(), e);
         }
 
         throw new IllegalStateException(
             "No layout for " + recordType.getName() +
-            ". Add @NativeStruct annotation or call StructLayout.register().");
+            ". Add @NativeStruct annotation to generate it at compile time.");
     }
 
     /**
@@ -106,150 +92,8 @@ public final class StructLayout {
         }
     }
 
-    // --- Build ---
-
-    private static StructLayout build(Class<?> type, LayoutMode mode) {
-        try {
-            if (!type.isRecord()) {
-                throw new IllegalArgumentException(type.getName() + " is not a record");
-            }
-        } catch (NoSuchMethodError | UnsupportedOperationException e) {
-            throw new IllegalStateException(
-                    "Reflection not available for " + type.getName() +
-                    ". Call StructLayout.register() before using this type on platforms without reflection (e.g., TeaVM).");
-        }
-
-        var components = type.getRecordComponents();
-        var fields = new ArrayList<Field>();
-        var writers = new ArrayList<FieldWriter>();
-        int currentOffset = 0;
-        int maxAlignment = 1;
-
-        for (var comp : components) {
-            var compType = comp.getType();
-            MethodHandle accessor;
-            try {
-                var method = comp.getAccessor();
-                method.setAccessible(true);
-                accessor = MethodHandles.lookup().unreflect(method);
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException("Cannot access component " + comp.getName(), e);
-            }
-
-            if (compType.isRecord() && !isKnownType(compType)) {
-                // Nested record — expand recursively
-                var nested = StructLayout.of(compType, mode);
-                int nestedAlign = nested.mode == LayoutMode.PACKED ? 1 : 16; // struct alignment in std140/430
-                if (mode != LayoutMode.PACKED) {
-                    currentOffset = align(currentOffset, nestedAlign);
-                }
-                int nestedBaseOffset = currentOffset;
-                var outerAccessor = accessor;
-                for (var nestedWriter : nested.writers) {
-                    var capturedWriter = nestedWriter;
-                    var capturedOffset = nestedBaseOffset;
-                    writers.add((mem, off, rec) -> {
-                        try {
-                            var nestedRec = outerAccessor.invoke(rec);
-                            capturedWriter.write(mem, off + capturedOffset, nestedRec);
-                        } catch (Throwable t) { throw new RuntimeException(t); }
-                    });
-                }
-                for (var nestedField : nested.fields) {
-                    fields.add(new Field(comp.getName() + "." + nestedField.name,
-                            nestedField.type, currentOffset + nestedField.offset, nestedField.size, nestedField.alignment));
-                }
-                currentOffset += nested.size;
-                maxAlignment = Math.max(maxAlignment, nestedAlign);
-            } else {
-                int fieldSize = sizeOf(compType);
-                int fieldAlign = alignmentOf(compType, mode);
-                currentOffset = align(currentOffset, fieldAlign);
-                int fieldOffset = currentOffset;
-                maxAlignment = Math.max(maxAlignment, fieldAlign);
-
-                fields.add(new Field(comp.getName(), compType, fieldOffset, fieldSize, fieldAlign));
-                writers.add(createPrimitiveWriter(accessor, compType, fieldOffset));
-                currentOffset += fieldSize;
-            }
-        }
-
-        // Round up total size to largest alignment
-        if (mode != LayoutMode.PACKED) {
-            currentOffset = align(currentOffset, maxAlignment);
-        }
-
-        return new StructLayout(type, mode, fields, currentOffset, writers);
-    }
-
-    // --- Alignment rules ---
-
-    private static int alignmentOf(Class<?> type, LayoutMode mode) {
-        if (mode == LayoutMode.PACKED) return 1; // no alignment in packed mode
-
-        // std140 / std430 alignment rules
-        if (type == float.class || type == Float.class) return 4;
-        if (type == int.class || type == Integer.class) return 4;
-        if (type == boolean.class || type == Boolean.class) return 4;
-        if (type == Vec2.class) return 8;
-        if (type == Vec3.class) return 16; // vec3 aligns to 16 in both std140 and std430
-        if (type == Vec4.class) return 16;
-        if (type == Mat4.class) return 16;
-        if (type == double.class || type == Double.class) return 8;
-        if (type == long.class || type == Long.class) return 8;
-        if (type == short.class || type == Short.class) return 2;
-        if (type == byte.class || type == Byte.class) return 1;
-        return 4; // default
-    }
-
-    private static boolean isKnownType(Class<?> type) {
-        return type == Vec2.class || type == Vec3.class || type == Vec4.class || type == Mat4.class;
-    }
-
-    private static int align(int offset, int alignment) {
-        return (offset + alignment - 1) & ~(alignment - 1);
-    }
-
-    // --- Size ---
-
-    private static int sizeOf(Class<?> type) {
-        if (type == float.class || type == Float.class) return 4;
-        if (type == int.class || type == Integer.class) return 4;
-        if (type == boolean.class || type == Boolean.class) return 4;
-        if (type == Vec2.class) return 8;
-        if (type == Vec3.class) return 12;
-        if (type == Vec4.class) return 16;
-        if (type == Mat4.class) return 64;
-        if (type == double.class || type == Double.class) return 8;
-        if (type == long.class || type == Long.class) return 8;
-        if (type == short.class || type == Short.class) return 2;
-        if (type == byte.class || type == Byte.class) return 1;
-        throw new IllegalArgumentException("Unsupported: " + type);
-    }
-
-    // --- Writers ---
-
-    private static FieldWriter createPrimitiveWriter(MethodHandle accessor, Class<?> type, int offset) {
-        // Delegate to BufferWriter for types it supports
-        if (BufferWriter.supports(type)) {
-            return (mem, base, rec) -> {
-                try {
-                    BufferWriter.write(mem, base + offset, accessor.invoke(rec));
-                } catch (Throwable t) { throw new RuntimeException(t); }
-            };
-        }
-        // Fallback for types BufferWriter doesn't handle (double, long, short, byte)
-        if (type == double.class || type == Double.class) {
-            return (mem, base, rec) -> { try { mem.putDouble(base + offset, (double) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
-        } else if (type == long.class || type == Long.class) {
-            return (mem, base, rec) -> { try { mem.putLong(base + offset, (long) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
-        } else if (type == short.class || type == Short.class) {
-            return (mem, base, rec) -> { try { mem.putShort(base + offset, (short) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
-        } else if (type == byte.class || type == Byte.class) {
-            return (mem, base, rec) -> { try { mem.putByte(base + offset, (byte) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
-        }
-        throw new IllegalArgumentException("Unsupported: " + type);
-    }
+    // Layout computation is done at compile time by the @NativeStruct annotation processor.
+    // No reflection-based build() method — all layouts are generated or manually registered.
 
     @FunctionalInterface
     private interface FieldWriter {

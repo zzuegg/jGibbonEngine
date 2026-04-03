@@ -26,6 +26,29 @@ TeaVM 0.13.1 names the output JS file after the Gradle module name (e.g.,
 `web.js` for the `:web` module), **not** `classes.js` as older versions did.
 The `index.html` must reference the correct filename.
 
+## SLF4J Shim
+
+SLF4J's `LoggerFactory.getLogger()` cannot run under TeaVM because it uses:
+- `SecurityManager.getClassContext()` for caller detection
+- `LinkedBlockingQueue` in `SubstituteLoggerFactory`
+- `ClassLoader.getResources()` / `ServiceLoader` for provider discovery
+
+**Solution:** The `web/` module excludes `slf4j-api` from its transitive
+dependencies and provides its own minimal `org.slf4j.*` classes in
+`web/src/main/java/org/slf4j/`. This works because the project does not use
+JPMS (no `module-info.java`), so there is no split-package conflict.
+
+The shim classes:
+- `LoggerFactory` — returns `ConsoleLogger` instances from a `HashMap` cache
+- `ConsoleLogger` — formats `{}` placeholders and writes to `System.out` / `System.err`
+  (which TeaVM maps to `console.log` / `console.error`)
+- `Logger`, `ILoggerFactory`, `Marker` — interfaces matching the SLF4J API surface
+- `Level`, `LoggingEventBuilder` — minimal types for the fluent API default methods
+- `NOPLoggingEventBuilder` — no-op for the `atInfo()` / `atDebug()` etc. fluent API
+
+Other modules continue to compile and run against the real `slf4j-api` jar.
+The exclusion only affects the `web/` module's classpath.
+
 ## TeaVM Limitations
 
 Code compiled by TeaVM cannot use:
@@ -36,6 +59,9 @@ Code compiled by TeaVM cannot use:
 - **Most `java.nio`** — limited `ByteBuffer` support
 - **Threads** — `Thread.start()` is not supported; browser is single-threaded
 - **`System.loadLibrary`** — no JNI/native libraries
+- **`SecurityManager`** — removed from recent JDKs, not in TeaVM classlib
+- **`ServiceLoader`** — relies on `ClassLoader.getResources()` which is not available
+- **`LinkedBlockingQueue`** — not implemented in TeaVM's `java.util.concurrent`
 
 Provider modules for TeaVM must avoid these APIs. The `WgpuBindings` interface
 is TeaVM-safe because it uses only primitive types, `String`, `ByteBuffer`,
