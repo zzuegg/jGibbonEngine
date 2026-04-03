@@ -38,11 +38,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import dev.engine.core.memory.NativeMemory;
-import dev.engine.core.memory.SegmentNativeMemory;
 
-import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
+import java.util.function.IntFunction;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -191,8 +189,16 @@ public class WgpuRenderDevice implements RenderDevice {
      * @param window the GLFW window handle (kept for API compatibility)
      * @param gpu    the WebGPU bindings implementation
      */
+    /** Factory for creating NativeMemory instances. Desktop: SegmentNativeMemory, Web: ByteBufferNativeMemory. */
+    private final IntFunction<NativeMemory> memoryFactory;
+
     public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu) {
+        this(window, gpu, WgpuRenderDevice::createDefaultMemory);
+    }
+
+    public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu, IntFunction<NativeMemory> memoryFactory) {
         this.gpu = gpu;
+        this.memoryFactory = memoryFactory;
         boolean available = false;
         try {
             available = gpu.initialize();
@@ -263,9 +269,8 @@ public class WgpuRenderDevice implements RenderDevice {
     @Override
     public BufferWriter writeBuffer(Handle<BufferResource> buffer, long offset, long length) {
         var buf = buffers.get(buffer);
-        var arena = Arena.ofConfined();
-        var segment = arena.allocate(length);
-        var gpuMemory = new SegmentNativeMemory(segment);
+        var bb = ByteBuffer.allocate((int) length).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        var gpuMemory = memoryFactory.apply((int) length);
         return new BufferWriter() {
             @Override
             public NativeMemory memory() { return gpuMemory; }
@@ -273,15 +278,14 @@ public class WgpuRenderDevice implements RenderDevice {
             @Override
             public void close() {
                 if (nativeAvailable && buf != null && buf.nativeBuffer() != 0) {
-                    // Copy from MemorySegment to a direct ByteBuffer
-                    ByteBuffer bb = ByteBuffer.allocateDirect((int) length);
+                    // Copy from NativeMemory to ByteBuffer for upload
+                    ByteBuffer upload = ByteBuffer.allocateDirect((int) length).order(java.nio.ByteOrder.LITTLE_ENDIAN);
                     for (int i = 0; i < length; i++) {
-                        bb.put(segment.get(java.lang.foreign.ValueLayout.JAVA_BYTE, i));
+                        upload.put(gpuMemory.getByte(i));
                     }
-                    bb.flip();
-                    gpu.queueWriteBuffer(wgpuQueue, buf.nativeBuffer(), (int) offset, bb, (int) length);
+                    upload.flip();
+                    gpu.queueWriteBuffer(wgpuQueue, buf.nativeBuffer(), (int) offset, upload, (int) length);
                 }
-                arena.close();
             }
         };
     }
@@ -1487,5 +1491,31 @@ public class WgpuRenderDevice implements RenderDevice {
 
     private static int alignTo256(int value) {
         return (value + 255) & ~255;
+    }
+
+    /**
+     * Default NativeMemory factory using ByteBuffer (works on all platforms).
+     */
+    private static NativeMemory createDefaultMemory(int size) {
+        var bb = java.nio.ByteBuffer.allocate(size).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        return new NativeMemory() {
+            @Override public void putFloat(long offset, float value) { bb.putFloat((int) offset, value); }
+            @Override public void putInt(long offset, int value) { bb.putInt((int) offset, value); }
+            @Override public void putByte(long offset, byte value) { bb.put((int) offset, value); }
+            @Override public void putShort(long offset, short value) { bb.putShort((int) offset, value); }
+            @Override public void putLong(long offset, long value) { bb.putLong((int) offset, value); }
+            @Override public void putDouble(long offset, double value) { bb.putDouble((int) offset, value); }
+            @Override public float getFloat(long offset) { return bb.getFloat((int) offset); }
+            @Override public int getInt(long offset) { return bb.getInt((int) offset); }
+            @Override public byte getByte(long offset) { return bb.get((int) offset); }
+            @Override public short getShort(long offset) { return bb.getShort((int) offset); }
+            @Override public long getLong(long offset) { return bb.getLong((int) offset); }
+            @Override public double getDouble(long offset) { return bb.getDouble((int) offset); }
+            @Override public long size() { return size; }
+            @Override public void putFloatArray(long offset, float[] data) { for (int i = 0; i < data.length; i++) bb.putFloat((int) offset + i * 4, data[i]); }
+            @Override public void putIntArray(long offset, int[] data) { for (int i = 0; i < data.length; i++) bb.putInt((int) offset + i * 4, data[i]); }
+            @Override public NativeMemory slice(long offset, long length) { return createDefaultMemory((int) length); }
+            @Override public void copyFrom(NativeMemory src) { for (long i = 0; i < Math.min(size, src.size()); i++) bb.put((int) i, src.getByte(i)); }
+        };
     }
 }

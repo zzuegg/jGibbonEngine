@@ -735,9 +735,19 @@ public class Renderer implements AutoCloseable {
     }
 
     private String loadShaderFile(String path) {
+        // Try classpath first (works on all platforms including TeaVM)
+        try (var is = getClass().getClassLoader().getResourceAsStream(path)) {
+            if (is != null) return new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException ignored) {}
+        // Fallback to filesystem (desktop only, loaded dynamically to avoid TeaVM tracing)
         try {
-            return java.nio.file.Files.readString(java.nio.file.Path.of(path));
-        } catch (java.io.IOException e) {
+            var filesClass = Class.forName("java.nio.file.Files");
+            var pathClass = Class.forName("java.nio.file.Path");
+            var ofMethod = pathClass.getMethod("of", String.class, String[].class);
+            var readMethod = filesClass.getMethod("readString", pathClass);
+            var pathObj = ofMethod.invoke(null, path, new String[0]);
+            return (String) readMethod.invoke(null, pathObj);
+        } catch (Exception ignored) {
             return null;
         }
     }
