@@ -64,7 +64,7 @@ public class WebMain {
 
     @JSBody(params = "callback", script = """
         function loop() {
-            callback.onFrame();
+            callback();
             requestAnimationFrame(loop);
         }
         requestAnimationFrame(loop);

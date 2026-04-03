@@ -43,20 +43,22 @@ public final class TeaVmWgpuInit {
             window._wgpu = {};
             window._wgpuNextId = 1;
         }
-        navigator.gpu.requestAdapter().then(function(adapter) {
+        var cb = callback;
+        navigator.gpu.requestAdapter({powerPreference: 'high-performance'}).then(function(adapter) {
             if (!adapter) {
                 console.error('[TeaVM/WebGPU] No adapter found');
-                callback.accept(0);
-                return;
+                cb(0);
+                return Promise.reject('No adapter');
             }
             var adapterId = window._wgpuNextId++;
             window._wgpu[adapterId] = adapter;
             window._wgpuAdapter = adapterId;
+            console.log('[TeaVM/WebGPU] Adapter obtained:', adapter);
             return adapter.requestDevice();
         }).then(function(device) {
             if (!device) {
                 console.error('[TeaVM/WebGPU] No device found');
-                callback.accept(0);
+                cb(0);
                 return;
             }
             var deviceId = window._wgpuNextId++;
@@ -65,10 +67,11 @@ public final class TeaVmWgpuInit {
             device.lost.then(function(info) {
                 console.error('[TeaVM/WebGPU] Device lost: ' + info.message);
             });
-            callback.accept(deviceId);
+            console.log('[TeaVM/WebGPU] Device obtained, id=' + deviceId);
+            cb(deviceId);
         }).catch(function(err) {
             console.error('[TeaVM/WebGPU] Init failed: ' + err);
-            callback.accept(0);
+            try { cb(0); } catch(e) { console.error('[TeaVM/WebGPU] Callback error:', e); }
         });
     """)
     private static native void initAsyncJS(IntCallback callback);
