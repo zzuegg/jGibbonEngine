@@ -3,9 +3,13 @@ package dev.engine.web;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
-import dev.engine.graphics.webgpu.WgpuBindings;
+import dev.engine.graphics.common.Renderer;
+import dev.engine.graphics.common.mesh.PrimitiveMeshes;
+import dev.engine.graphics.webgpu.WgpuRenderDevice;
+import dev.engine.providers.teavm.webgpu.TeaVmShaderCompiler;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuBindings;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuInit;
+import dev.engine.providers.teavm.windowing.CanvasWindowToolkit;
 import org.teavm.jso.JSBody;
 import org.teavm.jso.JSFunctor;
 import org.teavm.jso.JSObject;
@@ -13,17 +17,12 @@ import org.teavm.jso.JSObject;
 /**
  * Entry point for the TeaVM-compiled web application.
  *
- * <p>Renders the TWO_CUBES_UNLIT scene (matching the desktop screenshot tests)
- * using the engine's math types, material data, and transforms. Shaders are
- * compiled from Slang via the WASM compiler at runtime.
+ * <p>Uses the FULL engine pipeline: Renderer + WgpuRenderDevice + ShaderManager.
+ * Same code path as desktop screenshot tests — just different providers.
  */
 public class WebMain {
 
-    private static TeaVmWgpuBindings bindings;
-    private static int deviceId;
-    private static int queueId;
-    private static int contextId;
-    private static WebRenderer renderer;
+    private static Renderer renderer;
 
     @JSFunctor
     public interface FrameCallback extends JSObject {
@@ -55,72 +54,74 @@ public class WebMain {
     private static native int getCanvasHeight();
 
     public static void main(String[] args) {
+        // Register struct layouts for TeaVM (no reflection available)
+        WebStructLayouts.registerAll();
+
         setStatus("Initializing WebGPU...");
 
-        bindings = new TeaVmWgpuBindings();
-        if (!bindings.isAvailable()) {
+        var wgpuBindings = new TeaVmWgpuBindings();
+        if (!wgpuBindings.isAvailable()) {
             setStatus("WebGPU is not available in this browser.");
             return;
         }
-        bindings.initialize();
+        wgpuBindings.initialize();
 
         // Async init: request adapter + device
-        deviceId = TeaVmWgpuInit.initAsync();
+        int deviceId = TeaVmWgpuInit.initAsync();
         if (deviceId <= 0) {
             setStatus("Failed to initialize WebGPU adapter/device.");
             return;
         }
+        consoleLog("[Engine] WebGPU device ready, id=" + deviceId);
 
-        queueId = (int) bindings.deviceGetQueue(deviceId);
+        // Create window via canvas toolkit
+        var toolkit = new CanvasWindowToolkit();
+        var window = toolkit.createWindow(
+                new dev.engine.graphics.window.WindowDescriptor("Engine", getCanvasWidth(), getCanvasHeight()));
 
-        // Configure the canvas context
-        contextId = TeaVmWgpuBindings.configureCanvasContext("canvas", deviceId);
-        String canvasFormat = TeaVmWgpuBindings.getPreferredCanvasFormat();
+        // Create WgpuRenderDevice — same class as desktop WebGPU backend
+        setStatus("Creating render device...");
+        var device = new WgpuRenderDevice(window, wgpuBindings);
+
+        // Create shader compiler — Slang WASM in the browser
+        setStatus("Initializing shader compiler...");
+        var compiler = new TeaVmShaderCompiler();
+
+        // Create the full engine Renderer — same as desktop
+        setStatus("Creating renderer...");
+        renderer = new Renderer(device, compiler);
 
         int width = getCanvasWidth();
         int height = getCanvasHeight();
+        renderer.setViewport(width, height);
 
-        setStatus("Compiling shaders and creating pipeline...");
+        // Set up camera — same as CrossBackendScenes.TWO_CUBES_UNLIT
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), (float) width / height, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
 
-        // Create the WebRenderer
-        renderer = new WebRenderer(bindings, deviceId, queueId);
-        renderer.init(mapCanvasFormat(canvasFormat), width, height);
-        renderer.setupCamera(width, height);
+        // Set up scene — same as desktop
+        var cube1 = renderer.scene().createEntity();
+        cube1.add(PrimitiveMeshes.cube());
+        cube1.add(MaterialData.unlit(new Vec3(0.9f, 0.2f, 0.2f)));
+        cube1.add(Transform.at(-1.5f, 0, 0));
 
-        // Set up the TWO_CUBES_UNLIT scene (same as CrossBackendScenes.TWO_CUBES_UNLIT)
-        renderer.addEntity(
-                Transform.at(-1.5f, 0, 0),
-                MaterialData.unlit(new Vec3(0.9f, 0.2f, 0.2f)));
-        renderer.addEntity(
-                Transform.at(1.5f, 0, 0),
-                MaterialData.unlit(new Vec3(0.2f, 0.9f, 0.2f)));
+        var cube2 = renderer.scene().createEntity();
+        cube2.add(PrimitiveMeshes.cube());
+        cube2.add(MaterialData.unlit(new Vec3(0.2f, 0.9f, 0.2f)));
+        cube2.add(Transform.at(1.5f, 0, 0));
 
-        if (renderer.isSlangCompiled()) {
-            setStatus("Rendering TWO_CUBES_UNLIT (Slang -> WGSL)");
-        } else {
-            setStatus("Rendering TWO_CUBES_UNLIT (fallback WGSL)");
-        }
+        setStatus("Rendering (full engine pipeline)");
+        consoleLog("[Engine] Scene ready, entering render loop");
 
         // Enter the render loop
         requestAnimationFrame(WebMain::renderFrame);
     }
 
     private static void renderFrame() {
-        int width = getCanvasWidth();
-        int height = getCanvasHeight();
-        int textureViewId = TeaVmWgpuBindings.getCurrentTextureView(contextId);
-
-        renderer.renderFrame(textureViewId, width, height);
-
-        // Release per-frame texture view
-        TeaVmWgpuBindings.wgpuRelease(textureViewId);
-    }
-
-    private static int mapCanvasFormat(String format) {
-        return switch (format) {
-            case "rgba8unorm" -> WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM;
-            case "bgra8unorm" -> WgpuBindings.TEXTURE_FORMAT_BGRA8_UNORM;
-            default -> WgpuBindings.TEXTURE_FORMAT_BGRA8_UNORM;
-        };
+        // Full engine render — processes scene transactions, compiles shaders,
+        // uploads UBOs, records commands, submits to GPU
+        renderer.renderFrame();
     }
 }

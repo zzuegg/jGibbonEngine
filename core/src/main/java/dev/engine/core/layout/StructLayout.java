@@ -46,6 +46,26 @@ public final class StructLayout {
         return layout;
     }
 
+    /**
+     * Pre-registers a struct layout, bypassing reflection.
+     * Use this for platforms that don't support Class.getRecordComponents() (e.g., TeaVM).
+     * Must be called before StructLayout.of() for the same type.
+     */
+    public static synchronized void register(Class<?> recordType, LayoutMode mode, StructLayout layout) {
+        var key = recordType.getName() + ":" + mode.name();
+        CACHE.put(key, layout);
+    }
+
+    /**
+     * Creates a StructLayout from manually specified fields (no reflection needed).
+     * The write function must be provided externally.
+     */
+    public static StructLayout manual(Class<?> recordType, LayoutMode mode, List<Field> fields, int size,
+                                       java.util.function.BiConsumer<NativeMemory, Object> writeFunc) {
+        var writers = List.of((FieldWriter) (mem, offset, record) -> writeFunc.accept(mem, record));
+        return new StructLayout(recordType, mode, fields, size, writers);
+    }
+
     public List<Field> fields() { return fields; }
     public int size() { return size; }
     public LayoutMode mode() { return mode; }
@@ -59,8 +79,14 @@ public final class StructLayout {
     // --- Build ---
 
     private static StructLayout build(Class<?> type, LayoutMode mode) {
-        if (!type.isRecord()) {
-            throw new IllegalArgumentException(type.getName() + " is not a record");
+        try {
+            if (!type.isRecord()) {
+                throw new IllegalArgumentException(type.getName() + " is not a record");
+            }
+        } catch (NoSuchMethodError | UnsupportedOperationException e) {
+            throw new IllegalStateException(
+                    "Reflection not available for " + type.getName() +
+                    ". Call StructLayout.register() before using this type on platforms without reflection (e.g., TeaVM).");
         }
 
         var components = type.getRecordComponents();
