@@ -1,0 +1,254 @@
+/*
+ * jGibbonEngine — Modern Javadoc Theme
+ * Dark theme matching the project website aesthetic.
+ */
+
+/* ===== Color Variables ===== */
+:root {
+  --jg-bg-primary:    #0d1117;
+  --jg-bg-surface:    #161b22;
+  --jg-bg-elevated:   #1c2128;
+  --jg-border:        #30363d;
+  --jg-border-subtle: #21262d;
+  --jg-orange:        #f97316;
+  --jg-orange-light:  #fb923c;
+  --jg-amber:         #fbbf24;
+  --jg-green:         #22c55e;
+  --jg-blue:          #60a5fa;
+  --jg-text:          #e6edf3;
+  --jg-text-muted:    #8b949e;
+  --jg-text-subtle:   #6e7681;
+  --jg-radius:        0.5rem;
+}
+
+/* ===== Base ===== */
+body {
+  background-color: var(--jg-bg-primary) !important;
+  color: var(--jg-text) !important;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+  line-height: 1.6 !important;
+  margin: 0 !important;
+}
+
+/* ===== Headers ===== */
+h1, h2, h3, h4, h5, h6,
+.title, .sub-title {
+  color: var(--jg-text) !important;
+  font-family: 'Space Grotesk', system-ui, sans-serif !important;
+}
+
+h1 { border-bottom: 1px solid var(--jg-border-subtle) !important; padding-bottom: 0.5rem !important; }
+
+/* ===== Links ===== */
+a, a:visited {
+  color: var(--jg-orange) !important;
+  text-decoration: none !important;
+}
+a:hover {
+  color: var(--jg-orange-light) !important;
+  text-decoration: underline !important;
+}
+
+/* ===== Navigation Bar ===== */
+.top-nav, .bottom-nav, .sub-nav,
+div.top-nav, div.bottom-nav, div.sub-nav {
+  background-color: var(--jg-bg-surface) !important;
+  border-color: var(--jg-border-subtle) !important;
+  color: var(--jg-text-muted) !important;
+}
+
+.top-nav a, .bottom-nav a, .sub-nav a,
+div.top-nav a, div.bottom-nav a, div.sub-nav a {
+  color: var(--jg-text-muted) !important;
+}
+.top-nav a:hover, .bottom-nav a:hover, .sub-nav a:hover {
+  color: var(--jg-orange) !important;
+}
+
+/* ===== Header Bar ===== */
+header nav, .flex-header {
+  background-color: var(--jg-bg-surface) !important;
+  border-bottom: 1px solid var(--jg-border-subtle) !important;
+}
+
+/* ===== Content Area ===== */
+.header, .content-container, .main-grid,
+div.header, main, .flex-content {
+  background-color: var(--jg-bg-primary) !important;
+}
+
+/* ===== Sidebar / Package List ===== */
+.left-nav, .toc, ul.nav-list,
+div.left-nav {
+  background-color: var(--jg-bg-surface) !important;
+  border-right: 1px solid var(--jg-border-subtle) !important;
+}
+
+ul.nav-list li {
+  color: var(--jg-text-muted) !important;
+}
+ul.nav-list li a {
+  color: var(--jg-text-muted) !important;
+}
+ul.nav-list li a:hover {
+  color: var(--jg-orange) !important;
+}
+
+/* ===== Tables ===== */
+table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+}
+
+th {
+  background-color: var(--jg-bg-surface) !important;
+  color: var(--jg-text) !important;
+  border: 1px solid var(--jg-border) !important;
+  padding: 0.5rem 0.75rem !important;
+  text-align: left !important;
+}
+
+td {
+  background-color: var(--jg-bg-primary) !important;
+  color: var(--jg-text-muted) !important;
+  border: 1px solid var(--jg-border-subtle) !important;
+  padding: 0.5rem 0.75rem !important;
+}
+
+.alt-color, .row-color, .even-row-color {
+  background-color: var(--jg-bg-primary) !important;
+}
+.odd-row-color {
+  background-color: var(--jg-bg-surface) !important;
+}
+
+caption {
+  color: var(--jg-text) !important;
+  font-weight: 600 !important;
+}
+
+.table-header {
+  background-color: var(--jg-bg-elevated) !important;
+  color: var(--jg-text) !important;
+}
+
+/* Summary table */
+.summary-table {
+  border: 1px solid var(--jg-border) !important;
+  border-radius: var(--jg-radius) !important;
+  overflow: hidden !important;
+}
+
+/* ===== Code ===== */
+code, pre, .source-code, tt,
+code span {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
+  color: var(--jg-text) !important;
+}
+
+pre {
+  background-color: var(--jg-bg-surface) !important;
+  border: 1px solid var(--jg-border) !important;
+  border-radius: var(--jg-radius) !important;
+  padding: 1rem !important;
+  overflow-x: auto !important;
+}
+
+code {
+  background-color: var(--jg-bg-elevated) !important;
+  border-radius: 0.25rem !important;
+  padding: 0.1em 0.3em !important;
+  font-size: 0.9em !important;
+}
+
+pre code {
+  background: none !important;
+  padding: 0 !important;
+}
+
+/* ===== Type Signatures ===== */
+.type-signature, .return-type, .parameters,
+.member-signature {
+  color: var(--jg-text-muted) !important;
+}
+.member-signature .return-type {
+  color: var(--jg-blue) !important;
+}
+.member-signature .type-name-link {
+  color: var(--jg-amber) !important;
+}
+
+/* ===== Deprecation / Notes ===== */
+.deprecated-label {
+  color: var(--jg-amber) !important;
+}
+.deprecation-block {
+  background-color: rgba(251, 191, 36, 0.1) !important;
+  border: 1px solid var(--jg-amber) !important;
+  border-radius: var(--jg-radius) !important;
+  padding: 0.75rem 1rem !important;
+}
+.notes, .note-block {
+  background-color: rgba(96, 165, 250, 0.1) !important;
+  border-left: 3px solid var(--jg-blue) !important;
+  padding: 0.5rem 1rem !important;
+}
+
+/* ===== Sections ===== */
+section, .detail, .summary,
+.description {
+  color: var(--jg-text-muted) !important;
+}
+section .detail h3, .section-summary h2 {
+  color: var(--jg-text) !important;
+  border-bottom: 1px solid var(--jg-border-subtle) !important;
+  padding-bottom: 0.5rem !important;
+}
+
+.block {
+  color: var(--jg-text-muted) !important;
+}
+
+/* ===== Search ===== */
+#search-input, .ui-widget-content input,
+input[type="search"], input[type="text"] {
+  background-color: var(--jg-bg-surface) !important;
+  color: var(--jg-text) !important;
+  border: 1px solid var(--jg-border) !important;
+  border-radius: var(--jg-radius) !important;
+  padding: 0.375rem 0.75rem !important;
+}
+
+.ui-autocomplete, #ui-id-1 {
+  background-color: var(--jg-bg-elevated) !important;
+  border: 1px solid var(--jg-border) !important;
+}
+.ui-autocomplete li {
+  color: var(--jg-text-muted) !important;
+}
+.ui-state-active, .ui-state-hover {
+  background-color: var(--jg-bg-surface) !important;
+  color: var(--jg-orange) !important;
+}
+
+/* ===== Footer ===== */
+.legal, footer {
+  background-color: var(--jg-bg-surface) !important;
+  border-top: 1px solid var(--jg-border-subtle) !important;
+  color: var(--jg-text-subtle) !important;
+}
+
+/* ===== Misc ===== */
+hr {
+  border-color: var(--jg-border-subtle) !important;
+}
+
+.inheritance, .detail .member-signature {
+  color: var(--jg-text-muted) !important;
+}
+
+/* Hide the default "Generated by javadoc" text styling issues */
+.about-language {
+  color: var(--jg-text-subtle) !important;
+  font-size: 0.8rem !important;
+}

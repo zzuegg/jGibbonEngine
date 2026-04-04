@@ -11,6 +11,54 @@ allprojects {
     }
 }
 
+// ── Aggregated Javadoc ──────────────────────────────────────────────────
+val javadocModules = listOf(
+    ":core",
+    ":graphics:api",
+    ":graphics:common",
+    ":graphics:opengl",
+    ":graphics:vulcan",
+    ":graphics:webgpu"
+)
+
+tasks.register<Javadoc>("javadocAll") {
+    group = "documentation"
+    description = "Generates aggregated Javadoc for all public modules"
+
+    val catalog = rootProject.extensions
+        .getByType<VersionCatalogsExtension>()
+        .named("libs")
+    val javaVersion = catalog.findVersion("java").orElseThrow().requiredVersion
+
+    val javadocProjects = javadocModules.map { project(it) }
+
+    source = files(javadocProjects.map { it.sourceSets.main.get().allJava }).asFileTree
+    classpath = files(javadocProjects.map { it.sourceSets.main.get().compileClasspath })
+
+    setDestinationDir(file("docs/javadoc"))
+
+    javadocTool = javaToolchains.javadocToolFor {
+        languageVersion = JavaLanguageVersion.of(javaVersion)
+    }
+
+    options {
+        this as StandardJavadocDocletOptions
+        encoding = "UTF-8"
+        docEncoding = "UTF-8"
+        charSet = "UTF-8"
+        windowTitle = "jGibbonEngine API"
+        docTitle = "jGibbonEngine API Documentation"
+        header = "<a href='https://zzuegg.github.io/jGibbonEngine'>jGibbonEngine</a>"
+        addStringOption("Xdoclint:none", "-quiet")
+        addBooleanOption("-enable-preview", true)
+        addStringOption("source", javaVersion)
+        stylesheetFile = file("tools/site-generator/src/main/resources/javadoc-theme.css")
+        links("https://docs.oracle.com/en/java/javase/25/docs/api/")
+    }
+
+    javadocProjects.forEach { dependsOn("${it.path}:classes") }
+}
+
 subprojects {
     // Skip java-library for grouping-only projects (e.g. :graphics)
     if (childProjects.isNotEmpty() && projectDir.resolve("src").exists().not()) return@subprojects

@@ -15,6 +15,7 @@ exclude:
   - Gemfile.lock
   - node_modules
   - vendor
+  - superpowers
 
 # Navigation
 nav:
@@ -22,6 +23,10 @@ nav:
     url: "/tutorials/"
   - title: "Examples"
     url: "/examples/"
+  - title: "Modules"
+    url: "/modules/"
+  - title: "Guides"
+    url: "/guides/"
   - title: "Showcase"
     url: "/showcase/"
   - title: "Javadoc / API"

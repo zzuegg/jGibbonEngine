@@ -46,6 +46,10 @@ project(":providers:assimp").projectDir = file("providers/assets/assimp")
 include("platforms:desktop")
 include("platforms:web")
 
+// ── Tools ───────────────────────────────────────────────────────────
+include("tools:site-generator")
+project(":tools:site-generator").projectDir = file("tools/site-generator")
+
 // ── Examples (legacy, to be migrated) ────────────────────────────────
 include("examples")
 

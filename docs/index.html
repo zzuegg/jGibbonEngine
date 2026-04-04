@@ -37,11 +37,11 @@ description: "A modern 3D engine for the JVM — OpenGL, Vulkan, and WebGPU from
   <div class="section-container">
     <div class="stats-grid fade-in">
       <div>
-        <span class="stat-value">Java 25</span>
+        <span class="stat-value">Java {% if site.data.stats %}{{ site.data.stats.javaVersion }}{% else %}25{% endif %}</span>
         <span class="stat-label">Modern JVM</span>
       </div>
       <div>
-        <span class="stat-value">3</span>
+        <span class="stat-value">{% if site.data.stats %}{{ site.data.stats.backendCount }}{% else %}3{% endif %}</span>
         <span class="stat-label">GPU backends</span>
       </div>
       <div>
@@ -68,6 +68,15 @@ description: "A modern 3D engine for the JVM — OpenGL, Vulkan, and WebGPU from
       <h2 class="section-title">What's in the engine</h2>
     </header>
     <div class="features-grid">
+      {% if site.data.modules.features %}
+        {% for feature in site.data.modules.features %}
+      <div class="feature-card fade-in">
+        <span class="feature-icon">{{ feature.icon }}</span>
+        <h3 class="feature-title">{{ feature.name }}</h3>
+        <p class="feature-desc">{{ feature.description }}</p>
+      </div>
+        {% endfor %}
+      {% else %}
       <div class="feature-card fade-in">
         <span class="feature-icon">🎨</span>
         <h3 class="feature-title">Three GPU Backends</h3>
@@ -92,46 +101,7 @@ description: "A modern 3D engine for the JVM — OpenGL, Vulkan, and WebGPU from
           sampler control. Materials are type-safe property maps.
         </p>
       </div>
-      <div class="feature-card fade-in">
-        <span class="feature-icon">🏔️</span>
-        <h3 class="feature-title">Entity Components</h3>
-        <p class="feature-desc">
-          Scene entities with typed components — Transform, MeshData, MaterialData.
-          Parent-child hierarchy for scene graph organisation.
-        </p>
-      </div>
-      <div class="feature-card fade-in">
-        <span class="feature-icon">📦</span>
-        <h3 class="feature-title">Resource Management</h3>
-        <p class="feature-desc">
-          GpuResourceManager tracks all GPU resources with deferred deletion and
-          leak detection. WeakCache for automatic texture/mesh cleanup.
-        </p>
-      </div>
-      <div class="feature-card fade-in">
-        <span class="feature-icon">🌍</span>
-        <h3 class="feature-title">Desktop + Web</h3>
-        <p class="feature-desc">
-          Desktop via LWJGL (GLFW + OpenGL/Vulkan). Browser via TeaVM + WebGPU.
-          Same BaseApplication, same scene code, different platform config.
-        </p>
-      </div>
-      <div class="feature-card fade-in">
-        <span class="feature-icon">🧪</span>
-        <h3 class="feature-title">Visual Regression Tests</h3>
-        <p class="feature-desc">
-          28 screenshot test scenes run on all 3 backends automatically. Cross-backend
-          comparison catches rendering differences. Reference images track regressions.
-        </p>
-      </div>
-      <div class="feature-card fade-in">
-        <span class="feature-icon">📖</span>
-        <h3 class="feature-title">Compilable Tutorials</h3>
-        <p class="feature-desc">
-          Tutorials are real Java files that compile against the engine.
-          Auto-generated into website docs — always up to date.
-        </p>
-      </div>
+      {% endif %}
     </div>
   </div>
 </section>

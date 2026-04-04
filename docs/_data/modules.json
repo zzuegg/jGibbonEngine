@@ -1,0 +1,181 @@
+{
+  "modules": [
+    {
+      "name": "Core",
+      "description": "Backend-agnostic engine foundation — math, ECS, events, assets, profiler, and resource management.",
+      "category": "Core",
+      "icon": "⚙️",
+      "slug": "core",
+      "features": ["Math Types (Vec3, Mat4, Quat)", "Entity-Component System", "Event Bus", "Asset Management", "Profiler", "Resource Cleaner"]
+    },
+    {
+      "name": "Graphics API",
+      "description": "Low-level SPI that all backends implement — RenderDevice, descriptors, command buffers, and pipeline state.",
+      "category": "Graphics",
+      "icon": "🎨",
+      "slug": "graphics-api",
+      "features": ["RenderDevice SPI", "Pipeline Descriptors", "Command Buffers", "Texture & Buffer Management"]
+    },
+    {
+      "name": "Graphics Common",
+      "description": "High-level rendering engine — Renderer, ShaderManager, material system, mesh handling, and render graph orchestration.",
+      "category": "Graphics",
+      "icon": "🖥️",
+      "slug": "graphics-common",
+      "features": ["Renderer Orchestration", "Shader Manager", "PBR Materials", "Render Graph", "GPU Resource Manager"]
+    },
+    {
+      "name": "OpenGL Backend",
+      "description": "OpenGL 4.5 DSA backend — direct state access, bindless resources, and full pipeline implementation.",
+      "category": "Graphics Backend",
+      "icon": "🟢",
+      "slug": "opengl-backend",
+      "features": ["OpenGL 4.5", "Direct State Access", "Bindless Textures", "GLSL Shaders"]
+    },
+    {
+      "name": "Vulkan Backend",
+      "description": "Vulkan backend with explicit memory management, command pools, and SPIR-V shader pipeline.",
+      "category": "Graphics Backend",
+      "icon": "🔴",
+      "slug": "vulkan-backend",
+      "features": ["Vulkan 1.3", "SPIR-V Shaders", "Explicit Memory Management", "Command Pools"]
+    },
+    {
+      "name": "WebGPU Backend",
+      "description": "WebGPU backend for browser and native — WGSL shaders, modern GPU API, runs on desktop and web.",
+      "category": "Graphics Backend",
+      "icon": "🌐",
+      "slug": "webgpu-backend",
+      "features": ["WebGPU API", "WGSL Shaders", "Browser Support", "Native via Dawn/wgpu"]
+    },
+    {
+      "name": "Desktop Platform",
+      "description": "Opinionated desktop assembly — filesystem asset sources, native Slang, LWJGL windowing, JVM deployment.",
+      "category": "Platform",
+      "icon": "💻",
+      "slug": "desktop-platform",
+      "features": ["Filesystem Assets", "Native Slang", "LWJGL", "JVM Deployment"]
+    },
+    {
+      "name": "Web Platform",
+      "description": "Opinionated web assembly — fetch-based asset sources, Slang WASM, TeaVM compilation, browser deployment.",
+      "category": "Platform",
+      "icon": "🌐",
+      "slug": "web-platform",
+      "features": ["Fetch API Assets", "Slang WASM", "TeaVM", "Browser Deployment"]
+    },
+    {
+      "name": "Assimp Asset Loader",
+      "description": "Asset loading via Assimp — imports 40+ 3D model formats (OBJ, FBX, glTF, etc.) through Java FFM bindings.",
+      "category": "Provider",
+      "icon": "📦",
+      "slug": "assimp-asset-loader",
+      "features": ["40+ Model Formats", "Java FFM Bindings", "Mesh & Material Import"]
+    },
+    {
+      "name": "GLFW Windowing",
+      "description": "GLFW windowing provider via LWJGL — window creation, input handling, and OpenGL/Vulkan context management.",
+      "category": "Provider",
+      "icon": "🪟",
+      "slug": "glfw-windowing",
+      "features": ["GLFW 3", "Window Management", "Input Handling"]
+    },
+    {
+      "name": "LWJGL OpenGL Provider",
+      "description": "LWJGL bindings for the OpenGL backend — native OpenGL 4.5 access on desktop platforms.",
+      "category": "Provider",
+      "icon": "🔌",
+      "slug": "lwjgl-opengl-provider",
+      "features": ["LWJGL 3", "Desktop OpenGL"]
+    },
+    {
+      "name": "LWJGL Vulkan Provider",
+      "description": "LWJGL bindings for the Vulkan backend — native Vulkan access on desktop platforms.",
+      "category": "Provider",
+      "icon": "🔌",
+      "slug": "lwjgl-vulkan-provider",
+      "features": ["LWJGL 3", "Desktop Vulkan"]
+    },
+    {
+      "name": "SDL3 Windowing",
+      "description": "SDL3 windowing provider — cross-platform window creation and input via Java FFM bindings.",
+      "category": "Provider",
+      "icon": "🪟",
+      "slug": "sdl3-windowing",
+      "features": ["SDL 3", "Java FFM", "Cross-Platform"]
+    },
+    {
+      "name": "Slang Shader Compiler",
+      "description": "Slang shader compilation provider — write shaders once, compile to GLSL, SPIR-V, or WGSL per backend.",
+      "category": "Provider",
+      "icon": "🔮",
+      "slug": "slang-shader-compiler",
+      "features": ["Cross-Backend Shaders", "GLSL Output", "SPIR-V Output", "WGSL Output", "WASM Support"]
+    },
+    {
+      "name": "jWebGPU Provider",
+      "description": "Native WebGPU bindings for desktop — uses Dawn/wgpu for WebGPU on JVM without a browser.",
+      "category": "Provider",
+      "icon": "🔌",
+      "slug": "jwebgpu-provider",
+      "features": ["Native WebGPU", "Dawn/wgpu"]
+    }
+  ],
+  "features": [
+    {
+      "name": "Valhalla-Ready Math",
+      "description": "Math types are Java records, ready for Project Valhalla value types. Zero-allocation vector math.",
+      "icon": "🔢"
+    },
+    {
+      "name": "Transaction System",
+      "description": "Atomic resource creation with automatic cleanup on failure. All GPU resource setup goes through transactions.",
+      "icon": "🛡️"
+    },
+    {
+      "name": "Module System",
+      "description": "Dependency-aware module lifecycle with topological ordering, fixed/variable timestep, and state machine transitions.",
+      "icon": "🧩"
+    },
+    {
+      "name": "Visual Regression Tests",
+      "description": "Screenshot test scenes run on all backends automatically. Cross-backend comparison catches rendering differences.",
+      "icon": "🧪"
+    },
+    {
+      "name": "Compilable Tutorials",
+      "description": "Tutorials are real Java files that compile against the engine. Auto-generated into website docs — always up to date.",
+      "icon": "📖"
+    },
+    {
+      "name": "Entity Components",
+      "description": "Scene entities with typed components — Transform, MeshData, MaterialData. Parent-child hierarchy for scene graph organisation.",
+      "icon": "🏔️"
+    },
+    {
+      "name": "Resource Management",
+      "description": "GpuResourceManager tracks all GPU resources with deferred deletion and leak detection. WeakCache for automatic cleanup.",
+      "icon": "📦"
+    },
+    {
+      "name": "PBR Materials",
+      "description": "Physically-based rendering with albedo, roughness, metallic, and per-texture sampler control. Materials are type-safe property maps.",
+      "icon": "🎨"
+    },
+    {
+      "name": "Render Graph",
+      "description": "Declarative render pass orchestration with automatic resource lifetime management and dependency resolution.",
+      "icon": "📊"
+    },
+    {
+      "name": "Desktop + Web",
+      "description": "Same BaseApplication, same scene code — desktop via LWJGL (GLFW + OpenGL/Vulkan), browser via TeaVM + WebGPU.",
+      "icon": "🌍"
+    },
+    {
+      "name": "Slang Shaders",
+      "description": "Write shaders once in Slang. The engine compiles them to GLSL, SPIR-V, or WGSL depending on the active backend — including in the browser via WASM.",
+      "icon": "🔮"
+    }
+  ]
+}

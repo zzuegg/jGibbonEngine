@@ -115,8 +115,7 @@ pre code {
   font-size: inherit;
 }
 
-/* Rouge syntax highlighting */
-.highlight { background: var(--bg-surface); }
+/* Rouge syntax highlighting — token colors */
 .highlight .k  { color: #ff79c6; }
 .highlight .kd { color: #ff79c6; }
 .highlight .s  { color: #f1fa8c; }
@@ -131,6 +130,71 @@ pre code {
 .highlight .o  { color: #ff79c6; }
 .highlight .mi { color: var(--blue); }
 .highlight .p  { color: var(--text-muted); }
+
+/* --- Unified Code Block Fix --- */
+
+/* 1. Outermost container: Single source of truth for spacing */
+.highlighter-rouge {
+  display: block;
+  margin-bottom: 1.5rem !important;
+}
+
+/* 2. Unified appearance: Border and background only on this layer */
+.highlighter-rouge .highlight {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  margin-bottom: 0 !important;
+}
+
+/* 3. Table Layout: Ensure it fills the container without gaps */
+.rouge-table {
+  border-spacing: 0 !important;
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin: 0 !important;
+}
+
+/* 4. Line Number Column: Shrink to fit numbers and add a divider */
+.rouge-gutter.gl {
+  width: 1% !important;
+  white-space: nowrap !important;
+  border-right: 1px solid var(--border) !important;
+  vertical-align: top !important;
+}
+
+/* 5. Line Number Styling: Right-aligned, subtle color, and not selectable */
+.lineno {
+  text-align: right !important;
+  padding: 20px 12px 20px 24px !important;
+  color: rgba(230, 237, 243, 0.4) !important;
+  user-select: none !important;
+  width: min-content !important;
+  background-color: transparent !important;
+  border: none !important;
+  margin: 0 !important;
+  font-family: "JetBrains Mono", "Fira Code", monospace !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+}
+
+/* 6. Code Area Styling: Ensure perfect vertical alignment with line numbers */
+.rouge-code {
+  vertical-align: top !important;
+}
+
+.rouge-code pre {
+  padding: 20px 24px !important;
+  background-color: transparent !important;
+  border: none !important;
+  margin: 0 !important;
+  overflow: auto !important;
+  font-family: "JetBrains Mono", "Fira Code", monospace !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+}
 
 /* ===================================================
    Navigation

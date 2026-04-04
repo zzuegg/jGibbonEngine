@@ -35,13 +35,23 @@ See `NOTES.md` for all engine code conventions. Key points:
 ## Project Structure
 
 - `core/` — Backend-agnostic engine code (math, events, scene, assets, profiler)
-- `graphics:api` — Shared rendering types (commands, descriptors, handles)
-- `graphics:common` — High-level Renderer API (the public user interface)
-- `graphics:opengl` — OpenGL 4.5 DSA backend
-- `graphics:vulcan` — Vulkan backend
-- `graphics:webgpu` — WebGPU backend (stub, needs wgpu-native)
-- `bindings:sdl3` — SDL3 window toolkit via LWJGL
-- `bindings:wgpu` — wgpu-native FFM bindings
+- `core-processor/` — Annotation processor for core
+- `graphics/` — Graphics abstraction layers
+  - `api` — Low-level SPI: interfaces, descriptors, commands that backends implement
+  - `common` — High-level engine: Renderer, Engine, ShaderManager, materials, meshes
+  - `opengl` — OpenGL 4.5 DSA backend
+  - `vulcan` — Vulkan backend
+  - `webgpu` — WebGPU backend
+- `providers/` — Concrete implementations (Gradle paths stay `providers:<name>`, dirs are categorized)
+  - `graphics/desktop/` — lwjgl-gl, lwjgl-vk, jwebgpu
+  - `graphics/web/` — teavm-webgpu
+  - `windowing/desktop/` — lwjgl-glfw, sdl3
+  - `windowing/web/` — teavm-windowing
+  - `shader/` — slang
+  - `assets/` — assimp
+- `platforms/` — Opinionated assembly layers that wire providers with platform defaults
+  - `desktop` — Filesystem asset sources, native slang, JVM deployment
+  - `web` — Fetch asset sources, slang-wasm, TeaVM compilation, web deployment
 - `examples/` — Example applications
 
 ## Running

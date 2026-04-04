@@ -36,18 +36,21 @@ jobs:
       - name: Grant Gradle wrapper execute permission
         run: chmod +x gradlew
 
-      - name: Generate tutorial pages from source
-        run: ./gradlew :samples:tutorials:generateTutorials --no-daemon
+      - name: Generate site content from source
+        run: ./gradlew :tools:site-generator:generateSite --no-daemon
 
-      - name: Commit generated tutorials (if changed)
+      - name: Generate aggregated Javadoc
+        run: ./gradlew javadocAll --no-daemon
+
+      - name: Commit generated content (if changed)
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/tutorials/ || true
+          git add docs/tutorials/ docs/examples/ docs/modules/ docs/_data/ || true
           if git diff --cached --quiet; then
-            echo "No tutorial changes — skipping commit."
+            echo "No generated content changes — skipping commit."
           else
-            git commit -m "docs: regenerate tutorials from source [skip ci]"
+            git commit -m "docs: regenerate site from source [skip ci]"
             git push
           fi
 
