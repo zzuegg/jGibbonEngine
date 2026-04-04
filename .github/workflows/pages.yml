@@ -1,0 +1,86 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow one concurrent deployment
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # needed to commit generated API docs back to docs/javadoc/api/
+  pages: write
+  id-token: write
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 1: Generate API docs with Dokka and commit them to docs/javadoc/api/
+  # ─────────────────────────────────────────────────────────────────────────
+  build-api-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so the commit step works cleanly
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Grant Gradle wrapper execute permission
+        run: chmod +x gradlew
+
+      - name: Generate Dokka HTML documentation
+        run: ./gradlew copyDokkaToPages --no-daemon
+
+      - name: Commit generated API docs (if changed)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/javadoc/api/ || true
+          if git diff --cached --quiet; then
+            echo "No API doc changes — skipping commit."
+          else
+            git commit -m "docs: regenerate API reference [skip ci]"
+            git push
+          fi
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Job 2: Deploy /docs to GitHub Pages (Jekyll build via Pages action)
+  # ─────────────────────────────────────────────────────────────────────────
+  deploy-pages:
+    needs: build-api-docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository (after API docs commit)
+        uses: actions/checkout@v4
+        with:
+          ref: main   # pull the latest commit, which may include API docs
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build Jekyll site
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,22 @@
+<nav class="site-nav" id="site-nav">
+  <div class="nav-container">
+    <a class="nav-brand" href="{{ site.baseurl }}/">
+      <img src="{{ site.baseurl }}/assets/img/mascot.svg" alt="jGibbonEngine Mascot" class="nav-mascot" />
+      <span class="nav-title">jGibbonEngine</span>
+    </a>
+    <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      {% for item in site.nav %}
+      <li>
+        <a href="{% if item.external %}{{ item.url }}{% else %}{{ site.baseurl }}{{ item.url }}{% endif %}"
+           {% if item.external %}target="_blank" rel="noopener noreferrer"{% endif %}
+           class="nav-link {% if page.url == item.url %}active{% endif %}">
+          {{ item.title }}{% if item.external %}<span class="ext-icon">↗</span>{% endif %}
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</nav>

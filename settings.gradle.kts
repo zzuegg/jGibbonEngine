@@ -1,4 +1,4 @@
-rootProject.name = "engine"
+rootProject.name = "jGibbonEngine"
 
 // ── Core ─────────────────────────────────────────────────────────────
 include("core")
