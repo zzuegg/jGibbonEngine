@@ -74,6 +74,125 @@ public class JWebGpuBindings implements WgpuBindings {
         }
     }
 
+    // ===== Surface =====
+
+    private boolean surfaceEnabled = Boolean.getBoolean("engine.webgpu.surface");
+    private boolean surfaceConfigured = false;
+
+    /** Enable surface creation programmatically. Also settable via -Dengine.webgpu.surface=true. */
+    public void enableSurface(boolean enabled) { this.surfaceEnabled = enabled; }
+
+    @Override
+    public boolean hasSurface() { return surfaceConfigured; }
+
+    @Override
+    public long configureSurface(long instance, long device, dev.engine.graphics.window.WindowHandle window) {
+        var inst = get(instance, WGPUInstance.class);
+        var dev = get(device, WGPUDevice.class);
+        if (inst == null || dev == null) return 0;
+
+        var surfaceInfo = window.surfaceInfo();
+        if (surfaceInfo == null) {
+            log.info("WindowHandle does not provide surfaceInfo — rendering offscreen");
+            return 0;
+        }
+
+        if (!surfaceEnabled) {
+            log.info("WebGPU surface disabled (enable by removing -Dengine.webgpu.surface=false) — rendering offscreen");
+            return 0;
+        }
+
+        WGPUSurface surface;
+        try {
+            var displayHandle = wrapPointer(surfaceInfo.display());
+            var windowHandle = wrapPointer(surfaceInfo.window());
+            surface = switch (surfaceInfo.type()) {
+                case WAYLAND -> inst.createLinuxSurface(true, windowHandle, displayHandle);
+                case X11 -> inst.createLinuxSurface(false, windowHandle, displayHandle);
+                case WINDOWS -> inst.createWindowsSurface(windowHandle);
+                case COCOA -> inst.createMacSurface(windowHandle);
+            };
+        } catch (Throwable t) {
+            log.warn("WebGPU surface creation failed: {} — rendering offscreen", t.getMessage());
+            return 0;
+        }
+
+        if (surface == null || surface.native_isNULL()) {
+            log.info("WebGPU surface creation returned null — rendering offscreen");
+            return 0;
+        }
+
+        var config = WGPUSurfaceConfiguration.obtain();
+        config.setDevice(dev);
+        config.setFormat(WGPUTextureFormat.BGRA8Unorm);
+        config.setWidth(window.width());
+        config.setHeight(window.height());
+        config.setPresentMode(WGPUPresentMode.Fifo);
+        config.setAlphaMode(WGPUCompositeAlphaMode.Auto);
+        config.setUsage(WGPUTextureUsage.RenderAttachment);
+
+        try {
+            surface.configure(config);
+        } catch (Throwable t) {
+            log.warn("WebGPU surface configure failed: {} — rendering offscreen", t.getMessage());
+            return 0;
+        }
+
+        surfaceConfigured = true;
+        log.info("WebGPU surface configured ({}x{}, {})", window.width(), window.height(), surfaceInfo.type());
+        return assignHandle(surface);
+    }
+
+    @Override
+    public long getSurfaceTextureView(long surface) {
+        var surf = get(surface, WGPUSurface.class);
+        if (surf == null) return 0;
+        var surfTexture = WGPUSurfaceTexture.obtain();
+        surf.getCurrentTexture(surfTexture);
+        var texture = new WGPUTexture();
+        surfTexture.getTexture(texture);
+        if (texture.native_isNULL()) return 0;
+        var viewDesc = WGPUTextureViewDescriptor.obtain();
+        viewDesc.setFormat(WGPUTextureFormat.BGRA8Unorm);
+        viewDesc.setDimension(WGPUTextureViewDimension._2D);
+        viewDesc.setBaseMipLevel(0);
+        viewDesc.setMipLevelCount(1);
+        viewDesc.setBaseArrayLayer(0);
+        viewDesc.setArrayLayerCount(1);
+        viewDesc.setAspect(WGPUTextureAspect.All);
+        var view = new WGPUTextureView();
+        texture.createView(viewDesc, view);
+        if (view.native_isNULL()) return 0;
+        return assignHandle(view);
+    }
+
+    @Override
+    public void releaseSurfaceTextureView(long textureView) {
+        var view = get(textureView, WGPUTextureView.class);
+        if (view != null) {
+            view.release();
+            removeHandle(textureView);
+        }
+    }
+
+    @Override
+    public void surfacePresent(long surface) {
+        var surf = get(surface, WGPUSurface.class);
+        if (surf != null) {
+            surf.present();
+        }
+    }
+
+    /**
+     * Wraps a raw native pointer as an IDLBase for jWebGPU surface creation methods.
+     * Uses native_new() + native_setAddress() to match jWebGPU's expected pattern.
+     */
+    private static com.github.xpenatan.jParser.idl.IDLBase wrapPointer(long address) {
+        var handle = com.github.xpenatan.jParser.idl.IDLBase.native_new();
+        handle.native_setAddress(address);
+        return handle;
+    }
+
     // ===== Instance =====
 
     @Override

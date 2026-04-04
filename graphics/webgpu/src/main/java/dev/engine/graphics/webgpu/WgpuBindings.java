@@ -2,6 +2,7 @@ package dev.engine.graphics.webgpu;
 
 import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
+import dev.engine.graphics.window.WindowHandle;
 
 import java.nio.ByteBuffer;
 
@@ -34,10 +35,11 @@ public interface WgpuBindings {
 
     /**
      * Configures a presentation surface for the given window.
-     * Desktop: creates a wgpu surface. Web: configures the canvas context.
+     * Desktop: creates a wgpu surface using WindowHandle.surfaceInfo().
+     * Web: configures the canvas context.
      * Returns a surface/context handle, or 0 if not supported (headless).
      */
-    default long configureSurface(long device, long windowHandle, int width, int height) { return 0; }
+    default long configureSurface(long instance, long device, WindowHandle window) { return 0; }
 
     /**
      * Gets the current surface texture view for rendering.
@@ -49,6 +51,12 @@ public interface WgpuBindings {
      * Releases a surface texture view obtained from getSurfaceTextureView.
      */
     default void releaseSurfaceTextureView(long textureView) {}
+
+    /**
+     * Presents the current surface texture to the screen.
+     * Desktop: calls wgpuSurfacePresent. Web: no-op (browser presents after submit).
+     */
+    default void surfacePresent(long surface) {}
 
     /**
      * Returns true if a presentation surface is available.

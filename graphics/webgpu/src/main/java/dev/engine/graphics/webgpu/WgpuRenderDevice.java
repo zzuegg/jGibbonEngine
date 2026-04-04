@@ -186,7 +186,8 @@ public class WgpuRenderDevice implements RenderDevice {
             int stencilMask,
             String stencilPassOp,
             String stencilFailOp,
-            String stencilDepthFailOp
+            String stencilDepthFailOp,
+            int colorTargetFormat
     ) {}
 
     private final Map<PipelineStateKey, Long> pipelineVariants = new HashMap<>();
@@ -236,8 +237,12 @@ public class WgpuRenderDevice implements RenderDevice {
             wgpuQueue = gpu.deviceGetQueue(wgpuDevice);
 
             // Configure presentation surface if available
-            surfaceHandle = gpu.configureSurface(wgpuDevice, window.nativeHandle(),
-                    window.width(), window.height());
+            try {
+                surfaceHandle = gpu.configureSurface(wgpuInstance, wgpuDevice, window);
+            } catch (Throwable t) {
+                log.warn("WebGPU surface creation failed: {} — rendering offscreen", t.getMessage());
+                surfaceHandle = 0;
+            }
             if (surfaceHandle != 0) {
                 log.info("WebGPU device created with presentation surface");
             } else {
@@ -684,12 +689,25 @@ public class WgpuRenderDevice implements RenderDevice {
                 stencilMask,
                 stencilFront,
                 stencilBack,
-                WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM,
+                currentColorTargetFormat(),
                 blend[0], blend[1], WgpuBindings.BLEND_OP_ADD,
                 blend[2], blend[3], WgpuBindings.BLEND_OP_ADD
         );
 
         return gpu.deviceCreateRenderPipeline(wgpuDevice, desc);
+    }
+
+    private int currentColorTargetFormat() {
+        if (currentRenderTarget != null) {
+            var rt = renderTargets.get(currentRenderTarget);
+            if (rt != null && !rt.colorTextures().isEmpty()) {
+                var colorTex = textures.get(rt.colorTextures().getFirst());
+                if (colorTex != null) return colorTex.wgpuFormat();
+            }
+        }
+        return surfaceHandle != 0
+                ? WgpuBindings.TEXTURE_FORMAT_BGRA8_UNORM
+                : WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM;
     }
 
     private WgpuBindings.StencilFaceState buildStencilFaceState(boolean enabled) {
@@ -793,7 +811,8 @@ public class WgpuRenderDevice implements RenderDevice {
                 stencilMask,
                 stencilPassOp.name(),
                 stencilFailOp.name(),
-                stencilDepthFailOp.name()
+                stencilDepthFailOp.name(),
+                currentColorTargetFormat()
         );
 
         return pipelineVariants.computeIfAbsent(key, k -> buildPipelineVariant(basePipeline));
@@ -859,12 +878,14 @@ public class WgpuRenderDevice implements RenderDevice {
         if (defaultRenderTarget != null) {
             destroyRenderTarget(defaultRenderTarget);
         }
+        // Use BGRA8 when presenting to a surface (matches surface format), RGBA8 otherwise
+        var colorFormat = surfaceHandle != 0 ? TextureFormat.BGRA8 : TextureFormat.RGBA8;
         defaultRenderTarget = createRenderTarget(
                 RenderTargetDescriptor.colorDepth(width, height,
-                        TextureFormat.RGBA8, TextureFormat.DEPTH24_STENCIL8));
+                        colorFormat, TextureFormat.DEPTH24_STENCIL8));
         defaultRtWidth = width;
         defaultRtHeight = height;
-        log.debug("Created default render target {}x{}", width, height);
+        log.debug("Created default render target {}x{} ({})", width, height, colorFormat);
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -918,10 +939,13 @@ public class WgpuRenderDevice implements RenderDevice {
             currentBindGroup = 0;
         }
 
-        // Release surface texture view — browser presents automatically after submit
+        // Release surface texture view and present
         if (canvasTextureViewOverride != 0) {
             gpu.releaseSurfaceTextureView(canvasTextureViewOverride);
             canvasTextureViewOverride = 0;
+        }
+        if (surfaceHandle != 0) {
+            gpu.surfacePresent(surfaceHandle);
         }
     }
 

@@ -1,5 +1,6 @@
 package dev.engine.examples;
 
+import dev.engine.core.input.*;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.Entity;
@@ -7,11 +8,19 @@ import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
+import dev.engine.bindings.sdl3.Sdl3WindowToolkit;
+import dev.engine.graphics.GraphicsBackendFactory;
 import dev.engine.graphics.opengl.OpenGlBackend;
 import dev.engine.graphics.vulkan.VulkanBackend;
+import dev.engine.graphics.webgpu.WebGpuBackend;
+import dev.engine.graphics.window.WindowToolkit;
 import dev.engine.platform.desktop.DesktopPlatform;
+import dev.engine.windowing.glfw.GlfwInputProvider;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
+import dev.engine.providers.jwebgpu.JWebGpuBindings;
 import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
+
+import java.util.List;
 
 public class MyGame extends BaseApplication {
 
@@ -53,7 +62,24 @@ public class MyGame extends BaseApplication {
     }
 
     @Override
-    protected void update(float dt) {
+    protected InputProvider createInputProvider() {
+        if (window() instanceof GlfwWindowToolkit.GlfwWindowHandle glfwWindow) {
+            return new GlfwInputProvider(glfwWindow);
+        }
+        return null;
+    }
+
+    @Override
+    protected void update(float dt, List<InputEvent> inputEvents) {
+        for (var event : inputEvents) {
+            switch (event) {
+                case InputEvent.KeyPressed e when e.keyCode() == KeyCode.ESCAPE -> {
+                    // Close handled by window
+                }
+                default -> {}
+            }
+        }
+
         float t = (float) time();
         float aspect = (float) window().width() / Math.max(window().height(), 1);
         camera().setPerspective((float) Math.toRadians(60), aspect, 0.1f, 100f);
@@ -66,24 +92,37 @@ public class MyGame extends BaseApplication {
 
     public static void main(String[] args) {
         String backend = System.getProperty("engine.backend", "opengl");
+        String windowing = System.getProperty("engine.windowing", "glfw");
 
-        var graphicsBackend = switch (backend) {
-            case "vulkan" -> {
-                var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
-                yield VulkanBackend.factory(toolkit, new VulkanBackend.SurfaceCreator() {
-                    public String[] requiredInstanceExtensions() {
-                        return GlfwWindowToolkit.getRequiredVulkanExtensions();
-                    }
-                    public long createSurface(long instance, long windowHandle) {
-                        return GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
-                    }
-                }, new LwjglVkBindings());
+        WindowToolkit toolkit;
+        if ("sdl3".equals(windowing)) {
+            toolkit = new Sdl3WindowToolkit("opengl".equals(backend));
+        } else {
+            var hints = "opengl".equals(backend)
+                    ? GlfwWindowToolkit.OPENGL_HINTS
+                    : GlfwWindowToolkit.NO_API_HINTS;
+            toolkit = new GlfwWindowToolkit(hints);
+        }
+
+        GraphicsBackendFactory graphicsBackend = switch (backend) {
+            case "vulkan" -> VulkanBackend.factory(toolkit, new VulkanBackend.SurfaceCreator() {
+                public String[] requiredInstanceExtensions() {
+                    return GlfwWindowToolkit.getRequiredVulkanExtensions();
+                }
+                public long createSurface(long instance, long windowHandle) {
+                    return GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
+                }
+            }, new LwjglVkBindings());
+            case "webgpu" -> {
+                var gpu = new JWebGpuBindings();
+                gpu.enableSurface(true);
+                yield WebGpuBackend.factory(toolkit, gpu);
             }
-            default -> OpenGlBackend.factory(new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
+            default -> OpenGlBackend.factory(toolkit, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
         };
 
         var config = EngineConfig.builder()
-                .windowTitle("My Game (" + backend + ")")
+                .windowTitle("My Game (" + windowing + "/" + backend + ")")
                 .windowSize(1280, 720)
                 .maxFrames(Integer.getInteger("engine.maxFrames", 0))
                 .platform(DesktopPlatform.builder().build())
