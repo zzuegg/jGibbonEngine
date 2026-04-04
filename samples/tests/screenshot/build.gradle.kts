@@ -35,3 +35,21 @@ tasks.test {
         environment("LD_PRELOAD", jemalloc.absolutePath)
     }
 }
+
+tasks.register<JavaExec>("screenshotReport") {
+    group = "verification"
+    description = "Runs screenshot tests and generates an HTML comparison report"
+    dependsOn("test")
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass = "dev.engine.tests.screenshot.ScreenshotReportGenerator"
+    args = listOf(
+        layout.buildDirectory.dir("screenshots").get().asFile.absolutePath,
+        layout.buildDirectory.dir("test-results/test").get().asFile.absolutePath,
+        layout.buildDirectory.dir("screenshots/report.html").get().asFile.absolutePath
+    )
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    doLast {
+        val report = layout.buildDirectory.file("screenshots/report.html").get().asFile
+        println("Report: file://${report.absolutePath}")
+    }
+}
