@@ -2,19 +2,19 @@ package dev.engine.graphics.opengl;
 
 import dev.engine.graphics.GraphicsBackend;
 import dev.engine.graphics.GraphicsBackendFactory;
-import dev.engine.windowing.glfw.GlfwWindowToolkit;
+import dev.engine.graphics.window.WindowToolkit;
 
 /**
  * OpenGL backend factory.
- * Creates GLFW window (with OpenGL hints) + OpenGL 4.5 render device.
+ * Takes an externally provided window toolkit and creates an OpenGL render device.
+ * The toolkit must create windows with an OpenGL context.
  */
 public final class OpenGlBackend {
 
     private OpenGlBackend() {}
 
-    public static GraphicsBackendFactory factory(GlBindings gl) {
-        return windowDesc -> {
-            var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
+    public static GraphicsBackendFactory factory(WindowToolkit toolkit, GlBindings gl) {
+        return (windowDesc, config) -> {
             var window = toolkit.createWindow(windowDesc);
             var device = new GlRenderDevice(window, gl);
             return new GraphicsBackend(toolkit, window, device);

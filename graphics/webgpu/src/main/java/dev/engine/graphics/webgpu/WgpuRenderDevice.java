@@ -207,10 +207,14 @@ public class WgpuRenderDevice implements RenderDevice {
     private final IntFunction<NativeMemory> memoryFactory;
 
     public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu) {
-        this(window, gpu, WgpuRenderDevice::createDefaultMemory);
+        this(window, gpu, false, WgpuRenderDevice::createDefaultMemory);
     }
 
-    public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu, IntFunction<NativeMemory> memoryFactory) {
+    public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu, boolean presentToSurface) {
+        this(window, gpu, presentToSurface, WgpuRenderDevice::createDefaultMemory);
+    }
+
+    public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu, boolean presentToSurface, IntFunction<NativeMemory> memoryFactory) {
         this.gpu = gpu;
         this.memoryFactory = memoryFactory;
         boolean available = false;
@@ -236,12 +240,14 @@ public class WgpuRenderDevice implements RenderDevice {
 
             wgpuQueue = gpu.deviceGetQueue(wgpuDevice);
 
-            // Configure presentation surface if available
-            try {
-                surfaceHandle = gpu.configureSurface(wgpuInstance, wgpuDevice, window);
-            } catch (Throwable t) {
-                log.warn("WebGPU surface creation failed: {} — rendering offscreen", t.getMessage());
-                surfaceHandle = 0;
+            // Configure presentation surface if requested
+            if (presentToSurface) {
+                try {
+                    surfaceHandle = gpu.configureSurface(wgpuInstance, wgpuDevice, window);
+                } catch (Throwable t) {
+                    log.warn("WebGPU surface creation failed: {} — rendering offscreen", t.getMessage());
+                    surfaceHandle = 0;
+                }
             }
             if (surfaceHandle != 0) {
                 log.info("WebGPU device created with presentation surface");

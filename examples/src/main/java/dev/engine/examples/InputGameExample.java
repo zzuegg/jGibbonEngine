@@ -241,11 +241,7 @@ public class InputGameExample extends BaseApplication {
                     return GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
                 }
             }, new LwjglVkBindings());
-            case "webgpu" -> {
-                var gpu = new JWebGpuBindings();
-                gpu.enableSurface(true);
-                yield WebGpuBackend.factory(toolkit, gpu);
-            }
+            case "webgpu" -> WebGpuBackend.factory(toolkit, new JWebGpuBindings());
             default -> OpenGlBackend.factory(toolkit, new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
         };
 

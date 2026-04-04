@@ -1,7 +1,7 @@
 package dev.engine.graphics.common.engine;
 
 import dev.engine.core.asset.AssetManager;
-import dev.engine.core.input.InputState;
+import dev.engine.core.input.*;
 import dev.engine.core.module.ModuleManager;
 import dev.engine.core.module.Time;
 import dev.engine.core.profiler.Profiler;
@@ -16,6 +16,8 @@ import dev.engine.graphics.window.WindowToolkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+
 /**
  * Base class for engine applications. Extend this and override lifecycle methods.
  *
@@ -29,8 +31,13 @@ import org.slf4j.LoggerFactory;
  *         renderer().setMesh(entity, ...);
  *     }
  *
- *     {@literal @}Override protected void update(float deltaTime) {
- *         scene().setLocalTransform(entity, Mat4.rotationY(time()));
+ *     {@literal @}Override protected void update(float deltaTime, List&lt;InputEvent&gt; inputEvents) {
+ *         for (var event : inputEvents) {
+ *             switch (event) {
+ *                 case InputEvent.KeyPressed e when e.keyCode() == KeyCode.ESCAPE -&gt; window().close();
+ *                 default -&gt; {}
+ *             }
+ *         }
  *     }
  * }
  *
@@ -49,7 +56,7 @@ public abstract class BaseApplication {
     private Engine engine;
     private WindowToolkit toolkit;
     private WindowHandle window;
-    private InputState input;
+    private InputSystem inputSystem;
     private Camera defaultCamera;
 
     /**
@@ -60,7 +67,8 @@ public abstract class BaseApplication {
         try {
             var windowDesc = new WindowDescriptor(
                     config.windowTitle(), config.windowSize().x(), config.windowSize().y());
-            var backend = config.graphicsBackend().create(windowDesc);
+            var gfxConfig = new dev.engine.graphics.GraphicsConfig(config.headless());
+            var backend = config.graphicsBackend().create(windowDesc, gfxConfig);
             this.toolkit = backend.toolkit();
             this.window = backend.window();
             runInternal(config, backend);
@@ -70,9 +78,22 @@ public abstract class BaseApplication {
         }
     }
 
+    /**
+     * Override this to create and register an InputProvider for the platform.
+     * Called during initialization. Return null if no input provider is available.
+     */
+    protected InputProvider createInputProvider() {
+        return null;
+    }
+
     private void runInternal(EngineConfig config, GraphicsBackend backend) {
         this.engine = new Engine(config, config.platform(), backend.device());
-        this.input = new InputState();
+        this.inputSystem = new DefaultInputSystem();
+
+        var inputProvider = createInputProvider();
+        if (inputProvider != null) {
+            inputSystem.registerProvider(inputProvider);
+        }
 
         // Default camera
         defaultCamera = engine.renderer().createCamera();
@@ -93,16 +114,28 @@ public abstract class BaseApplication {
                 lastTime = now;
 
                 toolkit.pollEvents();
-                input.update();
+
+                var inputEvents = inputSystem.queue().drainInput();
+                var windowEvents = inputSystem.queue().drainWindow();
+
+                // Process window events
+                for (var we : windowEvents) {
+                    switch (we) {
+                        case WindowEvent.Resized r -> engine.renderer().setViewport(r.width(), r.height());
+                        default -> {}
+                    }
+                }
 
                 engine.renderer().setViewport(window.width(), window.height());
                 float aspect = (float) window.width() / Math.max(window.height(), 1);
 
-                update((float) delta);
+                engine.setInputEvents(inputEvents);
+                update((float) delta, inputEvents);
                 engine.tick(delta);
             }
         } finally {
             cleanup();
+            if (inputProvider != null) inputProvider.close();
             engine.shutdown();
             toolkit.close();
             log.info("Application stopped");
@@ -114,7 +147,13 @@ public abstract class BaseApplication {
     /** Called once after engine initialization. Load assets, create entities here. */
     protected void init() {}
 
-    /** Called every frame. Update game logic here. */
+    /** Called every frame with input events. Update game logic here. */
+    protected void update(float deltaTime, List<InputEvent> inputEvents) {
+        // Default: delegate to the no-arg version for backward compatibility
+        update(deltaTime);
+    }
+
+    /** Called every frame. Override this if you don't need input events. */
     protected void update(float deltaTime) {}
 
     /** Called on shutdown. Release custom resources here. */
@@ -129,7 +168,7 @@ public abstract class BaseApplication {
     protected ModuleManager<Time> modules() { return engine.modules(); }
     protected Profiler profiler() { return engine.profiler(); }
     protected RenderStats renderStats() { return engine.renderStats(); }
-    protected InputState input() { return input; }
+    protected InputSystem inputSystem() { return inputSystem; }
     protected Camera camera() { return defaultCamera; }
     protected WindowHandle window() { return window; }
     protected double time() { return engine.totalTime(); }

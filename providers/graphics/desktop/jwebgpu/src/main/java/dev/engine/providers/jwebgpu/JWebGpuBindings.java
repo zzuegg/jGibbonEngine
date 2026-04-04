@@ -76,11 +76,7 @@ public class JWebGpuBindings implements WgpuBindings {
 
     // ===== Surface =====
 
-    private boolean surfaceEnabled = Boolean.getBoolean("engine.webgpu.surface");
     private boolean surfaceConfigured = false;
-
-    /** Enable surface creation programmatically. Also settable via -Dengine.webgpu.surface=true. */
-    public void enableSurface(boolean enabled) { this.surfaceEnabled = enabled; }
 
     @Override
     public boolean hasSurface() { return surfaceConfigured; }
@@ -94,11 +90,6 @@ public class JWebGpuBindings implements WgpuBindings {
         var surfaceInfo = window.surfaceInfo();
         if (surfaceInfo == null) {
             log.info("WindowHandle does not provide surfaceInfo — rendering offscreen");
-            return 0;
-        }
-
-        if (!surfaceEnabled) {
-            log.info("WebGPU surface disabled (enable by removing -Dengine.webgpu.surface=false) — rendering offscreen");
             return 0;
         }
 

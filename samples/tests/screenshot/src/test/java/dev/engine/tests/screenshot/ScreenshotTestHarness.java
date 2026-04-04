@@ -49,7 +49,8 @@ public class ScreenshotTestHarness {
 
         var windowDesc = new dev.engine.graphics.window.WindowDescriptor(
                 config.windowTitle(), config.windowSize().x(), config.windowSize().y());
-        var graphicsBackend = config.graphicsBackend().create(windowDesc);
+        var gfxConfig = new dev.engine.graphics.GraphicsConfig(config.headless());
+        var graphicsBackend = config.graphicsBackend().create(windowDesc, gfxConfig);
         var engine = new Engine(config, config.platform(), graphicsBackend.device());
 
         try {
@@ -64,7 +65,13 @@ public class ScreenshotTestHarness {
             var captureSet = new java.util.HashSet<Integer>();
             for (int f : captureFrames) captureSet.add(f);
 
+            var inputScript = testScene.inputScript();
+
             for (int frame = 0; frame <= maxFrame; frame++) {
+                // Inject scripted input events for this frame
+                var frameEvents = inputScript.getOrDefault(frame, java.util.List.of());
+                engine.setInputEvents(frameEvents);
+
                 engine.tick(1.0 / 60.0);
 
                 if (captureSet.contains(frame)) {

@@ -19,7 +19,7 @@ public enum Backend {
     OPENGL {
         @Override
         public GraphicsBackendFactory factory() {
-            return windowDesc -> {
+            return (windowDesc, config) -> {
                 var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
                 var window = toolkit.createWindow(windowDesc);
                 var device = new GlRenderDevice(window,
@@ -34,7 +34,7 @@ public enum Backend {
     VULKAN {
         @Override
         public GraphicsBackendFactory factory() {
-            return windowDesc -> {
+            return (windowDesc, config) -> {
                 var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
                 var window = toolkit.createWindow(windowDesc);
                 var device = new VkRenderDevice(
@@ -53,7 +53,7 @@ public enum Backend {
     WEBGPU {
         @Override
         public GraphicsBackendFactory factory() {
-            return windowDesc -> {
+            return (windowDesc, config) -> {
                 var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
                 var window = toolkit.createWindow(windowDesc);
                 var device = new WgpuRenderDevice(window, new JWebGpuBindings());

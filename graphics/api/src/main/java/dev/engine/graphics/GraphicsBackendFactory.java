@@ -10,11 +10,11 @@ import dev.engine.graphics.window.WindowDescriptor;
  *
  * <pre>{@code
  * var factory = OpenGlBackend.factory(glBindings);
- * var backend = factory.create(new WindowDescriptor("My Game", 1280, 720));
+ * var backend = factory.create(new WindowDescriptor("My Game", 1280, 720), GraphicsConfig.DEFAULT);
  * }</pre>
  */
 @FunctionalInterface
 public interface GraphicsBackendFactory {
 
-    GraphicsBackend create(WindowDescriptor window);
+    GraphicsBackend create(WindowDescriptor window, GraphicsConfig config);
 }

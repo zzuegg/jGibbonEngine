@@ -31,7 +31,7 @@ public final class VulkanBackend {
             WindowToolkit toolkit,
             SurfaceCreator surfaceCreator,
             VkBindings vk) {
-        return windowDesc -> {
+        return (windowDesc, config) -> {
             var window = toolkit.createWindow(windowDesc);
             var extensions = surfaceCreator.requiredInstanceExtensions();
             long windowHandle = window.nativeHandle();
