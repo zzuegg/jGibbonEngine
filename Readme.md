@@ -3,73 +3,113 @@
 
   # jGibbonEngine
 
-  **The next-generation Java 3D game engine for the JVM.**
+  **A modern, multi-backend 3D engine for the JVM.**
 
   [![GitHub Pages](https://img.shields.io/badge/docs-GitHub%20Pages-orange?logo=github)](https://zzuegg.github.io/jGibbonEngine)
   [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
-  [![Java](https://img.shields.io/badge/Java-17%2B-007396?logo=java)](https://openjdk.org)
+  [![Java](https://img.shields.io/badge/Java-25-007396?logo=openjdk)](https://openjdk.org)
 
-  [🏠 Website](https://zzuegg.github.io/jGibbonEngine) ·
-  [📖 Tutorials](https://zzuegg.github.io/jGibbonEngine/tutorials/) ·
-  [💡 Examples](https://zzuegg.github.io/jGibbonEngine/examples/) ·
-  [📚 API Docs](https://zzuegg.github.io/jGibbonEngine/javadoc/) ·
-  [🖼️ Showcase](https://zzuegg.github.io/jGibbonEngine/showcase/)
+  [Website](https://zzuegg.github.io/jGibbonEngine) ·
+  [Tutorials](https://zzuegg.github.io/jGibbonEngine/tutorials/) ·
+  [Examples](https://zzuegg.github.io/jGibbonEngine/examples/) ·
+  [API Docs](https://zzuegg.github.io/jGibbonEngine/javadoc/)
 </div>
 
 ---
 
 ## What is jGibbonEngine?
 
-jGibbonEngine is a modern, high-performance 3D game engine for the JVM, written in Java. It embraces modern JVM idioms, a clean ECS architecture, and a straightforward Java API.
+jGibbonEngine is a 3D engine for the JVM, written in Java 25. It runs on **OpenGL**, **Vulkan**, and **WebGPU** from the same codebase — same application code, different backend config.
 
 ## Quick Start
 
 ```java
-// build.gradle.kts
-dependencies {
-    implementation("io.github.zzuegg:jgibbonengine-core:0.1.0")
-}
-```
+public class MyGame extends BaseApplication {
 
-```java
-public class MyGame extends GibbonApplication {
     @Override
-    public void init() {
-        getRootNode().attachChild(new Box(1f));
-        getRootNode().addLight(new DirectionalLight(new float[]{1f, -1f, -1f}));
+    protected void init() {
+        camera().lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
+
+        var cube = scene().createEntity();
+        cube.add(PrimitiveMeshes.cube());
+        cube.add(MaterialData.pbr(new Vec3(0.9f, 0.2f, 0.2f), 0.3f, 0.8f));
+        cube.add(Transform.at(0, 0.5f, 0));
     }
 
     public static void main(String[] args) {
-        new MyGame().start();
+        var config = EngineConfig.builder()
+                .windowTitle("My Game")
+                .windowSize(1280, 720)
+                .platform(DesktopPlatform.builder().build())
+                .graphicsBackend(OpenGlBackend.factory(new LwjglGlBindings()))
+                .build();
+
+        new MyGame().launch(config);
     }
 }
 ```
 
-→ [Full Getting Started tutorial](https://zzuegg.github.io/jGibbonEngine/tutorials/getting-started)
-
 ## Features
 
-- **Modern Rendering** — PBR, HDR, dynamic shadows, OpenGL + Vulkan targets
-- **ECS Architecture** — Cache-friendly entity-component-system for scalable game logic
-- **Familiar Scene Graph** — hierarchical scene graph for intuitive 3D world organisation
-- **Clean Java API** — straightforward, well-documented Java API
-- **Cross-platform** — Windows, macOS, Linux
-- **Plugin System** — Swap or extend any subsystem
+- **Three GPU backends** — OpenGL 4.5, Vulkan, WebGPU (desktop + browser via TeaVM)
+- **Slang shaders** — single shader source compiles to GLSL, SPIR-V, and WGSL
+- **PBR materials** — physically-based rendering with per-texture sampler control
+- **Entity-component scene** — entities with typed components (Transform, MeshData, MaterialData)
+- **Manager architecture** — `GpuResourceManager` with deferred deletion, leak detection, and per-type managers (Mesh, Texture, Sampler, Pipeline, RenderTarget, Uniform, RenderState, Shader)
+- **Transaction-based rendering** — scene and renderer are decoupled via a `TransactionBus` with subscriber filtering
+- **Screenshot regression tests** — 28 scenes × 3 backends, auto-discovered, cross-backend comparison
+- **Compilable tutorials** — tutorial source files are real Java that compile against the engine
+
+## Architecture
+
+```
+core/                    — math, ECS, events, assets, transactions
+graphics/
+  api/                   — RenderDevice SPI, descriptors, commands
+  common/                — Renderer, managers, engine orchestration
+  opengl/                — OpenGL 4.5 DSA backend
+  vulcan/                — Vulkan backend
+  webgpu/                — WebGPU backend
+providers/               — native bindings (LWJGL, jWebGPU, TeaVM, Slang, Assimp)
+platforms/
+  desktop/               — filesystem assets, native Slang
+  web/                   — fetch assets, Slang WASM, TeaVM
+samples/
+  tutorials/             — compilable tutorial source → auto-generated website
+  examples/              — runnable example applications
+  tests/screenshot/      — visual regression tests across all backends
+```
+
+## Running
+
+```bash
+# Build
+./gradlew build
+
+# Run an example
+./gradlew :examples:run -PmainClass=dev.engine.examples.MyGame
+
+# Run screenshot tests (all 3 backends)
+./gradlew :samples:tests:screenshot:test
+
+# Generate screenshot report
+./gradlew :samples:tests:screenshot:screenshotReport
+
+# Generate tutorial docs
+./gradlew :samples:tutorials:generateTutorials
+```
+
+Requires `JAVA_HOME` pointing to Java 25. Slang shader compiler in `tools/bin/slangc` ([download](https://github.com/shader-slang/slang/releases)).
 
 ## Documentation
 
 | Resource | Link |
 |----------|------|
-| 🏠 Project website | https://zzuegg.github.io/jGibbonEngine |
-| 📖 Tutorials | https://zzuegg.github.io/jGibbonEngine/tutorials/ |
-| 💡 Examples | https://zzuegg.github.io/jGibbonEngine/examples/ |
-| 📚 API Reference (Javadoc) | https://zzuegg.github.io/jGibbonEngine/javadoc/ |
-| 🖼️ Showcase | https://zzuegg.github.io/jGibbonEngine/showcase/ |
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and open a pull request or [start a discussion](https://github.com/zzuegg/jGibbonEngine/discussions).
+| Website | https://zzuegg.github.io/jGibbonEngine |
+| Tutorials | https://zzuegg.github.io/jGibbonEngine/tutorials/ |
+| Examples | https://zzuegg.github.io/jGibbonEngine/examples/ |
+| API Reference | https://zzuegg.github.io/jGibbonEngine/javadoc/ |
 
 ## License
 
-jGibbonEngine is released under the [BSD 3-Clause License](LICENSE).
+BSD 3-Clause License. See [LICENSE](LICENSE).
