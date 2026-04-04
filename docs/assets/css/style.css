@@ -133,8 +133,8 @@ pre code {
 
 /* --- Unified Code Block Fix --- */
 
-/* 1. Outermost container: Single source of truth for spacing */
-.highlighter-rouge {
+/* 1. Outermost container: Single source of truth for spacing (block code only) */
+div.highlighter-rouge {
   display: block;
   margin-bottom: 1.5rem !important;
 }
