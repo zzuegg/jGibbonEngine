@@ -1,5 +1,6 @@
 package dev.engine.providers.teavm.windowing;
 
+import dev.engine.core.input.InputProvider;
 import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
@@ -30,6 +31,11 @@ public class CanvasWindowToolkit implements WindowToolkit {
     @Override
     public void pollEvents() {
         waitForAnimationFrame();
+    }
+
+    @Override
+    public InputProvider createInputProvider(WindowHandle window) {
+        return new TeaVmInputProvider();
     }
 
     @Override

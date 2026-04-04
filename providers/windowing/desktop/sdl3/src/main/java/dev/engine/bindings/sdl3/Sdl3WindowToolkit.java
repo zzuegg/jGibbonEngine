@@ -1,5 +1,6 @@
 package dev.engine.bindings.sdl3;
 
+import dev.engine.core.input.InputProvider;
 import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
@@ -102,6 +103,13 @@ public class Sdl3WindowToolkit implements WindowToolkit {
         } finally {
             event.free();
         }
+    }
+
+    @Override
+    public InputProvider createInputProvider(WindowHandle window) {
+        var provider = new Sdl3InputProvider();
+        this.inputProvider = provider;
+        return provider;
     }
 
     @Override

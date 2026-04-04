@@ -59,6 +59,12 @@ public interface WgpuBindings {
     default void surfacePresent(long surface) {}
 
     /**
+     * Returns the texture format used by the presentation surface.
+     * Defaults to BGRA8 (desktop wgpu-native). Web browsers may use RGBA8.
+     */
+    default int surfaceFormat() { return TEXTURE_FORMAT_BGRA8_UNORM; }
+
+    /**
      * Returns true if a presentation surface is available.
      */
     default boolean hasSurface() { return false; }

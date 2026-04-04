@@ -2,6 +2,7 @@ package dev.engine.graphics.common.engine;
 
 import dev.engine.core.asset.AssetManager;
 import dev.engine.core.handle.Handle;
+import dev.engine.core.input.InputEvent;
 import dev.engine.core.scene.MeshTag;
 import dev.engine.core.mesh.MeshData;
 import dev.engine.core.module.ModuleManager;
@@ -52,6 +53,9 @@ public class Engine {
     private long frameNumber = 0;
     private double totalTime = 0;
 
+    // Input events for current frame (set before tick, read by modules)
+    private java.util.List<InputEvent> currentInputEvents = java.util.List.of();
+
     public Engine(EngineConfig config, Platform platform, RenderDevice device) {
         this.config = config;
 
@@ -88,6 +92,14 @@ public class Engine {
     public long frameNumber() { return frameNumber; }
     public double totalTime() { return totalTime; }
 
+    /** Returns the input events for the current frame. Set before each tick. */
+    public java.util.List<InputEvent> inputEvents() { return currentInputEvents; }
+
+    /** Sets the input events for the current frame. Called by the application loop. */
+    public void setInputEvents(java.util.List<InputEvent> events) {
+        this.currentInputEvents = events != null ? events : java.util.List.of();
+    }
+
     // --- Resource creation (user-facing, no GPU concepts exposed) ---
 
     /**
@@ -114,7 +126,6 @@ public class Engine {
         }
 
         try (var scope = profiler.scope("render")) {
-            renderer.setViewport(config.windowSize().x(), config.windowSize().y());
             var transactions = dev.engine.core.scene.SceneAccess.drainTransactions(scene);
             renderer.renderFrame(transactions);
         }

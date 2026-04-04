@@ -1,5 +1,6 @@
 package dev.engine.windowing.glfw;
 
+import dev.engine.core.input.InputProvider;
 import dev.engine.core.property.MutablePropertyMap;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.graphics.window.WindowDescriptor;
@@ -88,6 +89,14 @@ public class GlfwWindowToolkit implements WindowToolkit {
     }
 
     @Override
+    public InputProvider createInputProvider(WindowHandle window) {
+        if (window instanceof GlfwWindowHandle glfwWindow) {
+            return new GlfwInputProvider(glfwWindow);
+        }
+        return null;
+    }
+
+    @Override
     public void close() {
         for (var window : windows) {
             window.close();
@@ -143,11 +152,15 @@ public class GlfwWindowToolkit implements WindowToolkit {
     public static class GlfwWindowHandle implements WindowHandle {
         private long handle;
         private final WindowDescriptor descriptor;
-        private final MutablePropertyMap properties = new MutablePropertyMap();
+        private final MutablePropertyMap<WindowHandle> properties = new MutablePropertyMap<>();
+        private final dev.engine.core.versioned.Versioned<int[]> size;
+        private final dev.engine.core.versioned.Versioned<Boolean> focused;
 
         GlfwWindowHandle(long handle, WindowDescriptor descriptor) {
             this.handle = handle;
             this.descriptor = descriptor;
+            this.size = new dev.engine.core.versioned.Versioned<>(new int[]{descriptor.width(), descriptor.height()});
+            this.focused = new dev.engine.core.versioned.Versioned<>(false);
             properties.set(WindowProperty.TITLE, descriptor.title());
             properties.set(WindowProperty.VISIBLE, false);
             properties.set(WindowProperty.VSYNC, false);
@@ -195,13 +208,12 @@ public class GlfwWindowToolkit implements WindowToolkit {
         }
 
         @Override
-        @SuppressWarnings("unchecked")
-        public <T> T get(PropertyKey<T> key) {
+        public <T> T get(PropertyKey<WindowHandle, T> key) {
             return properties.get(key);
         }
 
         @Override
-        public <T> void set(PropertyKey<T> key, T value) {
+        public <T> void set(PropertyKey<WindowHandle, T> key, T value) {
             properties.set(key, value);
             if (handle == 0) return;
 
@@ -222,6 +234,67 @@ public class GlfwWindowToolkit implements WindowToolkit {
             } else if (key == WindowProperty.SWAP_INTERVAL) {
                 GLFW.glfwSwapInterval((Integer) value);
             }
+        }
+
+        @Override
+        public dev.engine.core.versioned.Reference<int[]> sizeRef() {
+            return size.createReference();
+        }
+
+        @Override
+        public dev.engine.core.versioned.Reference<Boolean> focusedRef() {
+            return focused.createReference();
+        }
+
+        @Override
+        public void swapBuffers() {
+            if (handle != 0) GLFW.glfwSwapBuffers(handle);
+        }
+
+        @Override
+        public SurfaceInfo surfaceInfo() {
+            if (handle == 0) return null;
+            try {
+                // Try Wayland first
+                long waylandDisplay = org.lwjgl.glfw.GLFWNativeWayland.glfwGetWaylandDisplay();
+                long waylandWindow = org.lwjgl.glfw.GLFWNativeWayland.glfwGetWaylandWindow(handle);
+                if (waylandDisplay != 0 && waylandWindow != 0) {
+                    return new SurfaceInfo(SurfaceInfo.SurfaceType.WAYLAND, waylandDisplay, waylandWindow);
+                }
+            } catch (Throwable ignored) {}
+            try {
+                // Fall back to X11
+                long x11Display = org.lwjgl.glfw.GLFWNativeX11.glfwGetX11Display();
+                long x11Window = org.lwjgl.glfw.GLFWNativeX11.glfwGetX11Window(handle);
+                if (x11Display != 0 && x11Window != 0) {
+                    return new SurfaceInfo(SurfaceInfo.SurfaceType.X11, x11Display, x11Window);
+                }
+            } catch (Throwable ignored) {}
+            try {
+                // Windows
+                long hwnd = org.lwjgl.glfw.GLFWNativeWin32.glfwGetWin32Window(handle);
+                if (hwnd != 0) {
+                    return new SurfaceInfo(SurfaceInfo.SurfaceType.WINDOWS, 0, hwnd);
+                }
+            } catch (Throwable ignored) {}
+            try {
+                // macOS
+                long cocoa = org.lwjgl.glfw.GLFWNativeCocoa.glfwGetCocoaWindow(handle);
+                if (cocoa != 0) {
+                    return new SurfaceInfo(SurfaceInfo.SurfaceType.COCOA, 0, cocoa);
+                }
+            } catch (Throwable ignored) {}
+            return null;
+        }
+
+        /** Called from GLFW resize callback. */
+        void updateSize(int width, int height) {
+            size.set(new int[]{width, height});
+        }
+
+        /** Called from GLFW focus callback. */
+        void updateFocused(boolean isFocused) {
+            focused.set(isFocused);
         }
 
         @Override

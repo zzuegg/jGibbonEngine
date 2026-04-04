@@ -1,10 +1,8 @@
 package dev.engine.examples;
 
-import dev.engine.bindings.sdl3.Sdl3InputProvider;
 import dev.engine.bindings.sdl3.Sdl3WindowToolkit;
 import dev.engine.core.input.*;
 import dev.engine.core.material.MaterialData;
-import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.Entity;
 import dev.engine.core.scene.component.Transform;
@@ -19,11 +17,9 @@ import dev.engine.graphics.window.WindowToolkit;
 import dev.engine.platform.desktop.DesktopPlatform;
 import dev.engine.providers.jwebgpu.JWebGpuBindings;
 import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
-import dev.engine.windowing.glfw.GlfwInputProvider;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -53,20 +49,6 @@ public class InputGameExample extends BaseApplication {
     };
 
     record Projectile(Entity entity, float x, float z, float dx, float dz, float life) {}
-
-    private static WindowToolkit sharedToolkit;
-    private static Sdl3InputProvider sdl3InputProvider;
-
-    @Override
-    protected InputProvider createInputProvider() {
-        if (window() instanceof GlfwWindowToolkit.GlfwWindowHandle glfwWindow) {
-            return new GlfwInputProvider(glfwWindow);
-        }
-        if (sdl3InputProvider != null) {
-            return sdl3InputProvider;
-        }
-        return null;
-    }
 
     @Override
     protected void init() {
@@ -220,17 +202,13 @@ public class InputGameExample extends BaseApplication {
 
         WindowToolkit toolkit;
         if ("sdl3".equals(windowing)) {
-            var sdl3Toolkit = new Sdl3WindowToolkit("opengl".equals(backend));
-            sdl3InputProvider = new Sdl3InputProvider();
-            sdl3Toolkit.setInputProvider(sdl3InputProvider);
-            toolkit = sdl3Toolkit;
+            toolkit = new Sdl3WindowToolkit("opengl".equals(backend));
         } else {
             var hints = "opengl".equals(backend)
                     ? GlfwWindowToolkit.OPENGL_HINTS
                     : GlfwWindowToolkit.NO_API_HINTS;
             toolkit = new GlfwWindowToolkit(hints);
         }
-        sharedToolkit = toolkit;
 
         GraphicsBackendFactory graphicsBackend = switch (backend) {
             case "vulkan" -> VulkanBackend.factory(toolkit, new VulkanBackend.SurfaceCreator() {

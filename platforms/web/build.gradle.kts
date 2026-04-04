@@ -24,10 +24,20 @@ dependencies {
     implementation("org.teavm:teavm-interop:$teavmVersion")
 }
 
+teavm {
+    js {
+        mainClass = "dev.engine.platform.web.WebMain"
+        outputDir = layout.buildDirectory.dir("web")
+        obfuscated = false
+        targetFileName = "web.js"
+    }
+}
+
 // Copy webapp resources (index.html, slang-wasm) and assets next to generated JS
 tasks.register<Copy>("assembleWeb") {
+    dependsOn("generateJavaScript")
     from("src/main/webapp")
-    into(layout.buildDirectory.dir("generated/js/teavm/js"))
+    into(layout.buildDirectory.dir("web"))
 
     // Copy shader files from graphics:common so they are served via HTTP
     from(project(":graphics:common").file("src/main/resources")) {

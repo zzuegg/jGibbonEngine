@@ -51,8 +51,8 @@ public class TeaVmWgpuBindings implements WgpuBindings {
     // ===== Surface / Presentation =====
 
     @Override
-    public long configureSurface(long device, long windowHandle, int width, int height) {
-        // windowHandle is not used on web — canvas is found by ID "canvas"
+    public long configureSurface(long instance, long device, dev.engine.graphics.window.WindowHandle window) {
+        // On web, canvas is found by ID — window handle is not used
         return configureCanvasContext("canvas", (int) device);
     }
 
@@ -69,6 +69,13 @@ public class TeaVmWgpuBindings implements WgpuBindings {
     @Override
     public boolean hasSurface() {
         return true;
+    }
+
+    @Override
+    public int surfaceFormat() {
+        var fmt = getPreferredCanvasFormat();
+        if ("rgba8unorm".equals(fmt)) return TEXTURE_FORMAT_RGBA8_UNORM;
+        return TEXTURE_FORMAT_BGRA8_UNORM;
     }
 
     // ===== Lifecycle =====

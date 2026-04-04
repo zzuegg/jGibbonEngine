@@ -100,6 +100,7 @@ public class WgpuRenderDevice implements RenderDevice {
 
     // ── Bindings ─────────────────────────────────────────────────────
 
+    private final WindowHandle window;
     private final WgpuBindings gpu;
 
     // ── Native state ──────────────────────────────────────────────────
@@ -215,6 +216,7 @@ public class WgpuRenderDevice implements RenderDevice {
     }
 
     public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu, boolean presentToSurface, IntFunction<NativeMemory> memoryFactory) {
+        this.window = window;
         this.gpu = gpu;
         this.memoryFactory = memoryFactory;
         boolean available = false;
@@ -712,7 +714,7 @@ public class WgpuRenderDevice implements RenderDevice {
             }
         }
         return surfaceHandle != 0
-                ? WgpuBindings.TEXTURE_FORMAT_BGRA8_UNORM
+                ? gpu.surfaceFormat()
                 : WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM;
     }
 
@@ -884,8 +886,14 @@ public class WgpuRenderDevice implements RenderDevice {
         if (defaultRenderTarget != null) {
             destroyRenderTarget(defaultRenderTarget);
         }
-        // Use BGRA8 when presenting to a surface (matches surface format), RGBA8 otherwise
-        var colorFormat = surfaceHandle != 0 ? TextureFormat.BGRA8 : TextureFormat.RGBA8;
+        // Match the surface format when presenting, RGBA8 otherwise
+        TextureFormat colorFormat;
+        if (surfaceHandle != 0) {
+            colorFormat = gpu.surfaceFormat() == WgpuBindings.TEXTURE_FORMAT_BGRA8_UNORM
+                    ? TextureFormat.BGRA8 : TextureFormat.RGBA8;
+        } else {
+            colorFormat = TextureFormat.RGBA8;
+        }
         defaultRenderTarget = createRenderTarget(
                 RenderTargetDescriptor.colorDepth(width, height,
                         colorFormat, TextureFormat.DEPTH24_STENCIL8));
@@ -907,6 +915,8 @@ public class WgpuRenderDevice implements RenderDevice {
 
         // Acquire surface texture view for canvas presentation
         if (gpu.hasSurface() && surfaceHandle != 0) {
+            // Ensure default RT matches current window/canvas size
+            ensureDefaultRenderTarget(window.width(), window.height());
             canvasTextureViewOverride = gpu.getSurfaceTextureView(surfaceHandle);
         }
 

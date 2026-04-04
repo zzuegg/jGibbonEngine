@@ -78,19 +78,11 @@ public abstract class BaseApplication {
         }
     }
 
-    /**
-     * Override this to create and register an InputProvider for the platform.
-     * Called during initialization. Return null if no input provider is available.
-     */
-    protected InputProvider createInputProvider() {
-        return null;
-    }
-
     private void runInternal(EngineConfig config, GraphicsBackend backend) {
         this.engine = new Engine(config, config.platform(), backend.device());
         this.inputSystem = new DefaultInputSystem();
 
-        var inputProvider = createInputProvider();
+        var inputProvider = toolkit.createInputProvider(window);
         if (inputProvider != null) {
             inputSystem.registerProvider(inputProvider);
         }

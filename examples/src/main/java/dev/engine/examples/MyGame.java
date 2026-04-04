@@ -15,7 +15,6 @@ import dev.engine.graphics.vulkan.VulkanBackend;
 import dev.engine.graphics.webgpu.WebGpuBackend;
 import dev.engine.graphics.window.WindowToolkit;
 import dev.engine.platform.desktop.DesktopPlatform;
-import dev.engine.windowing.glfw.GlfwInputProvider;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.providers.jwebgpu.JWebGpuBindings;
 import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
@@ -59,14 +58,6 @@ public class MyGame extends BaseApplication {
         plane.add(Transform.at(0, 0, 0).withScale(10f));
 
         camera().lookAt(new Vec3(0, 4, 8), new Vec3(0, 1, 0), Vec3.UNIT_Y);
-    }
-
-    @Override
-    protected InputProvider createInputProvider() {
-        if (window() instanceof GlfwWindowToolkit.GlfwWindowHandle glfwWindow) {
-            return new GlfwInputProvider(glfwWindow);
-        }
-        return null;
     }
 
     @Override

@@ -106,7 +106,7 @@ public class ShaderManager {
      * static global instance for the process-based compiler.
      * Cached by shader hint + key set combination.
      */
-    public CompiledShader getShaderWithMaterial(String shaderHint, Set<PropertyKey<?>> materialKeys) {
+    public CompiledShader getShaderWithMaterial(String shaderHint, Set<? extends PropertyKey<?, ?>> materialKeys) {
         var keyNames = materialKeys.stream()
                 .map(PropertyKey::name)
                 .sorted()
@@ -277,7 +277,7 @@ public class ShaderManager {
      * @param useGenericSpecialization if true, omits static global instances for all blocks
      *                                 (shader declares dependencies via generic params instead)
      */
-    private String prependParamBlocks(String source, Set<PropertyKey<?>> materialKeys,
+    private String prependParamBlocks(String source, Set<? extends PropertyKey<?, ?>> materialKeys,
                                        boolean useGenericSpecialization) {
         boolean includeGlobals = !useGenericSpecialization;
 
@@ -387,9 +387,15 @@ public class ShaderManager {
                 return assetManager.loadSync(path, SlangShaderSource.class).source();
             } catch (Exception ignored) {}
         }
-        try {
-            return java.nio.file.Files.readString(java.nio.file.Path.of(path));
-        } catch (IOException e) {
+        try (var reader = new java.io.BufferedReader(new java.io.FileReader(path))) {
+            var sb = new StringBuilder();
+            char[] buf = new char[4096];
+            int n;
+            while ((n = reader.read(buf)) != -1) {
+                sb.append(buf, 0, n);
+            }
+            return sb.toString();
+        } catch (Exception e) {
             return null;
         }
     }
