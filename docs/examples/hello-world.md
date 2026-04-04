@@ -1,93 +1,59 @@
 ---
 layout: page
-title: "Hello World Scene"
-description: "The minimum code needed to open a window and render a lit 3D box with jGibbonEngine."
+title: "Hello World"
+description: "The simplest jGibbonEngine application — a single colored cube."
 ---
 
-This example shows the absolute minimum you need to display a 3D scene with jGibbonEngine. It creates a single textured box illuminated by a directional light.
+```java
+import dev.engine.core.material.MaterialData;
+import dev.engine.core.math.Vec3;
+import dev.engine.core.scene.component.Transform;
+import dev.engine.graphics.common.engine.BaseApplication;
+import dev.engine.graphics.common.engine.EngineConfig;
+import dev.engine.graphics.common.mesh.PrimitiveMeshes;
+import dev.engine.graphics.opengl.OpenGlBackend;
+import dev.engine.platform.desktop.DesktopPlatform;
 
-## Full source
+public class HelloWorld extends BaseApplication {
 
-```kotlin
-package com.example
+    @Override
+    protected void init() {
+        camera().lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
 
-import io.github.zzuegg.engine.GibbonApplication
-import io.github.zzuegg.engine.scene.Box
-import io.github.zzuegg.engine.scene.DirectionalLight
-import io.github.zzuegg.engine.math.ColorRGBA
-import io.github.zzuegg.engine.math.Vector3f
+        var cube = scene().createEntity();
+        cube.add(PrimitiveMeshes.cube());
+        cube.add(MaterialData.unlit(new Vec3(0.2f, 0.6f, 1.0f)));
+        cube.add(Transform.IDENTITY);
+    }
 
-class HelloWorld : GibbonApplication() {
+    @Override
+    protected void update(float dt) {
+        float aspect = (float) window().width() / Math.max(window().height(), 1);
+        camera().setPerspective((float) Math.toRadians(60), aspect, 0.1f, 100f);
+    }
 
-    override fun init() {
-        // --- Geometry ---
-        val box = Box(halfExtents = 1f)
-        box.setMaterial(assetManager.loadDefaultMaterial())
-        box.localTranslation = Vector3f(0f, 0f, -3f)
-        rootNode.attachChild(box)
+    public static void main(String[] args) {
+        var config = EngineConfig.builder()
+                .windowTitle("Hello World")
+                .windowSize(1280, 720)
+                .platform(DesktopPlatform.builder().build())
+                .graphicsBackend(OpenGlBackend.factory(
+                        new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()))
+                .build();
 
-        // --- Lighting ---
-        val sun = DirectionalLight(
-            direction = Vector3f(1f, -1f, -1f).normalize(),
-            color     = ColorRGBA.White
-        )
-        rootNode.addLight(sun)
+        new HelloWorld().launch(config);
     }
 }
-
-fun main() {
-    HelloWorld().apply {
-        settings.title  = "jGibbonEngine — Hello World"
-        settings.width  = 1280
-        settings.height = 720
-    }.start()
-}
 ```
 
-## `build.gradle.kts`
+## Architecture
 
-```kotlin
-plugins {
-    kotlin("jvm") version "2.0.0"
-    application
-}
+All jGibbonEngine applications follow the same pattern:
 
-application {
-    mainClass.set("com.example.MainKt")
-}
+1. **Configure** — `EngineConfig` bundles platform + backend + window settings
+2. **Launch** — `launch(config)` creates the window, initializes the engine
+3. **Init** — create entities with components (mesh, material, transform)
+4. **Update** — game logic runs every frame
+5. **Cleanup** — automatic resource management via `GpuResourceManager`
 
-repositories {
-    mavenCentral()
-    mavenLocal() // needed during early access
-}
-
-dependencies {
-    implementation("io.github.zzuegg:jgibbonengine-core:0.1.0")
-}
-```
-
-## What's happening?
-
-| Line | Explanation |
-|------|-------------|
-| `GibbonApplication` | Base class that owns the render loop, window, and asset manager. |
-| `init()` | Called once before the first frame — set up your scene here. |
-| `Box(halfExtents = 1f)` | Creates a cube mesh ±1 unit on each axis (2 units wide). |
-| `assetManager.loadDefaultMaterial()` | A built-in flat grey PBR material — no texture files needed. |
-| `localTranslation` | Positions the box 3 units in front of the default camera. |
-| `DirectionalLight` | Simulates sunlight — infinite parallel rays from a direction. |
-| `settings.start()` | Opens the window and starts the game loop. |
-
-## Controls (default)
-
-| Key / Input | Action |
-|-------------|--------|
-| `W A S D`   | Move camera |
-| Mouse drag  | Look around |
-| `Escape`    | Quit |
-
-## Next steps
-
-- Add more geometry: try replacing `Box` with `Sphere` or `Cylinder`
-- Load a GLTF model with `assetManager.loadModel("path/to/model.gltf")`
-- Read the [Building Your First Scene]({{ site.baseurl }}/tutorials/first-scene) tutorial for lights, materials, and cameras
+The same application code runs on **OpenGL**, **Vulkan**, and **WebGPU** — just swap the `GraphicsBackendFactory` in the config.
