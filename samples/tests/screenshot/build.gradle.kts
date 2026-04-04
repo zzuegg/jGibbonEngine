@@ -36,6 +36,19 @@ tasks.test {
     }
 }
 
+tasks.register<JavaExec>("saveReferences") {
+    group = "verification"
+    description = "Renders all scenes and saves output as reference screenshots for regression tracking"
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass = "dev.engine.tests.screenshot.SaveReferences"
+    workingDir = projectDir
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    val jemalloc = file("/lib/x86_64-linux-gnu/libjemalloc.so.2")
+    if (jemalloc.exists()) {
+        environment("LD_PRELOAD", jemalloc.absolutePath)
+    }
+}
+
 tasks.register<JavaExec>("screenshotReport") {
     group = "verification"
     description = "Runs screenshot tests and generates an HTML comparison report"

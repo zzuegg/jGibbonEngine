@@ -59,15 +59,28 @@ class ScreenshotTest {
         for (int frame : frames) {
             String frameSuffix = frames.length > 1 ? "_f" + frame : "";
 
-            // Per-backend tests
+            // Per-backend tests (render + reference comparison)
             for (var backend : Backend.values()) {
                 var testName = backend.name().toLowerCase() + frameSuffix;
                 tests.add(DynamicTest.dynamicTest(testName, () -> {
                     assumeTrue(backend.isAvailable(), backend.name() + " not available");
                     var captures = harness.render(discovered.scene(), backend);
                     var pixels = captures.get(frame);
-                    harness.saveScreenshot(pixels, backend.name().toLowerCase(),
-                            discovered.name() + frameSuffix);
+                    var backendName = backend.name().toLowerCase();
+                    var sceneName = discovered.name() + frameSuffix;
+                    harness.saveScreenshot(pixels, backendName, sceneName);
+
+                    // Compare against reference if one exists
+                    var reference = harness.loadReference(backendName, sceneName);
+                    if (reference != null) {
+                        var tolerance = discovered.tolerance();
+                        double diff = ScreenshotTestHarness.diffPercent(pixels, reference, tolerance.maxChannelDiff());
+                        assertTrue(diff < tolerance.maxDiffPercent(),
+                                backendName.toUpperCase() + " '" + sceneName
+                                        + "' regressed: " + String.format("%.2f%%", diff)
+                                        + " diff from reference (max " + tolerance.maxDiffPercent() + "%)."
+                                        + " Screenshot: build/screenshots/" + backendName + "/" + sceneName + ".png");
+                    }
                 }));
             }
 

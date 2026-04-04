@@ -1,17 +1,16 @@
 package dev.engine.tests.screenshot;
 
 import dev.engine.bindings.slang.SlangShaderCompiler;
-import dev.engine.core.scene.SceneAccess;
 import dev.engine.graphics.ScreenshotHelper;
 import dev.engine.graphics.common.engine.Engine;
 import dev.engine.graphics.common.engine.EngineConfig;
-import dev.engine.graphics.common.engine.HeadlessPlatform;
 import dev.engine.platform.desktop.DesktopPlatform;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -21,6 +20,8 @@ import java.util.Map;
  * — the same path as a real application.
  */
 public class ScreenshotTestHarness {
+
+    private static final String REFERENCE_DIR = "reference-screenshots";
 
     private final int width;
     private final int height;
@@ -98,6 +99,51 @@ public class ScreenshotTestHarness {
         } catch (IOException e) {
             System.err.println("Warning: failed to save screenshot " + backend + "/" + name + ": " + e.getMessage());
         }
+    }
+
+    /**
+     * Loads a reference screenshot from src/test/resources/reference-screenshots/<backend>/<name>.png.
+     * Returns null if no reference exists.
+     */
+    public byte[] loadReference(String backend, String name) {
+        var path = REFERENCE_DIR + "/" + backend + "/" + name + ".png";
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
+            if (is == null) return null;
+            var image = ImageIO.read(is);
+            if (image == null) return null;
+            // Convert to RGBA byte array matching readFramebuffer format
+            var pixels = new byte[width * height * 4];
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    int argb = image.getRGB(x, y);
+                    int idx = (y * width + x) * 4;
+                    pixels[idx]     = (byte) ((argb >> 16) & 0xFF); // R
+                    pixels[idx + 1] = (byte) ((argb >> 8) & 0xFF);  // G
+                    pixels[idx + 2] = (byte) (argb & 0xFF);          // B
+                    pixels[idx + 3] = (byte) ((argb >> 24) & 0xFF); // A
+                }
+            }
+            return pixels;
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** Returns true if a reference exists for the given backend and scene name. */
+    public boolean hasReference(String backend, String name) {
+        var path = REFERENCE_DIR + "/" + backend + "/" + name + ".png";
+        return getClass().getClassLoader().getResource(path) != null;
+    }
+
+    /**
+     * Saves a reference screenshot to the source tree at
+     * src/test/resources/reference-screenshots/<backend>/<name>.png
+     */
+    public void saveReference(byte[] pixels, String backend, String name) throws IOException {
+        var dir = new File("src/test/resources/" + REFERENCE_DIR + "/" + backend);
+        dir.mkdirs();
+        var path = dir.getPath() + "/" + name + ".png";
+        ScreenshotHelper.save(pixels, width, height, path);
     }
 
     /** Computes the difference percentage between two pixel arrays. */
