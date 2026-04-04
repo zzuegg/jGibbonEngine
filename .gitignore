@@ -35,3 +35,9 @@ docs/javadoc/api/
 
 # Node / npm (if any tooling is added later)
 node_modules/
+
+# Native tool binaries (download from releases, don't commit)
+tools/bin/
+tools/lib/
+tools/*.tar.gz
+tools/*.zip
