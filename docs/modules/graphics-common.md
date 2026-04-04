@@ -1,4 +1,3 @@
-<!-- AUTO-GENERATED — do not edit, run ./gradlew :tools:site-generator:generateSite -->
 ---
 layout: page
 title: "Graphics Common"

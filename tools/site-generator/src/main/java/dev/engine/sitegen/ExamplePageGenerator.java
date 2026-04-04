@@ -100,7 +100,6 @@ public class ExamplePageGenerator {
 
     private static String generatePage(ExampleInfo example) {
         var sb = new StringBuilder();
-        sb.append("<!-- AUTO-GENERATED — do not edit, run ./gradlew :tools:site-generator:generateSite -->\n");
         sb.append("---\n");
         sb.append("layout: page\n");
         sb.append("title: \"").append(example.title).append("\"\n");
@@ -137,7 +136,6 @@ public class ExamplePageGenerator {
 
     private static String generateIndex(List<ExampleInfo> examples) {
         var sb = new StringBuilder();
-        sb.append("<!-- AUTO-GENERATED — do not edit, run ./gradlew :tools:site-generator:generateSite -->\n");
         sb.append("---\n");
         sb.append("layout: page\n");
         sb.append("title: \"Examples\"\n");

@@ -52,7 +52,7 @@ tasks.register<Javadoc>("javadocAll") {
         addStringOption("Xdoclint:none", "-quiet")
         addBooleanOption("-enable-preview", true)
         addStringOption("source", javaVersion)
-        stylesheetFile = file("tools/site-generator/src/main/resources/javadoc-theme.css")
+        addStringOption("-add-stylesheet", file("tools/site-generator/src/main/resources/javadoc-theme.css").absolutePath)
         links("https://docs.oracle.com/en/java/javase/25/docs/api/")
     }
 

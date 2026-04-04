@@ -103,7 +103,6 @@ public class TutorialGenerator {
 
     static String generateMarkdown(TutorialInfo tutorial) {
         var sb = new StringBuilder();
-        sb.append("<!-- AUTO-GENERATED — do not edit, run ./gradlew :tools:site-generator:generateSite -->\n");
         sb.append("---\n");
         sb.append("layout: page\n");
         sb.append("title: \"").append(tutorial.title).append("\"\n");
@@ -124,7 +123,6 @@ public class TutorialGenerator {
 
     static String generateIndex(List<TutorialInfo> tutorials) {
         var sb = new StringBuilder();
-        sb.append("<!-- AUTO-GENERATED — do not edit, run ./gradlew :tools:site-generator:generateSite -->\n");
         sb.append("---\n");
         sb.append("layout: page\n");
         sb.append("title: \"Tutorials\"\n");

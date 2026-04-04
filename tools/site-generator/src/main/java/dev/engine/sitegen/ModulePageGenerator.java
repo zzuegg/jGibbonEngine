@@ -128,7 +128,6 @@ public class ModulePageGenerator {
 
     private static String generateModulePage(ModuleInfo mod) {
         var sb = new StringBuilder();
-        sb.append("<!-- AUTO-GENERATED — do not edit, run ./gradlew :tools:site-generator:generateSite -->\n");
         sb.append("---\n");
         sb.append("layout: page\n");
         sb.append("title: \"").append(mod.name).append("\"\n");
@@ -151,7 +150,6 @@ public class ModulePageGenerator {
 
     private static String generateIndex(List<ModuleInfo> modules) {
         var sb = new StringBuilder();
-        sb.append("<!-- AUTO-GENERATED — do not edit, run ./gradlew :tools:site-generator:generateSite -->\n");
         sb.append("---\n");
         sb.append("layout: page\n");
         sb.append("title: \"Modules\"\n");
