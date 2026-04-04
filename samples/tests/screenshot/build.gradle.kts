@@ -49,10 +49,19 @@ tasks.register<JavaExec>("saveReferences") {
     }
 }
 
-tasks.register<JavaExec>("screenshotReport") {
+// Run tests + generate report (even on test failure)
+tasks.register("screenshotReport") {
     group = "verification"
-    description = "Runs screenshot tests and generates an HTML comparison report"
-    dependsOn("test")
+    description = "Runs screenshot tests and generates an HTML comparison report — even on failures"
+    dependsOn("test", "generateReport")
+}
+
+// Make test not block generateReport on failure
+tasks.test { finalizedBy("generateReport") }
+
+tasks.register<JavaExec>("generateReport") {
+    group = "verification"
+    description = "Generates the HTML screenshot report from existing test results"
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass = "dev.engine.tests.screenshot.ScreenshotReportGenerator"
     args = listOf(

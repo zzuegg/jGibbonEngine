@@ -28,12 +28,18 @@ public final class PrimitiveMeshes {
 
     /** A 1x1 quad centered at origin in the XY plane, facing +Z. */
     public static MeshData quad() {
+        return quad(1f);
+    }
+
+    /** A 1x1 quad with the given UV scale. uvScale=3 means UVs go 0→3, tiling the texture 3 times. */
+    public static MeshData quad(float uvScale) {
+        float u = uvScale;
         float[] v = {
                 // pos              normal          uv
                 -0.5f, -0.5f, 0f,  0f, 0f, 1f,    0f, 0f,
-                 0.5f, -0.5f, 0f,  0f, 0f, 1f,    1f, 0f,
-                 0.5f,  0.5f, 0f,  0f, 0f, 1f,    1f, 1f,
-                -0.5f,  0.5f, 0f,  0f, 0f, 1f,    0f, 1f,
+                 0.5f, -0.5f, 0f,  0f, 0f, 1f,    u,   0f,
+                 0.5f,  0.5f, 0f,  0f, 0f, 1f,    u,   u,
+                -0.5f,  0.5f, 0f,  0f, 0f, 1f,    0f,  u,
         };
         int[] idx = {0, 1, 2, 0, 2, 3};
         return MeshData.create(v, idx, STANDARD_FORMAT);
