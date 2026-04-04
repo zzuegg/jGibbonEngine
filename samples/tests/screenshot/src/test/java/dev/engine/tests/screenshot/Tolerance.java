@@ -14,9 +14,9 @@ public record Tolerance(int maxChannelDiff, double maxDiffPercent) {
     /** Tight — allows minor rounding differences. */
     public static Tolerance tight() { return new Tolerance(1, 0.001); }
 
-    /** Loose — allows cross-backend variation. */
-    public static Tolerance loose() { return new Tolerance(5, 0.05); }
+    /** Loose — allows minor cross-backend variation. */
+    public static Tolerance loose() { return new Tolerance(2, 0.01); }
 
-    /** Wide — for WebGPU vs GL/VK (different rasterization, Y-flip). */
-    public static Tolerance wide() { return new Tolerance(5, 5.0); }
+    /** Wide — for known cross-backend differences (blend mode rasterization). */
+    public static Tolerance wide() { return new Tolerance(3, 0.5); }
 }

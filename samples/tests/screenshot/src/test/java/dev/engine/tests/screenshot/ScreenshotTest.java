@@ -75,6 +75,7 @@ class ScreenshotTest {
                     if (reference != null) {
                         var tolerance = discovered.tolerance();
                         double diff = ScreenshotTestHarness.diffPercent(pixels, reference, tolerance.maxChannelDiff());
+                        TestResults.instance().recordDiff(discovered.name(), backendName + "_ref", diff);
                         assertTrue(diff < tolerance.maxDiffPercent(),
                                 backendName.toUpperCase() + " '" + sceneName
                                         + "' regressed: " + String.format("%.2f%%", diff)
@@ -106,6 +107,7 @@ class ScreenshotTest {
                 // GL vs VK
                 if (glPixels != null && vkPixels != null) {
                     double diff = ScreenshotTestHarness.diffPercent(glPixels, vkPixels, tolerance.maxChannelDiff());
+                    TestResults.instance().recordDiff(discovered.name(), "gl_vs_vk", diff);
                     assertTrue(diff < tolerance.maxDiffPercent(),
                             "GL/VK differ by " + String.format("%.2f%%", diff)
                                     + " (max " + tolerance.maxDiffPercent() + "%)");
@@ -115,10 +117,14 @@ class ScreenshotTest {
                 if (glPixels != null && wgpuPixels != null) {
                     var wideTolerance = Tolerance.wide();
                     double diff = ScreenshotTestHarness.diffPercent(glPixels, wgpuPixels, wideTolerance.maxChannelDiff());
+                    TestResults.instance().recordDiff(discovered.name(), "gl_vs_webgpu", diff);
                     assertTrue(diff < wideTolerance.maxDiffPercent(),
                             "GL/WebGPU differ by " + String.format("%.2f%%", diff)
                                     + " (max " + wideTolerance.maxDiffPercent() + "%)");
                 }
+
+                // Write diff results for report
+                TestResults.instance().writeToFile("build/screenshots");
             }));
         }
 
