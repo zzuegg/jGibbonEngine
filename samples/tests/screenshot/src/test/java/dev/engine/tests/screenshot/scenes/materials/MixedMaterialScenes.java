@@ -2,6 +2,8 @@ package dev.engine.tests.screenshot.scenes.materials;
 
 import dev.engine.core.asset.TextureData;
 import dev.engine.core.material.MaterialData;
+import dev.engine.graphics.texture.TextureKeys;
+import dev.engine.graphics.texture.SampledTexture;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
@@ -39,7 +41,7 @@ public class MixedMaterialScenes {
         var texData = createCheckerboard(8, 8, (byte) 0, (byte) 128, (byte) 255);
         var texturedQuad = scene.createEntity();
         texturedQuad.add(PrimitiveMeshes.quad());
-        texturedQuad.add(MaterialData.create("textured").set(MaterialData.ALBEDO_TEXTURE, texData));
+        texturedQuad.add(MaterialData.create("textured").set(TextureKeys.ALBEDO_TEXTURE, new SampledTexture(texData)));
         texturedQuad.add(Transform.at(3, 0, 0));
     };
 

@@ -1,6 +1,5 @@
 package dev.engine.core.material;
 
-import dev.engine.core.asset.TextureData;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.math.Vec4;
@@ -35,13 +34,8 @@ public final class MaterialData implements Component {
     public static final PropertyKey<Float> OPACITY = PropertyKey.of("opacity", Float.class);
     public static final PropertyKey<Float> NORMAL_STRENGTH = PropertyKey.of("normalStrength", Float.class);
 
-    // --- Texture keys ---
-    public static final PropertyKey<TextureData> ALBEDO_TEXTURE = PropertyKey.of("albedoTexture", TextureData.class);
-    public static final PropertyKey<TextureData> NORMAL_TEXTURE = PropertyKey.of("normalTexture", TextureData.class);
-    public static final PropertyKey<TextureData> ROUGHNESS_TEXTURE = PropertyKey.of("roughnessTexture", TextureData.class);
-    public static final PropertyKey<TextureData> METALLIC_TEXTURE = PropertyKey.of("metallicTexture", TextureData.class);
-    public static final PropertyKey<TextureData> EMISSIVE_TEXTURE = PropertyKey.of("emissiveTexture", TextureData.class);
-    public static final PropertyKey<TextureData> AO_TEXTURE = PropertyKey.of("aoTexture", TextureData.class);
+    // Texture keys are in dev.engine.graphics.texture.TextureKeys (graphics:api)
+    // to avoid core depending on graphics types.
 
     // --- Unlit keys ---
     public static final PropertyKey<Vec3> COLOR = PropertyKey.of("color", Vec3.class);

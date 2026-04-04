@@ -1,6 +1,7 @@
 package dev.engine.graphics.shader;
 
 import dev.engine.core.material.MaterialData;
+import dev.engine.graphics.texture.TextureKeys;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;
@@ -66,7 +67,7 @@ class SlangParamsBlockTest {
 
         @Test void excludesTextureKeys() {
             var block = SlangParamsBlock.fromKeys("Material", Set.of(
-                    MaterialData.ALBEDO_COLOR, MaterialData.ALBEDO_TEXTURE));
+                    MaterialData.ALBEDO_COLOR, TextureKeys.ALBEDO_TEXTURE));
             var code = block.generateUbo();
             assertTrue(code.contains("albedoColor"));
             assertFalse(code.contains("albedoTexture"));

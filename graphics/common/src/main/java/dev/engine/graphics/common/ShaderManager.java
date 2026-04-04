@@ -307,7 +307,7 @@ public class ShaderManager {
             int texIndex = 0;
 
             var sortedTexKeys = materialKeys.stream()
-                    .filter(k -> k.type() == dev.engine.core.asset.TextureData.class)
+                    .filter(k -> k.type() == dev.engine.graphics.texture.SampledTexture.class)
                     .sorted(java.util.Comparator.comparing(PropertyKey::name))
                     .toList();
             for (var key : sortedTexKeys) {

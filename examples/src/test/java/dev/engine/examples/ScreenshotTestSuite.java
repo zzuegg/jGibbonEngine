@@ -2,6 +2,8 @@ package dev.engine.examples;
 
 import dev.engine.core.asset.TextureData;
 import dev.engine.core.material.MaterialData;
+import dev.engine.graphics.texture.TextureKeys;
+import dev.engine.graphics.texture.SampledTexture;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
@@ -365,7 +367,7 @@ public final class ScreenshotTestSuite {
         var quad = scene.createEntity();
         quad.add(PrimitiveMeshes.quad());
         quad.add(MaterialData.create("textured")
-            .set(MaterialData.ALBEDO_TEXTURE, texData));
+            .set(TextureKeys.ALBEDO_TEXTURE, new SampledTexture(texData)));
         quad.add(Transform.IDENTITY);
     };
 
@@ -380,14 +382,14 @@ public final class ScreenshotTestSuite {
         var leftQuad = scene.createEntity();
         leftQuad.add(PrimitiveMeshes.quad());
         leftQuad.add(MaterialData.create("textured")
-            .set(MaterialData.ALBEDO_TEXTURE, createCheckerboard(8, 8, (byte) 255, (byte) 0, (byte) 0)));
+            .set(TextureKeys.ALBEDO_TEXTURE, new SampledTexture(createCheckerboard(8, 8, (byte) 255, (byte) 0, (byte) 0))));
         leftQuad.add(Transform.at(-1.5f, 0, 0));
 
         // Right quad: blue checkerboard texture
         var rightQuad = scene.createEntity();
         rightQuad.add(PrimitiveMeshes.quad());
         rightQuad.add(MaterialData.create("textured")
-            .set(MaterialData.ALBEDO_TEXTURE, createCheckerboard(8, 8, (byte) 0, (byte) 0, (byte) 255)));
+            .set(TextureKeys.ALBEDO_TEXTURE, new SampledTexture(createCheckerboard(8, 8, (byte) 0, (byte) 0, (byte) 255))));
         rightQuad.add(Transform.at(1.5f, 0, 0));
     };
 

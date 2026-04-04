@@ -1,6 +1,7 @@
 package dev.engine.graphics.shader;
 
 import dev.engine.core.material.MaterialData;
+import dev.engine.graphics.texture.TextureKeys;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.property.PropertyKey;
 import org.junit.jupiter.api.Nested;
@@ -25,7 +26,7 @@ class SlangMaterialGeneratorTest {
         }
 
         @Test void excludesTextureKeys() {
-            var keys = Set.<PropertyKey<?>>of(MaterialData.ALBEDO_COLOR, MaterialData.ALBEDO_TEXTURE, MaterialData.ROUGHNESS);
+            var keys = Set.<PropertyKey<?>>of(MaterialData.ALBEDO_COLOR, TextureKeys.ALBEDO_TEXTURE, MaterialData.ROUGHNESS);
             var code = SlangMaterialGenerator.generateInterface(keys);
             assertTrue(code.contains("albedoColor"));
             assertTrue(code.contains("roughness"));

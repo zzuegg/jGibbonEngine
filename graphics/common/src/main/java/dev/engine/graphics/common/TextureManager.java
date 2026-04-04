@@ -1,6 +1,7 @@
 package dev.engine.graphics.common;
 
 import dev.engine.core.asset.TextureData;
+import dev.engine.graphics.texture.SampledTexture;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.property.PropertyKey;
@@ -34,25 +35,25 @@ public class TextureManager {
     public void bindMaterialTextures(MaterialData matData, CompiledShader shader,
                                       SamplerManager samplerManager, CommandRecorder draw) {
         var sortedTexKeys = matData.keys().stream()
-                .filter(k -> k.type() == TextureData.class)
+                .filter(k -> k.type() == SampledTexture.class)
                 .sorted(java.util.Comparator.comparing(PropertyKey::name))
                 .toList();
 
         int texUnit = 0;
         for (var key : sortedTexKeys) {
-            TextureData texData = (TextureData) matData.get(key);
-            if (texData == null) {
+            SampledTexture sampled = (SampledTexture) matData.get(key);
+            if (sampled == null || sampled.texture() == null) {
                 texUnit++;
                 continue;
             }
 
-            var texHandle = upload(texData);
+            var texHandle = upload(sampled.texture());
             String texParamName = key.name();
             var texBinding = shader.findBinding(texParamName);
             int unit = texBinding != null ? texBinding.binding() : texUnit;
 
             draw.bindTexture(unit, texHandle);
-            draw.bindSampler(unit, samplerManager.getOrCreate(SamplerDescriptor.linear()));
+            draw.bindSampler(unit, samplerManager.getOrCreate(sampled.sampler()));
             texUnit++;
         }
     }
