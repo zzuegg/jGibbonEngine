@@ -52,7 +52,7 @@ public class SceneMultiCapture {
                 HighLevelSceneExample.cubeVertices(0.5f),
                 HighLevelSceneExample.cubeIndices(), format);
 
-        var scene = (HierarchicalScene) renderer.scene();
+        var scene = new HierarchicalScene();
         var root = scene.createEntity();
         var c1 = scene.createEntity(); c1.setParent(root);
         var c2 = scene.createEntity(); c2.setParent(root);
@@ -74,7 +74,7 @@ public class SceneMultiCapture {
             scene.setLocalTransform(c2, Mat4.translation(0f, (float) Math.sin(time) * 1.5f, 0f).mul(Mat4.rotationZ(time * 1.5f)));
             scene.setLocalTransform(c3, Mat4.translation(2f, 0f, 0f).mul(Mat4.rotationY(time * 2f)));
 
-            renderer.renderFrame();
+            renderer.renderFrame(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
             ScreenshotUtil.capture(800, 600, "/tmp/engine_scene_t" + frame + ".png");
             System.out.println("t=" + time + "s → /tmp/engine_scene_t" + frame + ".png");
         }

@@ -1,7 +1,6 @@
 package dev.engine.graphics.common.engine;
 
 import dev.engine.core.asset.AssetManager;
-import dev.engine.core.asset.FileSystemAssetSource;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.scene.MeshTag;
 import dev.engine.core.mesh.MeshData;
@@ -13,14 +12,10 @@ import dev.engine.core.profiler.RenderStats;
 import dev.engine.core.scene.AbstractScene;
 import dev.engine.core.scene.Scene;
 import dev.engine.graphics.RenderDevice;
-import dev.engine.graphics.common.HeadlessRenderDevice;
-import dev.engine.graphics.common.NoOpShaderCompiler;
 import dev.engine.graphics.common.Renderer;
-import dev.engine.graphics.shader.ShaderCompiler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.file.Path;
 // No Executors import — use Runnable::run for cross-platform compatibility
 
 /**
@@ -57,15 +52,7 @@ public class Engine {
     private long frameNumber = 0;
     private double totalTime = 0;
 
-    public Engine(EngineConfig config) {
-        this(config, config.headless() ? new HeadlessRenderDevice() : null, new NoOpShaderCompiler());
-    }
-
-    public Engine(EngineConfig config, RenderDevice device) {
-        this(config, device, new NoOpShaderCompiler());
-    }
-
-    public Engine(EngineConfig config, RenderDevice device, ShaderCompiler compiler) {
+    public Engine(EngineConfig config, Platform platform, RenderDevice device) {
         this.config = config;
 
         // Scene
@@ -77,14 +64,10 @@ public class Engine {
 
         // Asset manager — synchronous by default, works on all platforms
         this.assets = new AssetManager(Runnable::run);
-        assets.registerLoader(new dev.engine.core.asset.SlangShaderLoader());
-        // Register platform-specific loaders dynamically (TeaVM can't trace Class.forName)
-        registerLoaderIfAvailable(assets, "dev.engine.core.asset.ImageLoader");
-        registerLoaderIfAvailable(assets, "dev.engine.core.mesh.ObjLoader");
+        platform.configureAssets(assets);
 
         // Renderer — connected to asset manager for shader hot-reload
-        if (device == null) device = new HeadlessRenderDevice();
-        this.renderer = new Renderer(device, scene, compiler);
+        this.renderer = new Renderer(device, platform.shaderCompiler());
         this.renderer.shaderManager().setAssetManager(assets);
 
         // Module manager — synchronous executor for cross-platform compatibility
@@ -131,8 +114,9 @@ public class Engine {
         }
 
         try (var scope = profiler.scope("render")) {
-            renderer.setViewport(config.windowWidth(), config.windowHeight());
-            renderer.renderFrame();
+            renderer.setViewport(config.windowSize().x(), config.windowSize().y());
+            var transactions = dev.engine.core.scene.SceneAccess.drainTransactions(scene);
+            renderer.renderFrame(transactions);
         }
 
         frameNumber++;
@@ -155,7 +139,8 @@ public class Engine {
         renderThread = Thread.ofPlatform().name("render").start(() -> {
             log.info("Render thread started");
             while (running) {
-                renderer.renderFrame();
+                var transactions = dev.engine.core.scene.SceneAccess.drainTransactions(scene);
+                renderer.renderFrame(transactions);
                 frameNumber++;
             }
             log.info("Render thread stopped");
@@ -195,14 +180,4 @@ public class Engine {
         log.info("Engine shut down");
     }
 
-    @SuppressWarnings("unchecked")
-    private static void registerLoaderIfAvailable(AssetManager assets, String className) {
-        try {
-            var loader = (dev.engine.core.asset.AssetLoader<?>) Class.forName(className)
-                    .getDeclaredConstructor().newInstance();
-            assets.registerLoader(loader);
-        } catch (Throwable ignored) {
-            // Loader not available on this platform (e.g., ImageLoader on TeaVM)
-        }
-    }
 }

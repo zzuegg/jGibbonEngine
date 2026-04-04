@@ -4,12 +4,12 @@ import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.Entity;
 import dev.engine.core.scene.component.Transform;
-import dev.engine.bindings.slang.SlangShaderCompiler;
 import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.opengl.OpenGlBackend;
 import dev.engine.graphics.vulkan.VulkanBackend;
+import dev.engine.platform.desktop.DesktopPlatform;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
 
@@ -66,14 +66,8 @@ public class MyGame extends BaseApplication {
 
     public static void main(String[] args) {
         String backend = System.getProperty("engine.backend", "opengl");
-        var config = EngineConfig.builder()
-                .windowTitle("My Game (" + backend + ")")
-                .windowSize(1280, 720)
-                .maxFrames(Integer.getInteger("engine.maxFrames", 0))
-                .build();
 
-        var compiler = new SlangShaderCompiler();
-        var factory = switch (backend) {
+        var graphicsBackend = switch (backend) {
             case "vulkan" -> {
                 var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
                 yield VulkanBackend.factory(toolkit, new VulkanBackend.SurfaceCreator() {
@@ -83,11 +77,19 @@ public class MyGame extends BaseApplication {
                     public long createSurface(long instance, long windowHandle) {
                         return GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
                     }
-                }, new LwjglVkBindings(), compiler);
+                }, new LwjglVkBindings());
             }
-            default -> OpenGlBackend.factory(new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings(), compiler);
+            default -> OpenGlBackend.factory(new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
         };
 
-        new MyGame().launch(config, factory);
+        var config = EngineConfig.builder()
+                .windowTitle("My Game (" + backend + ")")
+                .windowSize(1280, 720)
+                .maxFrames(Integer.getInteger("engine.maxFrames", 0))
+                .platform(DesktopPlatform.builder().build())
+                .graphicsBackend(graphicsBackend)
+                .build();
+
+        new MyGame().launch(config);
     }
 }

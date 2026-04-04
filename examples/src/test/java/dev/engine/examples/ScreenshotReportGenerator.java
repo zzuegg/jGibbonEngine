@@ -132,6 +132,10 @@ public final class ScreenshotReportGenerator {
             }
         }
 
+        // Locate reference screenshots
+        var refBase = Path.of("examples/src/test/resources/reference-screenshots");
+        int missingRefCount = 0;
+
         var rows = new StringBuilder();
         for (var scene : scenes) {
             var glFile = glDir.resolve(scene + ".png");
@@ -141,15 +145,28 @@ public final class ScreenshotReportGenerator {
             boolean hasVk = Files.exists(vkFile);
             boolean hasWgpu = Files.exists(wgpuFile);
 
+            // Check for reference screenshots (per-backend, then flat fallback)
+            boolean hasGlRef = hasReference(refBase, "opengl", scene);
+            boolean hasVkRef = hasReference(refBase, "vulkan", scene);
+            boolean hasWgpuRef = hasReference(refBase, "webgpu", scene);
+
             var glResult = glResults.get(scene);
             var vkResult = vkResults.get(scene);
             var wgpuResult = wgpuResults.get(scene);
             var crossResult = crossResults.get(scene);
 
             String displayName = scene.replace("_", " ");
-            String glImg = hasGl ? "<img src=\"opengl/" + scene + ".png\" alt=\"OpenGL\">" : "<span class=\"missing\">no image</span>";
-            String vkImg = hasVk ? "<img src=\"vulkan/" + scene + ".png\" alt=\"Vulkan\">" : "<span class=\"missing\">no image</span>";
-            String wgpuImg = hasWgpu ? "<img src=\"webgpu/" + scene + ".png\" alt=\"WebGPU\">" : "<span class=\"missing\">not available</span>";
+            String glRefBadge = refBadge(hasGlRef, glResult);
+            String vkRefBadge = refBadge(hasVkRef, vkResult);
+            String wgpuRefBadge = refBadge(hasWgpuRef, wgpuResult);
+            // Only count missing refs for per-backend tests (not cross-backend)
+            if (!hasGlRef && glResult != null) missingRefCount++;
+            if (!hasVkRef && vkResult != null) missingRefCount++;
+            if (!hasWgpuRef && wgpuResult != null) missingRefCount++;
+
+            String glImg = hasGl ? "<img src=\"opengl/" + scene + ".png\" alt=\"OpenGL\">" + glRefBadge : "<span class=\"missing\">no image</span>";
+            String vkImg = hasVk ? "<img src=\"vulkan/" + scene + ".png\" alt=\"Vulkan\">" + vkRefBadge : "<span class=\"missing\">no image</span>";
+            String wgpuImg = hasWgpu ? "<img src=\"webgpu/" + scene + ".png\" alt=\"WebGPU\">" + wgpuRefBadge : "<span class=\"missing\">not available</span>";
 
             String glStatus = statusBadge(glResult);
             String vkStatus = statusBadge(vkResult);
@@ -263,6 +280,12 @@ public final class ScreenshotReportGenerator {
                         transform: scale(2); z-index: 10; position: relative; border-color: #58a6ff;
                     }
                     .missing { color: #8b949e; font-style: italic; font-size: 0.85rem; }
+                    .missing-ref {
+                        display: inline-block; margin-top: 0.3rem;
+                        font-size: 0.7rem; padding: 0.15rem 0.5rem;
+                        border-radius: 10px; font-weight: 500;
+                        background: #da3633; color: #fff;
+                    }
                     tr:hover { background: #1c2128; }
                     .failed-row { background: #1c1012; }
                     .failed-row:hover { background: #261418; }
@@ -290,6 +313,10 @@ public final class ScreenshotReportGenerator {
                         <div class="stat-value yellow">%d</div>
                         <div class="stat-label">Skipped</div>
                     </div>
+                    <div class="stat">
+                        <div class="stat-value %s">%d</div>
+                        <div class="stat-label">Missing References</div>
+                    </div>
                 </div>
 
                 <table>
@@ -311,6 +338,7 @@ public final class ScreenshotReportGenerator {
             </html>
             """.formatted(
                 scenes.size(), totalPassed, totalFailed, totalSkipped,
+                missingRefCount > 0 ? "red" : "green", missingRefCount,
                 rows.toString(),
                 java.time.LocalDateTime.now().toString()
             );
@@ -336,5 +364,20 @@ public final class ScreenshotReportGenerator {
     private static String escapeHtml(String s) {
         if (s == null) return "";
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    private static boolean hasReference(Path refBase, String backend, String scene) {
+        // Check via classpath (works regardless of working directory)
+        var cl = ScreenshotReportGenerator.class;
+        if (cl.getResource("/reference-screenshots/" + backend + "/" + scene + ".png") != null) return true;
+        if (cl.getResource("/reference-screenshots/" + scene + ".png") != null) return true;
+        // Fallback: check filesystem path
+        return Files.exists(refBase.resolve(backend).resolve(scene + ".png"))
+            || Files.exists(refBase.resolve(scene + ".png"));
+    }
+
+    private static String refBadge(boolean hasRef, TestResult result) {
+        if (hasRef || result == null) return "";
+        return "<div class=\"missing-ref\">no reference</div>";
     }
 }

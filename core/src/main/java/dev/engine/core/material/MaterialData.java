@@ -36,12 +36,12 @@ public final class MaterialData implements Component {
     public static final PropertyKey<Float> NORMAL_STRENGTH = PropertyKey.of("normalStrength", Float.class);
 
     // --- Texture keys ---
-    public static final PropertyKey<TextureData> ALBEDO_MAP = PropertyKey.of("albedoMap", TextureData.class);
-    public static final PropertyKey<TextureData> NORMAL_MAP = PropertyKey.of("normalMap", TextureData.class);
-    public static final PropertyKey<TextureData> ROUGHNESS_MAP = PropertyKey.of("roughnessMap", TextureData.class);
-    public static final PropertyKey<TextureData> METALLIC_MAP = PropertyKey.of("metallicMap", TextureData.class);
-    public static final PropertyKey<TextureData> EMISSIVE_MAP = PropertyKey.of("emissiveMap", TextureData.class);
-    public static final PropertyKey<TextureData> AO_MAP = PropertyKey.of("aoMap", TextureData.class);
+    public static final PropertyKey<TextureData> ALBEDO_TEXTURE = PropertyKey.of("albedoTexture", TextureData.class);
+    public static final PropertyKey<TextureData> NORMAL_TEXTURE = PropertyKey.of("normalTexture", TextureData.class);
+    public static final PropertyKey<TextureData> ROUGHNESS_TEXTURE = PropertyKey.of("roughnessTexture", TextureData.class);
+    public static final PropertyKey<TextureData> METALLIC_TEXTURE = PropertyKey.of("metallicTexture", TextureData.class);
+    public static final PropertyKey<TextureData> EMISSIVE_TEXTURE = PropertyKey.of("emissiveTexture", TextureData.class);
+    public static final PropertyKey<TextureData> AO_TEXTURE = PropertyKey.of("aoTexture", TextureData.class);
 
     // --- Unlit keys ---
     public static final PropertyKey<Vec3> COLOR = PropertyKey.of("color", Vec3.class);

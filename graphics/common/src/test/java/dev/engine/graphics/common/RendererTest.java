@@ -4,6 +4,8 @@ import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.mesh.MeshData;
+import dev.engine.core.scene.Scene;
+import dev.engine.core.scene.SceneAccess;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
 import dev.engine.graphics.pipeline.ShaderSource;
@@ -16,28 +18,24 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class RendererTest {
 
     // Stub backend for testing without GPU
     private Renderer renderer;
+    private Scene scene;
 
     @BeforeEach
     void setUp() {
         renderer = Renderer.createHeadless();
+        scene = new Scene();
     }
 
-    @Nested
-    class SceneAccess {
-        @Test void rendererOwnsScene() {
-            assertNotNull(renderer.scene());
-        }
-
-        @Test void createEntityViaScene() {
-            var entity = renderer.scene().createEntity();
-            assertNotNull(entity);
-        }
+    private void renderFrame() {
+        renderer.renderFrame(SceneAccess.drainTransactions(scene));
     }
 
     @Nested
@@ -83,7 +81,7 @@ class RendererTest {
             cam.setPerspective((float) Math.toRadians(60), 1f, 0.1f, 100f);
             cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
             renderer.setActiveCamera(cam);
-            assertDoesNotThrow(() -> renderer.renderFrame());
+            assertDoesNotThrow(() -> renderFrame());
         }
 
         @Test void renderFrameWithEntity() {
@@ -94,16 +92,16 @@ class RendererTest {
                     new int[]{0, 1, 2},
                     format);
 
-            var entity = renderer.scene().createEntity();
-            renderer.scene().setMesh(entity.handle(), mesh);
-            renderer.scene().setLocalTransform(entity, Mat4.translation(0, 0, 0));
+            var entity = scene.createEntity();
+            scene.setMesh(entity.handle(), mesh);
+            scene.setLocalTransform(entity, Mat4.translation(0, 0, 0));
 
             var cam = renderer.createCamera();
             cam.setPerspective((float) Math.toRadians(60), 1f, 0.1f, 100f);
             cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
             renderer.setActiveCamera(cam);
 
-            assertDoesNotThrow(() -> renderer.renderFrame());
+            assertDoesNotThrow(() -> renderFrame());
         }
     }
 
@@ -116,7 +114,7 @@ class RendererTest {
 
         @Test void renderFrameWithMaterialResolvesShaderLazily() {
             // Entity with PBR material — pipeline resolved lazily with material keys
-            var entity = renderer.scene().createEntity();
+            var entity = scene.createEntity();
             entity.add(PrimitiveMeshes.cube());
             entity.add(MaterialData.pbr(new Vec3(1, 0, 0), 0.5f, 0.0f));
 
@@ -125,16 +123,16 @@ class RendererTest {
             cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
             renderer.setActiveCamera(cam);
 
-            assertDoesNotThrow(() -> renderer.renderFrame());
+            assertDoesNotThrow(() -> renderFrame());
         }
 
         @Test void pipelineResolutionUsesShaderWithMaterialKeys() {
             // Different materials with different shader hints both resolve lazily
-            var e1 = renderer.scene().createEntity();
+            var e1 = scene.createEntity();
             e1.add(PrimitiveMeshes.cube());
             e1.add(MaterialData.pbr(new Vec3(1, 0, 0), 0.5f, 0.0f));
 
-            var e2 = renderer.scene().createEntity();
+            var e2 = scene.createEntity();
             e2.add(PrimitiveMeshes.cube());
             e2.add(MaterialData.unlit(new Vec3(0, 1, 0)));
 
@@ -143,7 +141,7 @@ class RendererTest {
             cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
             renderer.setActiveCamera(cam);
 
-            assertDoesNotThrow(() -> renderer.renderFrame());
+            assertDoesNotThrow(() -> renderFrame());
         }
     }
 

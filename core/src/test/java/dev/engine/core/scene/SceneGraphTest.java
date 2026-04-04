@@ -81,7 +81,8 @@ class SceneGraphTest {
             drainTransactions(scene);
             scene.setLocalTransform(entity, Mat4.translation(1f, 0f, 0f));
             var txns = drainTransactions(scene);
-            assertTrue(txns.stream().anyMatch(t -> t instanceof Transaction.TransformChanged));
+            assertTrue(txns.stream().anyMatch(t -> t instanceof Transaction.ComponentChanged cc
+                    && cc.component() instanceof dev.engine.core.scene.component.Transform));
         }
 
         @Test void removeParent() {

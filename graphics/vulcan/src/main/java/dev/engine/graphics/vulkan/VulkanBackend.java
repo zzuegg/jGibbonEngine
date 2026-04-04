@@ -1,20 +1,18 @@
 package dev.engine.graphics.vulkan;
 
-import dev.engine.graphics.common.engine.BaseApplication;
-import dev.engine.graphics.shader.ShaderCompiler;
-import dev.engine.graphics.window.WindowDescriptor;
+import dev.engine.graphics.GraphicsBackend;
+import dev.engine.graphics.GraphicsBackendFactory;
 import dev.engine.graphics.window.WindowToolkit;
 
 /**
- * Vulkan backend factory for BaseApplication.
+ * Vulkan backend factory.
  * Requires a WindowToolkit that supports Vulkan surface creation.
  *
  * <pre>{@code
- * // With GLFW:
- * new MyGame().launch(config, VulkanBackend.factory(
- *     new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS),
- *     surfaceCreator,
- *     vkBindings));
+ * var platform = DesktopPlatform.builder().build();
+ * new MyGame().launch(config.toBuilder()
+ *     .graphicsBackend(VulkanBackend.factory(toolkit, surfaceCreator, vkBindings))
+ *     .build());
  * }</pre>
  */
 public final class VulkanBackend {
@@ -29,30 +27,18 @@ public final class VulkanBackend {
      * @param surfaceCreator given (VkInstance handle, nativeWindowHandle) returns VkSurfaceKHR handle
      * @param vk             the Vulkan bindings implementation
      */
-    public static BaseApplication.BackendFactory factory(
+    public static GraphicsBackendFactory factory(
             WindowToolkit toolkit,
             SurfaceCreator surfaceCreator,
             VkBindings vk) {
-        return factory(toolkit, surfaceCreator, vk, null);
-    }
-
-    public static BaseApplication.BackendFactory factory(
-            WindowToolkit toolkit,
-            SurfaceCreator surfaceCreator,
-            VkBindings vk,
-            ShaderCompiler compiler) {
-        return config -> {
-            var window = toolkit.createWindow(
-                    new WindowDescriptor(config.windowTitle(), config.windowWidth(), config.windowHeight()));
+        return windowDesc -> {
+            var window = toolkit.createWindow(windowDesc);
             var extensions = surfaceCreator.requiredInstanceExtensions();
             long windowHandle = window.nativeHandle();
             var device = new VkRenderDevice(vk, extensions,
                     instance -> surfaceCreator.createSurface(instance, windowHandle),
                     window.width(), window.height());
-            if (compiler != null) {
-                return new BaseApplication.BackendInstance(toolkit, window, device, compiler);
-            }
-            return new BaseApplication.BackendInstance(toolkit, window, device);
+            return new GraphicsBackend(toolkit, window, device);
         };
     }
 

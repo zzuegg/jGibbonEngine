@@ -18,30 +18,30 @@ final class CrossBackendScenes {
 
     private CrossBackendScenes() {}
 
-    static final RenderTestScene TWO_CUBES_UNLIT = (renderer, w, h) -> {
+    static final RenderTestScene TWO_CUBES_UNLIT = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
-        var cube1 = renderer.scene().createEntity();
+        var cube1 = scene.createEntity();
         cube1.add(PrimitiveMeshes.cube());
         cube1.add(MaterialData.unlit(new Vec3(0.9f, 0.2f, 0.2f)));
         cube1.add(Transform.at(-1.5f, 0, 0));
 
-        var cube2 = renderer.scene().createEntity();
+        var cube2 = scene.createEntity();
         cube2.add(PrimitiveMeshes.cube());
         cube2.add(MaterialData.unlit(new Vec3(0.2f, 0.9f, 0.2f)));
         cube2.add(Transform.at(1.5f, 0, 0));
     };
 
-    static final RenderTestScene SINGLE_SPHERE_PBR = (renderer, w, h) -> {
+    static final RenderTestScene SINGLE_SPHERE_PBR = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
-        var sphere = renderer.scene().createEntity();
+        var sphere = scene.createEntity();
         sphere.add(PrimitiveMeshes.sphere());
         sphere.add(MaterialData.pbr(new Vec3(0.8f, 0.3f, 0.1f), 0.5f, 0.5f));
         sphere.add(Transform.IDENTITY);

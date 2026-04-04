@@ -60,7 +60,10 @@ class VkDescriptorManager implements AutoCloseable {
                 VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT,
                 VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT,
                 VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                0.0f, 0.0f);
+                0.0f, 0.0f, 0.0f,
+                false, 1.0f,
+                false, VkBindings.VK_COMPARE_OP_NEVER,
+                VkBindings.VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK);
 
         // Build bindings arrays
         int[] bindings = new int[TOTAL_BINDINGS];

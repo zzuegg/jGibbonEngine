@@ -93,21 +93,32 @@ public interface GlBindings {
     int GL_RGBA = 0x1908;
 
     // --- Texture / sampler parameters ---
-    int GL_TEXTURE_MIN_FILTER = 0x2801;
-    int GL_TEXTURE_MAG_FILTER = 0x2800;
-    int GL_TEXTURE_WRAP_S     = 0x2802;
-    int GL_TEXTURE_WRAP_T     = 0x2803;
+    int GL_TEXTURE_MIN_FILTER    = 0x2801;
+    int GL_TEXTURE_MAG_FILTER    = 0x2800;
+    int GL_TEXTURE_WRAP_S        = 0x2802;
+    int GL_TEXTURE_WRAP_T        = 0x2803;
+    int GL_TEXTURE_WRAP_R        = 0x8072;
+    int GL_TEXTURE_MIN_LOD       = 0x813A;
+    int GL_TEXTURE_MAX_LOD       = 0x813B;
+    int GL_TEXTURE_LOD_BIAS      = 0x8501;
+    int GL_TEXTURE_COMPARE_MODE  = 0x884C;
+    int GL_TEXTURE_COMPARE_FUNC  = 0x884D;
+    int GL_TEXTURE_BORDER_COLOR  = 0x1004;
+    int GL_COMPARE_REF_TO_TEXTURE = 0x884E;
 
     // --- Filter modes ---
     int GL_NEAREST                = 0x2600;
     int GL_LINEAR                 = 0x2601;
     int GL_NEAREST_MIPMAP_NEAREST = 0x2700;
+    int GL_LINEAR_MIPMAP_NEAREST  = 0x2701;
+    int GL_NEAREST_MIPMAP_LINEAR  = 0x2702;
     int GL_LINEAR_MIPMAP_LINEAR   = 0x2703;
 
     // --- Wrap modes ---
     int GL_REPEAT          = 0x2901;
     int GL_CLAMP_TO_EDGE   = 0x812F;
     int GL_MIRRORED_REPEAT = 0x8370;
+    int GL_CLAMP_TO_BORDER = 0x812D;
 
     // --- Buffer targets ---
     int GL_ELEMENT_ARRAY_BUFFER = 0x8893;
@@ -251,6 +262,10 @@ public interface GlBindings {
     int glCreateSamplers();
 
     void glSamplerParameteri(int sampler, int pname, int param);
+
+    void glSamplerParameterf(int sampler, int pname, float param);
+
+    void glSamplerParameterfv(int sampler, int pname, float[] params);
 
     void glDeleteSamplers(int sampler);
 

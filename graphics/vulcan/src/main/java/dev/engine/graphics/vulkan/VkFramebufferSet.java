@@ -32,8 +32,15 @@ class VkFramebufferSet implements AutoCloseable {
         depthImage = depthAlloc.image();
         depthMemory = depthAlloc.memory();
 
+        // Include stencil aspect when the format has a stencil component
+        int aspectMask = VkBindings.VK_IMAGE_ASPECT_DEPTH_BIT;
+        if (depthFormat == VkBindings.VK_FORMAT_D24_UNORM_S8_UINT
+                || depthFormat == VkBindings.VK_FORMAT_D32_SFLOAT_S8_UINT) {
+            aspectMask |= VkBindings.VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
+
         depthImageView = vk.createImageView(device, depthImage, depthFormat,
-                VkBindings.VK_IMAGE_VIEW_TYPE_2D, VkBindings.VK_IMAGE_ASPECT_DEPTH_BIT,
+                VkBindings.VK_IMAGE_VIEW_TYPE_2D, aspectMask,
                 0, 1, 0, 1);
 
         // Create framebuffers (one per swapchain image)

@@ -23,60 +23,60 @@ public final class ScreenshotTestSuite {
     private ScreenshotTestSuite() {}
 
     /** Basic colored cube with depth test — front cube should occlude back cube. */
-    static final RenderTestScene DEPTH_TEST_CUBES = (renderer, w, h) -> {
+    static final RenderTestScene DEPTH_TEST_CUBES = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // Front red cube at z=0
-        var front = renderer.scene().createEntity();
+        var front = scene.createEntity();
         front.add(PrimitiveMeshes.cube());
         front.add(MaterialData.unlit(new Vec3(0.9f, 0.1f, 0.1f)));
         front.add(Transform.at(0, 0, 0));
 
         // Back blue cube at z=-3 (should be occluded)
-        var back = renderer.scene().createEntity();
+        var back = scene.createEntity();
         back.add(PrimitiveMeshes.cube());
         back.add(MaterialData.unlit(new Vec3(0.1f, 0.1f, 0.9f)));
         back.add(Transform.at(0, 0, -3));
     };
 
     /** Multiple primitive meshes in a row. */
-    static final RenderTestScene PRIMITIVE_MESHES = (renderer, w, h) -> {
+    static final RenderTestScene PRIMITIVE_MESHES = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 4, 10), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // Cube
-        var cube = renderer.scene().createEntity();
+        var cube = scene.createEntity();
         cube.add(PrimitiveMeshes.cube());
         cube.add(MaterialData.unlit(new Vec3(0.8f, 0.2f, 0.2f)));
         cube.add(Transform.at(-3, 0, 0));
 
         // Sphere
-        var sphere = renderer.scene().createEntity();
+        var sphere = scene.createEntity();
         sphere.add(PrimitiveMeshes.sphere());
         sphere.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f)));
         sphere.add(Transform.at(0, 0, 0));
 
         // Plane
-        var plane = renderer.scene().createEntity();
+        var plane = scene.createEntity();
         plane.add(PrimitiveMeshes.quad());
         plane.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f)));
         plane.add(Transform.at(3, 0, 0));
     };
 
     /** Cull mode test — render both sides of a quad with culling disabled. */
-    static final RenderTestScene CULL_MODE_NONE = (renderer, w, h) -> {
+    static final RenderTestScene CULL_MODE_NONE = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 3), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // Quad with no culling — should show backface
-        var quad = renderer.scene().createEntity();
+        var quad = scene.createEntity();
         quad.add(PrimitiveMeshes.quad());
         quad.add(MaterialData.unlit(new Vec3(0.9f, 0.9f, 0.1f))
             .set(RenderState.CULL_MODE, CullMode.NONE));
@@ -84,40 +84,40 @@ public final class ScreenshotTestSuite {
     };
 
     /** Render-to-texture — creates an RT, clears it, then renders the scene normally. */
-    static final RenderTestScene RENDER_TO_TEXTURE = (renderer, w, h) -> {
+    static final RenderTestScene RENDER_TO_TEXTURE = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
-        var cube = renderer.scene().createEntity();
+        var cube = scene.createEntity();
         cube.add(PrimitiveMeshes.cube());
         cube.add(MaterialData.unlit(new Vec3(0.3f, 0.7f, 0.3f)));
         cube.add(Transform.at(0, 0, 0));
     };
 
     /** Multiple materials with different cull modes in a single scene. */
-    static final RenderTestScene MIXED_RENDER_STATES = (renderer, w, h) -> {
+    static final RenderTestScene MIXED_RENDER_STATES = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 3, 8), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // Opaque cube with back-face culling (default)
-        var opaque = renderer.scene().createEntity();
+        var opaque = scene.createEntity();
         opaque.add(PrimitiveMeshes.cube());
         opaque.add(MaterialData.unlit(new Vec3(0.8f, 0.2f, 0.2f)));
         opaque.add(Transform.at(-2, 0, 0));
 
         // Cube with front-face culling (shows inside)
-        var frontCull = renderer.scene().createEntity();
+        var frontCull = scene.createEntity();
         frontCull.add(PrimitiveMeshes.cube());
         frontCull.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f))
             .set(RenderState.CULL_MODE, CullMode.FRONT));
         frontCull.add(Transform.at(2, 0, 0));
 
         // Cube with no culling (both faces visible)
-        var noCull = renderer.scene().createEntity();
+        var noCull = scene.createEntity();
         noCull.add(PrimitiveMeshes.cube());
         noCull.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f))
             .set(RenderState.CULL_MODE, CullMode.NONE));
@@ -125,7 +125,7 @@ public final class ScreenshotTestSuite {
     };
 
     /** Wireframe mode via forced property — all geometry rendered as wireframe. */
-    static final RenderTestScene FORCED_WIREFRAME = (renderer, w, h) -> {
+    static final RenderTestScene FORCED_WIREFRAME = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
@@ -134,27 +134,27 @@ public final class ScreenshotTestSuite {
         // Force wireframe on everything
         renderer.forceProperty(RenderState.WIREFRAME, true);
 
-        var sphere = renderer.scene().createEntity();
+        var sphere = scene.createEntity();
         sphere.add(PrimitiveMeshes.sphere());
         sphere.add(MaterialData.unlit(new Vec3(1f, 1f, 1f)));
         sphere.add(Transform.IDENTITY);
     };
 
     /** Additive blending — front cube blends additively with back cube. */
-    static final RenderTestScene BLEND_ADDITIVE = (renderer, w, h) -> {
+    static final RenderTestScene BLEND_ADDITIVE = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // Back: red cube
-        var back = renderer.scene().createEntity();
+        var back = scene.createEntity();
         back.add(PrimitiveMeshes.cube());
         back.add(MaterialData.unlit(new Vec3(0.8f, 0.0f, 0.0f)));
         back.add(Transform.at(0, 0, -1));
 
         // Front: green cube with additive blending (should appear yellow where overlapping)
-        var front = renderer.scene().createEntity();
+        var front = scene.createEntity();
         front.add(PrimitiveMeshes.cube());
         front.add(MaterialData.unlit(new Vec3(0.0f, 0.8f, 0.0f))
             .set(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
@@ -163,14 +163,14 @@ public final class ScreenshotTestSuite {
     };
 
     /** Depth write disabled — back object visible through front. */
-    static final RenderTestScene DEPTH_WRITE_OFF = (renderer, w, h) -> {
+    static final RenderTestScene DEPTH_WRITE_OFF = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // Back: blue sphere
-        var back = renderer.scene().createEntity();
+        var back = scene.createEntity();
         back.add(PrimitiveMeshes.sphere());
         back.add(MaterialData.unlit(new Vec3(0.1f, 0.1f, 0.9f)));
         back.add(Transform.at(0, 0, -1));
@@ -178,7 +178,7 @@ public final class ScreenshotTestSuite {
         // Front: red cube with depth write off
         // The red cube renders first with depth write off,
         // so the blue sphere behind it is still visible where it extends beyond the cube
-        var front = renderer.scene().createEntity();
+        var front = scene.createEntity();
         front.add(PrimitiveMeshes.cube());
         front.add(MaterialData.unlit(new Vec3(0.9f, 0.1f, 0.1f))
             .set(RenderState.DEPTH_WRITE, false));
@@ -186,27 +186,27 @@ public final class ScreenshotTestSuite {
     };
 
     /** PBR material test — rough vs metallic spheres. */
-    static final RenderTestScene PBR_MATERIALS = (renderer, w, h) -> {
+    static final RenderTestScene PBR_MATERIALS = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // Rough sphere
-        var rough = renderer.scene().createEntity();
+        var rough = scene.createEntity();
         rough.add(PrimitiveMeshes.sphere());
         rough.add(MaterialData.pbr(new Vec3(0.8f, 0.3f, 0.1f), 0.9f, 0.1f));
         rough.add(Transform.at(-2, 0, 0));
 
         // Metallic sphere
-        var metal = renderer.scene().createEntity();
+        var metal = scene.createEntity();
         metal.add(PrimitiveMeshes.sphere());
         metal.add(MaterialData.pbr(new Vec3(0.9f, 0.9f, 0.9f), 0.1f, 0.9f));
         metal.add(Transform.at(2, 0, 0));
     };
 
     /** Procedural checkerboard texture upload + sampler creation alongside scene rendering. */
-    static final RenderTestScene TEXTURED_QUAD = (renderer, w, h) -> {
+    static final RenderTestScene TEXTURED_QUAD = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 3), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
@@ -226,32 +226,32 @@ public final class ScreenshotTestSuite {
 
         // Upload texture and create sampler via renderer/device API
         var texData = TextureData.rgba(texW, texH, pixels);
-        var texHandle = renderer.uploadTexture(texData);
-        var sampler = renderer.device().createSampler(SamplerDescriptor.nearest());
+        var texHandle = renderer.textureManager().upload(texData);
+        var sampler = renderer.samplerManager().getOrCreate(SamplerDescriptor.nearest());
 
         // Render a quad with unlit material — texture isn't auto-bound by materials yet,
         // but this verifies texture upload + sampler creation work alongside rendering
-        var quad = renderer.scene().createEntity();
+        var quad = scene.createEntity();
         quad.add(PrimitiveMeshes.quad());
         quad.add(MaterialData.unlit(new Vec3(1f, 1f, 1f)));
         quad.add(Transform.IDENTITY);
     };
 
     /** All blend modes side by side over a red background. */
-    static final RenderTestScene ALL_BLEND_MODES = (renderer, w, h) -> {
+    static final RenderTestScene ALL_BLEND_MODES = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 8), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // Background: bright red plane
-        var bg = renderer.scene().createEntity();
+        var bg = scene.createEntity();
         bg.add(PrimitiveMeshes.quad());
         bg.add(MaterialData.unlit(new Vec3(0.9f, 0.0f, 0.0f)));
         bg.add(Transform.at(0, 0, -2).withScale(new Vec3(10, 10, 1)));
 
         // Alpha blend
-        var alpha = renderer.scene().createEntity();
+        var alpha = scene.createEntity();
         alpha.add(PrimitiveMeshes.cube());
         alpha.add(MaterialData.unlit(new Vec3(0.0f, 0.0f, 1.0f))
             .set(RenderState.BLEND_MODE, BlendMode.ALPHA)
@@ -259,7 +259,7 @@ public final class ScreenshotTestSuite {
         alpha.add(Transform.at(-3, 0, 0));
 
         // Additive
-        var additive = renderer.scene().createEntity();
+        var additive = scene.createEntity();
         additive.add(PrimitiveMeshes.cube());
         additive.add(MaterialData.unlit(new Vec3(0.0f, 1.0f, 0.0f))
             .set(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
@@ -267,7 +267,7 @@ public final class ScreenshotTestSuite {
         additive.add(Transform.at(0, 0, 0));
 
         // Multiply
-        var multiply = renderer.scene().createEntity();
+        var multiply = scene.createEntity();
         multiply.add(PrimitiveMeshes.cube());
         multiply.add(MaterialData.unlit(new Vec3(0.5f, 0.5f, 1.0f))
             .set(RenderState.BLEND_MODE, BlendMode.MULTIPLY)
@@ -276,7 +276,7 @@ public final class ScreenshotTestSuite {
     };
 
     /** Depth function ALWAYS — all fragments pass regardless of depth, so the last-drawn object wins. */
-    static final RenderTestScene DEPTH_FUNC_GREATER = (renderer, w, h) -> {
+    static final RenderTestScene DEPTH_FUNC_GREATER = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
@@ -288,27 +288,27 @@ public final class ScreenshotTestSuite {
         renderer.setDefault(RenderState.DEPTH_FUNC, CompareFunc.ALWAYS);
 
         // Front: red cube
-        var front = renderer.scene().createEntity();
+        var front = scene.createEntity();
         front.add(PrimitiveMeshes.cube());
         front.add(MaterialData.unlit(new Vec3(0.9f, 0.1f, 0.1f)));
         front.add(Transform.at(0, 0, 0));
 
         // Back: blue cube (drawn after red, so it overwrites where they overlap)
-        var back = renderer.scene().createEntity();
+        var back = scene.createEntity();
         back.add(PrimitiveMeshes.cube());
         back.add(MaterialData.unlit(new Vec3(0.1f, 0.1f, 0.9f)));
         back.add(Transform.at(0, 0, -3));
     };
 
     /** CW front face — default CCW geometry should be culled with back-face culling. */
-    static final RenderTestScene FRONT_FACE_CW = (renderer, w, h) -> {
+    static final RenderTestScene FRONT_FACE_CW = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 3, 6), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // With CW front face + back culling, the default CCW geometry should be culled
-        var cube = renderer.scene().createEntity();
+        var cube = scene.createEntity();
         cube.add(PrimitiveMeshes.cube());
         cube.add(MaterialData.unlit(new Vec3(0.9f, 0.9f, 0.1f))
             .set(RenderState.FRONT_FACE, FrontFace.CW));
@@ -316,33 +316,33 @@ public final class ScreenshotTestSuite {
     };
 
     /** Multiple shader types in one scene — PBR and UNLIT entities rendered together, forcing pipeline switches. */
-    static final RenderTestScene SHADER_SWITCHING = (renderer, w, h) -> {
+    static final RenderTestScene SHADER_SWITCHING = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 3, 8), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // PBR sphere on the left
-        var pbrSphere = renderer.scene().createEntity();
+        var pbrSphere = scene.createEntity();
         pbrSphere.add(PrimitiveMeshes.sphere());
         pbrSphere.add(MaterialData.pbr(new Vec3(0.8f, 0.2f, 0.1f), 0.3f, 0.8f));
         pbrSphere.add(Transform.at(-2, 0, 0));
 
         // Unlit cube on the right
-        var unlitCube = renderer.scene().createEntity();
+        var unlitCube = scene.createEntity();
         unlitCube.add(PrimitiveMeshes.cube());
         unlitCube.add(MaterialData.unlit(new Vec3(0.1f, 0.8f, 0.2f)));
         unlitCube.add(Transform.at(2, 0, 0));
 
         // Another PBR sphere in the middle-back (forces pipeline switch back to PBR)
-        var pbrSphere2 = renderer.scene().createEntity();
+        var pbrSphere2 = scene.createEntity();
         pbrSphere2.add(PrimitiveMeshes.sphere());
         pbrSphere2.add(MaterialData.pbr(new Vec3(0.2f, 0.2f, 0.9f), 0.9f, 0.1f));
         pbrSphere2.add(Transform.at(0, 0, -2));
     };
 
     /** Material with texture data — uses textured shader to sample albedo texture. */
-    static final RenderTestScene MATERIAL_TEXTURE = (renderer, w, h) -> {
+    static final RenderTestScene MATERIAL_TEXTURE = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 3), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
@@ -362,32 +362,32 @@ public final class ScreenshotTestSuite {
 
         var texData = TextureData.rgba(texW, texH, pixels);
 
-        var quad = renderer.scene().createEntity();
+        var quad = scene.createEntity();
         quad.add(PrimitiveMeshes.quad());
         quad.add(MaterialData.create("textured")
-            .set(MaterialData.ALBEDO_MAP, texData));
+            .set(MaterialData.ALBEDO_TEXTURE, texData));
         quad.add(Transform.IDENTITY);
     };
 
     /** Two quads with different textures — verifies material/texture switching between draws. */
-    static final RenderTestScene TEXTURE_SWITCHING = (renderer, w, h) -> {
+    static final RenderTestScene TEXTURE_SWITCHING = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 4), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // Left quad: red checkerboard texture
-        var leftQuad = renderer.scene().createEntity();
+        var leftQuad = scene.createEntity();
         leftQuad.add(PrimitiveMeshes.quad());
         leftQuad.add(MaterialData.create("textured")
-            .set(MaterialData.ALBEDO_MAP, createCheckerboard(8, 8, (byte) 255, (byte) 0, (byte) 0)));
+            .set(MaterialData.ALBEDO_TEXTURE, createCheckerboard(8, 8, (byte) 255, (byte) 0, (byte) 0)));
         leftQuad.add(Transform.at(-1.5f, 0, 0));
 
         // Right quad: blue checkerboard texture
-        var rightQuad = renderer.scene().createEntity();
+        var rightQuad = scene.createEntity();
         rightQuad.add(PrimitiveMeshes.quad());
         rightQuad.add(MaterialData.create("textured")
-            .set(MaterialData.ALBEDO_MAP, createCheckerboard(8, 8, (byte) 0, (byte) 0, (byte) 255)));
+            .set(MaterialData.ALBEDO_TEXTURE, createCheckerboard(8, 8, (byte) 0, (byte) 0, (byte) 255)));
         rightQuad.add(Transform.at(1.5f, 0, 0));
     };
 
@@ -408,7 +408,7 @@ public final class ScreenshotTestSuite {
     }
 
     /** Creates a 3D texture (verifies API), renders an unlit cube alongside. */
-    static final RenderTestScene TEXTURE_3D_CREATE = (renderer, w, h) -> {
+    static final RenderTestScene TEXTURE_3D_CREATE = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
@@ -416,24 +416,24 @@ public final class ScreenshotTestSuite {
 
         // Create and upload a 4x4x4 3D texture (proves the path works)
         var desc3d = TextureDescriptor.texture3d(4, 4, 4, TextureFormat.RGBA8);
-        var tex3d = renderer.device().createTexture(desc3d);
+        var tex3d = renderer.gpu().createTexture(desc3d);
         var pixels = java.nio.ByteBuffer.allocateDirect(4 * 4 * 4 * 4);
         for (int i = 0; i < 4 * 4 * 4; i++) {
             pixels.put((byte) 255).put((byte) 128).put((byte) 0).put((byte) 255);
         }
         pixels.flip();
-        renderer.device().uploadTexture(tex3d, pixels);
-        renderer.device().destroyTexture(tex3d);
+        renderer.gpu().uploadTexture(tex3d, pixels);
+        renderer.gpu().destroyTexture(tex3d);
 
         // Render a visible cube to prove the scene works
-        var cube = renderer.scene().createEntity();
+        var cube = scene.createEntity();
         cube.add(PrimitiveMeshes.cube());
         cube.add(MaterialData.unlit(new Vec3(1.0f, 0.5f, 0.0f))); // orange = success
         cube.add(Transform.IDENTITY);
     };
 
     /** Creates a 2D array texture (verifies API), renders an unlit sphere alongside. */
-    static final RenderTestScene TEXTURE_ARRAY_CREATE = (renderer, w, h) -> {
+    static final RenderTestScene TEXTURE_ARRAY_CREATE = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
@@ -441,31 +441,31 @@ public final class ScreenshotTestSuite {
 
         // Create a 4x4 2D array texture with 3 layers
         var descArr = TextureDescriptor.texture2dArray(4, 4, 3, TextureFormat.RGBA8);
-        var texArr = renderer.device().createTexture(descArr);
+        var texArr = renderer.gpu().createTexture(descArr);
         var pixels = java.nio.ByteBuffer.allocateDirect(4 * 4 * 3 * 4);
         for (int i = 0; i < 4 * 4 * 3; i++) {
             pixels.put((byte) 0).put((byte) 255).put((byte) 128).put((byte) 255);
         }
         pixels.flip();
-        renderer.device().uploadTexture(texArr, pixels);
-        renderer.device().destroyTexture(texArr);
+        renderer.gpu().uploadTexture(texArr, pixels);
+        renderer.gpu().destroyTexture(texArr);
 
         // Render a visible sphere to prove the scene works
-        var sphere = renderer.scene().createEntity();
+        var sphere = scene.createEntity();
         sphere.add(PrimitiveMeshes.sphere());
         sphere.add(MaterialData.unlit(new Vec3(0.0f, 1.0f, 0.5f))); // teal = success
         sphere.add(Transform.IDENTITY);
     };
 
     /** Stencil write + test — left quad writes to stencil, right quad only shows where stencil is set. */
-    static final RenderTestScene STENCIL_MASKING = (renderer, w, h) -> {
+    static final RenderTestScene STENCIL_MASKING = (renderer, scene, w, h) -> {
         var cam = renderer.createCamera();
         cam.lookAt(new Vec3(0, 0, 5), Vec3.ZERO, Vec3.UNIT_Y);
         cam.setPerspective((float) Math.toRadians(60), (float) w / h, 0.1f, 100f);
         renderer.setActiveCamera(cam);
 
         // First pass: small green quad writes 1 to stencil buffer
-        var stencilWriter = renderer.scene().createEntity();
+        var stencilWriter = scene.createEntity();
         stencilWriter.add(PrimitiveMeshes.quad());
         stencilWriter.add(MaterialData.unlit(new Vec3(0.0f, 0.8f, 0.0f))
             .set(RenderState.STENCIL_TEST, true)
@@ -478,7 +478,7 @@ public final class ScreenshotTestSuite {
         stencilWriter.add(Transform.at(0, 0, 0).withScale(new Vec3(0.5f, 0.5f, 1)));
 
         // Second pass: large blue quad only renders where stencil == 1
-        var stencilReader = renderer.scene().createEntity();
+        var stencilReader = scene.createEntity();
         stencilReader.add(PrimitiveMeshes.quad());
         stencilReader.add(MaterialData.unlit(new Vec3(0.0f, 0.0f, 0.9f))
             .set(RenderState.STENCIL_TEST, true)

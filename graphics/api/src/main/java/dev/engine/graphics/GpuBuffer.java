@@ -2,7 +2,7 @@ package dev.engine.graphics;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.core.layout.StructLayout;
-import dev.engine.core.shader.SlangStructGenerator;
+import dev.engine.graphics.shader.SlangStructGenerator;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;

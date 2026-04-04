@@ -63,7 +63,7 @@ public class HighLevelSceneExample {
         var cubeMesh = renderer.createMesh(vertices, indices, format);
 
         // Create entities via scene — no manual GPU resource management
-        var scene = (HierarchicalScene) renderer.scene();
+        var scene = new HierarchicalScene();
         var root = scene.createEntity();
         var cube1 = scene.createEntity();
         var cube2 = scene.createEntity();
@@ -97,7 +97,7 @@ public class HighLevelSceneExample {
             renderer.setViewport(window.width(), window.height());
 
             // One call renders everything
-            renderer.renderFrame();
+            renderer.renderFrame(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
         }
 
         renderer.close();

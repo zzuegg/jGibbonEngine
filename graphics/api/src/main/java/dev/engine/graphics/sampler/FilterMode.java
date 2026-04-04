@@ -6,6 +6,8 @@ public interface FilterMode {
     FilterMode NEAREST = NamedFilter.of("NEAREST");
     FilterMode LINEAR = NamedFilter.of("LINEAR");
     FilterMode NEAREST_MIPMAP_NEAREST = NamedFilter.of("NEAREST_MIPMAP_NEAREST");
+    FilterMode NEAREST_MIPMAP_LINEAR = NamedFilter.of("NEAREST_MIPMAP_LINEAR");
+    FilterMode LINEAR_MIPMAP_NEAREST = NamedFilter.of("LINEAR_MIPMAP_NEAREST");
     FilterMode LINEAR_MIPMAP_LINEAR = NamedFilter.of("LINEAR_MIPMAP_LINEAR");
 }
 

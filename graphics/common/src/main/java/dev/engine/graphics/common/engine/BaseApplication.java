@@ -8,10 +8,9 @@ import dev.engine.core.profiler.Profiler;
 import dev.engine.core.profiler.RenderStats;
 import dev.engine.core.scene.AbstractScene;
 import dev.engine.core.scene.camera.Camera;
-import dev.engine.graphics.RenderDevice;
-import dev.engine.graphics.common.NoOpShaderCompiler;
+import dev.engine.graphics.GraphicsBackend;
 import dev.engine.graphics.common.Renderer;
-import dev.engine.graphics.shader.ShaderCompiler;
+import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
 import org.slf4j.Logger;
@@ -36,7 +35,11 @@ import org.slf4j.LoggerFactory;
  * }
  *
  * // Launch:
- * new MyGame().run(config, toolkit, device);
+ * var config = EngineConfig.builder()
+ *     .platform(DesktopPlatform.builder().build())
+ *     .graphicsBackend(OpenGlBackend.factory(glBindings))
+ *     .build();
+ * new MyGame().launch(config);
  * </pre>
  */
 public abstract class BaseApplication {
@@ -50,55 +53,25 @@ public abstract class BaseApplication {
     private Camera defaultCamera;
 
     /**
-     * Launches with a toolkit + device factory.
-     * The factory creates the toolkit and device, then this handles the rest.
+     * Launches the application with the given configuration.
+     * The config provides platform, graphics backend, window settings, and scene type.
      */
-    public void launch(EngineConfig config, BackendFactory factory) {
+    public void launch(EngineConfig config) {
         try {
-            var backend = factory.create(config);
+            var windowDesc = new WindowDescriptor(
+                    config.windowTitle(), config.windowSize().x(), config.windowSize().y());
+            var backend = config.graphicsBackend().create(windowDesc);
             this.toolkit = backend.toolkit();
             this.window = backend.window();
-            runInternal(config, backend.device(), backend.compiler());
+            runInternal(config, backend);
         } catch (Exception e) {
             log.error("Failed to launch application", e);
             throw new RuntimeException(e);
         }
     }
 
-    /** Factory for creating backend-specific toolkit + device + window. */
-    public interface BackendFactory {
-        BackendInstance create(EngineConfig config);
-    }
-
-    public record BackendInstance(WindowToolkit toolkit, WindowHandle window, RenderDevice device, ShaderCompiler compiler) {
-        /** Backward-compatible constructor without compiler. */
-        public BackendInstance(WindowToolkit toolkit, WindowHandle window, RenderDevice device) {
-            this(toolkit, window, device, new NoOpShaderCompiler());
-        }
-    }
-
-    /**
-     * Starts the application with explicit toolkit and render device.
-     * Blocks until the window is closed.
-     */
-    public void run(EngineConfig config, WindowToolkit toolkit, RenderDevice device) {
-        this.toolkit = toolkit;
-        this.window = toolkit.createWindow(
-                new dev.engine.graphics.window.WindowDescriptor(
-                        config.windowTitle(), config.windowWidth(), config.windowHeight()));
-        runInternal(config, device, new NoOpShaderCompiler());
-    }
-
-    public void run(EngineConfig config, WindowToolkit toolkit, RenderDevice device, ShaderCompiler compiler) {
-        this.toolkit = toolkit;
-        this.window = toolkit.createWindow(
-                new dev.engine.graphics.window.WindowDescriptor(
-                        config.windowTitle(), config.windowWidth(), config.windowHeight()));
-        runInternal(config, device, compiler);
-    }
-
-    private void runInternal(EngineConfig config, RenderDevice device, ShaderCompiler compiler) {
-        this.engine = new Engine(config, device, compiler);
+    private void runInternal(EngineConfig config, GraphicsBackend backend) {
+        this.engine = new Engine(config, config.platform(), backend.device());
         this.input = new InputState();
 
         // Default camera

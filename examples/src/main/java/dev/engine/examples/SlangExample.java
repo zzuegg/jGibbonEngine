@@ -36,7 +36,7 @@ public class SlangExample {
                 HighLevelSceneExample.cubeIndices(), format);
 
         // Create scene entities with unlit material
-        var scene = (HierarchicalScene) renderer.scene();
+        var scene = new HierarchicalScene();
         var root = scene.createEntity();
         var cube1 = scene.createEntity(); cube1.setParent(root);
         var cube2 = scene.createEntity(); cube2.setParent(root);
@@ -70,7 +70,7 @@ public class SlangExample {
 
             camera.setPerspective((float) Math.toRadians(60), aspect, 0.1f, 100f);
             renderer.setViewport(window.width(), window.height());
-            renderer.renderFrame();
+            renderer.renderFrame(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
         }
 
         renderer.close();

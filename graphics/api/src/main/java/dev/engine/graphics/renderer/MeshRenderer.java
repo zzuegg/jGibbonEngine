@@ -45,6 +45,8 @@ public class MeshRenderer {
                 materials.remove(removed.entity());
                 materialData.remove(removed.entity());
             }
+            case Transaction.ComponentChanged cc -> processComponentChanged(cc);
+            // Legacy transaction types — kept for compatibility
             case Transaction.TransformChanged changed ->
                     transforms.put(changed.entity(), changed.transform());
             case Transaction.MaterialPropertyChanged changed -> {
@@ -58,7 +60,6 @@ public class MeshRenderer {
             case Transaction.MaterialReplaced replaced -> {
                 var mat = materials.get(replaced.entity());
                 if (mat != null && replaced.material() != null) {
-                    // Replace all properties from the snapshot
                     for (var key : replaced.material().keys()) {
                         @SuppressWarnings("unchecked")
                         var typedKey = (PropertyKey<Object>) key;
@@ -68,16 +69,35 @@ public class MeshRenderer {
             }
             case Transaction.MeshChanged changed -> {
                 meshDataAssignments.put(changed.entity(), changed.meshData());
-                renderables.remove(changed.entity()); // force re-resolve
+                renderables.remove(changed.entity());
             }
             case Transaction.MaterialDataChanged changed -> {
                 materialData.put(changed.entity(), changed.materialData());
-                renderables.remove(changed.entity()); // force re-resolve with new material
+                renderables.remove(changed.entity());
             }
             case Transaction.MeshAssigned assigned ->
                     meshAssignments.put(assigned.entity(), assigned.mesh());
             case Transaction.MaterialAssigned assigned ->
                     materialAssignments.put(assigned.entity(), assigned.material());
+            default -> {} // Unknown transaction types — ignore
+        }
+    }
+
+    private void processComponentChanged(Transaction.ComponentChanged cc) {
+        var entity = cc.entity();
+        var component = cc.component();
+        switch (component) {
+            case dev.engine.core.scene.component.Transform t ->
+                    transforms.put(entity, t.toMatrix());
+            case MeshData m -> {
+                meshDataAssignments.put(entity, m);
+                renderables.remove(entity);
+            }
+            case MaterialData md -> {
+                materialData.put(entity, md);
+                renderables.remove(entity);
+            }
+            default -> {} // Not a graphics component — ignore
         }
     }
 

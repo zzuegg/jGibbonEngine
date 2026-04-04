@@ -214,13 +214,14 @@ public class RenderTestHarness {
         }
     }
 
-    private byte[] renderWith(RenderDevice device, RenderTestScene scene) {
+    private byte[] renderWith(RenderDevice device, RenderTestScene testScene) {
         var renderer = new Renderer(device, new SlangShaderCompiler());
+        var scene = new dev.engine.core.scene.Scene();
         renderer.setViewport(width, height);
-        scene.setup(renderer, width, height);
+        testScene.setup(renderer, scene, width, height);
 
         for (int i = 0; i < 3; i++) {
-            renderer.renderFrame();
+            renderer.renderFrame(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
         }
 
         byte[] pixels = device.readFramebuffer(width, height);

@@ -90,7 +90,10 @@ final class VkPipelineFactory {
                 VkBindings.VK_DYNAMIC_STATE_CULL_MODE,
                 VkBindings.VK_DYNAMIC_STATE_FRONT_FACE,
                 VkBindings.VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE,
-                VkBindings.VK_DYNAMIC_STATE_STENCIL_OP
+                VkBindings.VK_DYNAMIC_STATE_STENCIL_OP,
+                VkBindings.VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
+                VkBindings.VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
+                VkBindings.VK_DYNAMIC_STATE_STENCIL_REFERENCE
         };
 
         long pipeline = vk.createGraphicsPipeline(device, renderPass, pipelineLayout,

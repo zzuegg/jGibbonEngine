@@ -179,7 +179,14 @@ public class WgpuRenderDevice implements RenderDevice {
             int frontFace,
             boolean depthTest,
             boolean depthWrite,
-            String depthFunc
+            String depthFunc,
+            boolean stencilTest,
+            String stencilFunc,
+            int stencilRef,
+            int stencilMask,
+            String stencilPassOp,
+            String stencilFailOp,
+            String stencilDepthFailOp
     ) {}
 
     private final Map<PipelineStateKey, Long> pipelineVariants = new HashMap<>();
@@ -484,13 +491,17 @@ public class WgpuRenderDevice implements RenderDevice {
     @Override
     public Handle<SamplerResource> createSampler(SamplerDescriptor descriptor) {
         if (nativeAvailable) {
+            int compare = descriptor.compareFunc() != null
+                    ? mapCompareFunction(descriptor.compareFunc()) : 0; // 0 = undefined/disabled in WebGPU
             long sampler = gpu.deviceCreateSampler(wgpuDevice,
                     mapWrapMode(descriptor.wrapS()),
                     mapWrapMode(descriptor.wrapT()),
-                    mapWrapMode(descriptor.wrapS()),
+                    mapWrapMode(descriptor.wrapR()),
                     mapFilterMode(descriptor.magFilter()),
                     mapFilterMode(descriptor.minFilter()),
-                    mapMipmapFilterMode(descriptor.minFilter()));
+                    mapMipmapFilterMode(descriptor.minFilter()),
+                    descriptor.minLod(), descriptor.maxLod(),
+                    compare, descriptor.maxAnisotropy());
             return samplers.register(new WgpuSampler(sampler, descriptor));
         }
         return samplers.register(new WgpuSampler(0, descriptor));
@@ -775,7 +786,14 @@ public class WgpuRenderDevice implements RenderDevice {
                 wgpuFrontFace,
                 depthTestEnabled,
                 depthWriteEnabled,
-                depthFunc.name()
+                depthFunc.name(),
+                stencilTestEnabled,
+                stencilFunc.name(),
+                stencilRef,
+                stencilMask,
+                stencilPassOp.name(),
+                stencilFailOp.name(),
+                stencilDepthFailOp.name()
         );
 
         return pipelineVariants.computeIfAbsent(key, k -> buildPipelineVariant(basePipeline));
@@ -1464,15 +1482,17 @@ public class WgpuRenderDevice implements RenderDevice {
     }
 
     private static int mapFilterMode(FilterMode mode) {
-        if (mode == FilterMode.NEAREST || mode == FilterMode.NEAREST_MIPMAP_NEAREST) {
+        if (mode == FilterMode.NEAREST || mode == FilterMode.NEAREST_MIPMAP_NEAREST
+                || mode == FilterMode.NEAREST_MIPMAP_LINEAR) {
             return WgpuBindings.FILTER_MODE_NEAREST;
         }
         return WgpuBindings.FILTER_MODE_LINEAR;
     }
 
     private static int mapMipmapFilterMode(FilterMode mode) {
-        if (mode == FilterMode.LINEAR_MIPMAP_LINEAR) return WgpuBindings.MIPMAP_FILTER_MODE_LINEAR;
-        if (mode == FilterMode.NEAREST_MIPMAP_NEAREST) return WgpuBindings.MIPMAP_FILTER_MODE_NEAREST;
+        if (mode == FilterMode.LINEAR_MIPMAP_LINEAR || mode == FilterMode.NEAREST_MIPMAP_LINEAR) {
+            return WgpuBindings.MIPMAP_FILTER_MODE_LINEAR;
+        }
         return WgpuBindings.MIPMAP_FILTER_MODE_NEAREST;
     }
 
@@ -1481,6 +1501,20 @@ public class WgpuRenderDevice implements RenderDevice {
         if (mode == WrapMode.CLAMP_TO_EDGE) return WgpuBindings.ADDRESS_MODE_CLAMP_TO_EDGE;
         if (mode == WrapMode.MIRRORED_REPEAT) return WgpuBindings.ADDRESS_MODE_MIRROR_REPEAT;
         return WgpuBindings.ADDRESS_MODE_REPEAT;
+    }
+
+    private static int mapCompareFunction(dev.engine.graphics.sampler.CompareFunc func) {
+        return switch (func.name()) {
+            case "NEVER" -> WgpuBindings.COMPARE_NEVER;
+            case "LESS" -> WgpuBindings.COMPARE_LESS;
+            case "EQUAL" -> WgpuBindings.COMPARE_EQUAL;
+            case "LESS_EQUAL" -> WgpuBindings.COMPARE_LESS_EQUAL;
+            case "GREATER" -> WgpuBindings.COMPARE_GREATER;
+            case "NOT_EQUAL" -> WgpuBindings.COMPARE_NOT_EQUAL;
+            case "GREATER_EQUAL" -> WgpuBindings.COMPARE_GREATER_EQUAL;
+            case "ALWAYS" -> WgpuBindings.COMPARE_ALWAYS;
+            default -> WgpuBindings.COMPARE_LESS;
+        };
     }
 
     private static int mapCompareFunc(CompareFunc func) {

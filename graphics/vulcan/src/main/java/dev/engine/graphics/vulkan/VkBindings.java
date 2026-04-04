@@ -152,7 +152,10 @@ public interface VkBindings {
 
     long createSampler(long device, int magFilter, int minFilter, int mipmapMode,
                        int addressModeU, int addressModeV, int addressModeW,
-                       float minLod, float maxLod);
+                       float minLod, float maxLod, float lodBias,
+                       boolean anisotropyEnable, float maxAnisotropy,
+                       boolean compareEnable, int compareOp,
+                       int borderColor);
 
     void destroySampler(long device, long sampler);
 
@@ -360,6 +363,8 @@ public interface VkBindings {
 
     void cmdSetStencilCompareMask(long cmd, int faceMask, int mask);
 
+    void cmdSetStencilWriteMask(long cmd, int faceMask, int mask);
+
     void cmdSetStencilReference(long cmd, int faceMask, int reference);
 
     // ===== Sync =====
@@ -466,8 +471,9 @@ public interface VkBindings {
     int VK_IMAGE_LAYOUT_PRESENT_SRC_KHR                  = 1000001002;
 
     // Image aspects
-    int VK_IMAGE_ASPECT_COLOR_BIT = 0x00000001;
-    int VK_IMAGE_ASPECT_DEPTH_BIT = 0x00000002;
+    int VK_IMAGE_ASPECT_COLOR_BIT   = 0x00000001;
+    int VK_IMAGE_ASPECT_DEPTH_BIT   = 0x00000002;
+    int VK_IMAGE_ASPECT_STENCIL_BIT = 0x00000004;
 
     // Formats
     int VK_FORMAT_R8_UNORM                = 9;
@@ -591,6 +597,7 @@ public interface VkBindings {
     int VK_SAMPLER_ADDRESS_MODE_REPEAT          = 0;
     int VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT = 1;
     int VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE   = 2;
+    int VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER = 3;
 
     // Polygon mode
     int VK_POLYGON_MODE_FILL = 0;
@@ -634,6 +641,9 @@ public interface VkBindings {
     int VK_DYNAMIC_STATE_DEPTH_COMPARE_OP     = 1000267008;
     int VK_DYNAMIC_STATE_CULL_MODE            = 1000267000;
     int VK_DYNAMIC_STATE_FRONT_FACE           = 1000267001;
+    int VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK = 6;
+    int VK_DYNAMIC_STATE_STENCIL_WRITE_MASK   = 7;
+    int VK_DYNAMIC_STATE_STENCIL_REFERENCE    = 8;
     int VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE  = 1000267010;
     int VK_DYNAMIC_STATE_STENCIL_OP           = 1000267011;
 
@@ -650,7 +660,12 @@ public interface VkBindings {
     int VK_QUEUE_FAMILY_IGNORED = (~0);
 
     // Border color
-    int VK_BORDER_COLOR_INT_OPAQUE_BLACK = 3;
+    int VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK = 0;
+    int VK_BORDER_COLOR_INT_TRANSPARENT_BLACK   = 1;
+    int VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK      = 2;
+    int VK_BORDER_COLOR_INT_OPAQUE_BLACK        = 3;
+    int VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE      = 4;
+    int VK_BORDER_COLOR_INT_OPAQUE_WHITE        = 5;
 
     // Blend ops
     int VK_BLEND_OP_ADD = 0;

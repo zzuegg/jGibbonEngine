@@ -23,7 +23,7 @@ class EngineTest {
                     .headless(true)
                     .threaded(false)
                     .build();
-            var engine = new Engine(config);
+            var engine = new Engine(config, HeadlessPlatform.INSTANCE, new HeadlessRenderDevice());
             assertNotNull(engine.modules());
             assertNotNull(engine.assets());
             assertNotNull(engine.renderer());
@@ -32,7 +32,7 @@ class EngineTest {
 
         @Test void singleThreadedTick() {
             var config = EngineConfig.builder().headless(true).threaded(false).build();
-            var engine = new Engine(config);
+            var engine = new Engine(config, HeadlessPlatform.INSTANCE, new HeadlessRenderDevice());
 
             var tickCount = new AtomicInteger(0);
             engine.modules().add(new AbstractModule<Time>() {
@@ -52,21 +52,21 @@ class EngineTest {
     class ModuleAccess {
         @Test void assetModuleAccessible() {
             var config = EngineConfig.builder().headless(true).threaded(false).build();
-            var engine = new Engine(config);
+            var engine = new Engine(config, HeadlessPlatform.INSTANCE, new HeadlessRenderDevice());
             assertNotNull(engine.assets());
             engine.shutdown();
         }
 
         @Test void rendererAccessible() {
             var config = EngineConfig.builder().headless(true).threaded(false).build();
-            var engine = new Engine(config);
+            var engine = new Engine(config, HeadlessPlatform.INSTANCE, new HeadlessRenderDevice());
             assertNotNull(engine.renderer());
             engine.shutdown();
         }
 
         @Test void sceneAccessible() {
             var config = EngineConfig.builder().headless(true).threaded(false).build();
-            var engine = new Engine(config);
+            var engine = new Engine(config, HeadlessPlatform.INSTANCE, new HeadlessRenderDevice());
             assertNotNull(engine.scene());
             engine.shutdown();
         }
@@ -76,7 +76,7 @@ class EngineTest {
     class UserModules {
         @Test void userModuleGetsInitAndUpdate() {
             var config = EngineConfig.builder().headless(true).threaded(false).build();
-            var engine = new Engine(config);
+            var engine = new Engine(config, HeadlessPlatform.INSTANCE, new HeadlessRenderDevice());
 
             var events = new ArrayList<String>();
             engine.modules().add(new AbstractModule<Time>() {

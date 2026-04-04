@@ -522,12 +522,17 @@ public class VkRenderDevice implements RenderDevice {
         int magFilter = mapFilter(descriptor.magFilter());
         int minFilter = mapFilter(descriptor.minFilter());
         int mipmapMode = mapMipmapMode(descriptor.minFilter());
-        float maxLod = isMipmapFilter(descriptor.minFilter()) ? 1000.0f : 0.0f;
+        boolean anisotropyEnable = descriptor.maxAnisotropy() > 1f;
+        boolean compareEnable = descriptor.compareFunc() != null;
+        int compareOp = compareEnable ? mapCompareOp(descriptor.compareFunc()) : VkBindings.VK_COMPARE_OP_NEVER;
+        int borderColor = mapBorderColor(descriptor.borderColor());
 
         long sampler = vk.createSampler(device, magFilter, minFilter, mipmapMode,
                 mapWrapMode(descriptor.wrapS()), mapWrapMode(descriptor.wrapT()),
-                VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT,
-                0.0f, maxLod);
+                mapWrapMode(descriptor.wrapR()),
+                descriptor.minLod(), descriptor.maxLod(), descriptor.lodBias(),
+                anisotropyEnable, descriptor.maxAnisotropy(),
+                compareEnable, compareOp, borderColor);
 
         return samplerRegistry.register(new VkSamplerAllocation(sampler, descriptor));
     }
@@ -1081,6 +1086,7 @@ public class VkRenderDevice implements RenderDevice {
                         int ref = props.contains(RenderState.STENCIL_REF) ? props.get(RenderState.STENCIL_REF) : 0;
                         int mask = props.contains(RenderState.STENCIL_MASK) ? props.get(RenderState.STENCIL_MASK) : 0xFF;
                         vk.cmdSetStencilCompareMask(cmd, VkBindings.VK_STENCIL_FACE_FRONT_AND_BACK, mask);
+                        vk.cmdSetStencilWriteMask(cmd, VkBindings.VK_STENCIL_FACE_FRONT_AND_BACK, mask);
                         vk.cmdSetStencilReference(cmd, VkBindings.VK_STENCIL_FACE_FRONT_AND_BACK, ref);
                     }
                     if (props.contains(RenderState.STENCIL_FAIL)) {
@@ -1399,22 +1405,15 @@ public class VkRenderDevice implements RenderDevice {
 
     private int mapFilter(dev.engine.graphics.sampler.FilterMode mode) {
         return switch (mode.name()) {
-            case "LINEAR", "LINEAR_MIPMAP_LINEAR" -> VkBindings.VK_FILTER_LINEAR;
+            case "LINEAR", "LINEAR_MIPMAP_LINEAR", "LINEAR_MIPMAP_NEAREST" -> VkBindings.VK_FILTER_LINEAR;
             default -> VkBindings.VK_FILTER_NEAREST;
         };
     }
 
     private int mapMipmapMode(dev.engine.graphics.sampler.FilterMode mode) {
         return switch (mode.name()) {
-            case "LINEAR_MIPMAP_LINEAR" -> VkBindings.VK_SAMPLER_MIPMAP_MODE_LINEAR;
+            case "LINEAR_MIPMAP_LINEAR", "NEAREST_MIPMAP_LINEAR" -> VkBindings.VK_SAMPLER_MIPMAP_MODE_LINEAR;
             default -> VkBindings.VK_SAMPLER_MIPMAP_MODE_NEAREST;
-        };
-    }
-
-    private boolean isMipmapFilter(dev.engine.graphics.sampler.FilterMode mode) {
-        return switch (mode.name()) {
-            case "NEAREST_MIPMAP_NEAREST", "LINEAR_MIPMAP_LINEAR" -> true;
-            default -> false;
         };
     }
 
@@ -1422,7 +1421,31 @@ public class VkRenderDevice implements RenderDevice {
         return switch (mode.name()) {
             case "CLAMP_TO_EDGE" -> VkBindings.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
             case "MIRRORED_REPEAT" -> VkBindings.VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+            case "CLAMP_TO_BORDER" -> VkBindings.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
             default -> VkBindings.VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        };
+    }
+
+    private int mapCompareOp(dev.engine.graphics.sampler.CompareFunc func) {
+        return switch (func.name()) {
+            case "NEVER" -> VkBindings.VK_COMPARE_OP_NEVER;
+            case "LESS" -> VkBindings.VK_COMPARE_OP_LESS;
+            case "EQUAL" -> VkBindings.VK_COMPARE_OP_EQUAL;
+            case "LESS_EQUAL" -> VkBindings.VK_COMPARE_OP_LESS_OR_EQUAL;
+            case "GREATER" -> VkBindings.VK_COMPARE_OP_GREATER;
+            case "NOT_EQUAL" -> VkBindings.VK_COMPARE_OP_NOT_EQUAL;
+            case "GREATER_EQUAL" -> VkBindings.VK_COMPARE_OP_GREATER_OR_EQUAL;
+            case "ALWAYS" -> VkBindings.VK_COMPARE_OP_ALWAYS;
+            default -> VkBindings.VK_COMPARE_OP_LESS;
+        };
+    }
+
+    private int mapBorderColor(dev.engine.graphics.sampler.BorderColor color) {
+        if (color == null) return VkBindings.VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+        return switch (color.name()) {
+            case "OPAQUE_BLACK" -> VkBindings.VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+            case "OPAQUE_WHITE" -> VkBindings.VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+            default -> VkBindings.VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
         };
     }
 
@@ -1446,7 +1469,8 @@ public class VkRenderDevice implements RenderDevice {
     }
 
     private boolean usesMipmaps(SamplerDescriptor desc) {
-        return isMipmapFilter(desc.minFilter());
+        var name = desc.minFilter().name();
+        return name.contains("MIPMAP");
     }
 
     private void generateMipmaps(Handle<TextureResource> textureHandle) {

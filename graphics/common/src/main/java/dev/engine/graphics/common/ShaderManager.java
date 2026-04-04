@@ -5,8 +5,8 @@ import dev.engine.core.asset.SlangShaderSource;
 import dev.engine.graphics.DeviceCapability;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.property.PropertyKey;
-import dev.engine.core.shader.GlobalParamsRegistry;
-import dev.engine.core.shader.SlangParamsBlock;
+import dev.engine.graphics.shader.GlobalParamsRegistry;
+import dev.engine.graphics.shader.SlangParamsBlock;
 import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -36,6 +36,8 @@ public class ShaderManager {
 
     private final RenderDevice device;
     private final Map<String, CompiledShader> shaderCache = new ConcurrentHashMap<>();
+    private final Map<String, CompiledShader> resolvedShaders = new HashMap<>();
+    private final Map<Integer, CompiledShader> entityShaders = new HashMap<>();
     private final GlobalParamsRegistry globalParams;
     private final int slangTarget; // ShaderCompiler.TARGET_GLSL / TARGET_SPIRV / TARGET_WGSL
     private AssetManager assetManager;
@@ -126,9 +128,69 @@ public class ShaderManager {
         if (old != null) device.destroyPipeline(old.pipeline());
     }
 
+    /**
+     * Resolves a shader for an entity based on its material's shader hint and keys.
+     * Returns null if no material or shader hint, or if compilation fails.
+     * Caches the result per entity.
+     */
+    public CompiledShader resolveForEntity(dev.engine.core.handle.Handle<?> entity,
+                                            dev.engine.core.material.MaterialData material) {
+        if (material == null || material.shaderHint() == null) return null;
+
+        var hint = material.shaderHint();
+        var shaderKeys = material.keys().stream()
+                .filter(k -> !RenderStateManager.isRenderStateKey(k))
+                .collect(java.util.stream.Collectors.toSet());
+        var keyNames = shaderKeys.stream()
+                .map(dev.engine.core.property.PropertyKey::name)
+                .sorted()
+                .toList();
+        var cacheKey = hint + "_" + String.join("_", keyNames);
+
+        var compiled = resolvedShaders.computeIfAbsent(cacheKey, k -> {
+            try {
+                if (hint.contains("/") || hint.contains(".")) {
+                    return compileSlangSource(loadShaderFile(hint), hint);
+                }
+                return getShaderWithMaterial(hint, shaderKeys);
+            } catch (Exception e) {
+                log.error("Shader compilation FAILED for hint='{}'", hint, e);
+                return null;
+            }
+        });
+
+        if (compiled != null) {
+            entityShaders.put(entity.index(), compiled);
+        }
+        return compiled;
+    }
+
+    /** Returns the compiled shader previously resolved for an entity, or null. */
+    public CompiledShader getEntityShader(dev.engine.core.handle.Handle<?> entity) {
+        return entityShaders.get(entity.index());
+    }
+
+    /**
+     * Extracts buffer name → binding slot map from a CompiledShader's reflection.
+     * Only includes constant buffer bindings.
+     */
+    public static Map<String, Integer> extractBufferBindings(CompiledShader compiled) {
+        if (compiled.bindings().isEmpty()) return Map.of();
+        var result = new java.util.HashMap<String, Integer>();
+        for (var entry : compiled.bindings().entrySet()) {
+            var binding = entry.getValue();
+            if (binding.type() == CompiledShader.BindingType.CONSTANT_BUFFER) {
+                result.put(entry.getKey(), binding.binding());
+            }
+        }
+        return result;
+    }
+
     public void invalidateAll() {
         for (var entry : shaderCache.values()) device.destroyPipeline(entry.pipeline());
         shaderCache.clear();
+        resolvedShaders.clear();
+        entityShaders.clear();
     }
 
     // --- Internal ---
@@ -233,7 +295,7 @@ public class ShaderManager {
 
             // Generate combined texture+sampler declarations for TextureData keys.
             // Uses Sampler2D (combined type) for cross-backend compatibility.
-            // Convention: key "albedoMap" → Sampler2D albedoTexture
+            // Convention: key "albedoTexture" → Sampler2D albedoTexture
             //
             // Binding strategy differs by target:
             //   - GLSL: Slang auto-assigns sequential layout(binding=N) after UBOs.
@@ -249,7 +311,7 @@ public class ShaderManager {
                     .sorted(java.util.Comparator.comparing(PropertyKey::name))
                     .toList();
             for (var key : sortedTexKeys) {
-                String texName = mapTextureKeyName(key.name());
+                String texName = key.name();
                 // Only emit vk::binding for SPIRV targets (Vulkan descriptor set layout).
                 // For WGSL/GLSL, let Slang auto-assign sequential bindings. Slang applies
                 // vk::binding to ALL targets (including WGSL), which would force texture
@@ -273,21 +335,6 @@ public class ShaderManager {
         return result;
     }
 
-    /**
-     * Maps a material texture key name to the shader texture parameter name.
-     * Convention: "albedoMap" → "albedoTexture", "normalMap" → "normalTexture".
-     */
-    private static String mapTextureKeyName(String keyName) {
-        return switch (keyName) {
-            case "albedoMap" -> "albedoTexture";
-            case "normalMap" -> "normalTexture";
-            case "roughnessMap" -> "roughnessTexture";
-            case "metallicMap" -> "metallicTexture";
-            case "emissiveMap" -> "emissiveTexture";
-            case "aoMap" -> "aoTexture";
-            default -> keyName;
-        };
-    }
 
     /**
      * Converts compiler-provided parameter info to CompiledShader bindings.

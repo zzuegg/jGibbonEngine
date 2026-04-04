@@ -100,7 +100,7 @@ class MaterialDataTest {
             var mat = MaterialData.pbr(Vec3.ONE, 0.5f, 0.2f);
             assertTrue(mat.has(MaterialData.ALBEDO_COLOR));
             assertTrue(mat.has(MaterialData.ROUGHNESS));
-            assertFalse(mat.has(MaterialData.NORMAL_MAP));
+            assertFalse(mat.has(MaterialData.NORMAL_TEXTURE));
             assertTrue(mat.keys().size() >= 3);
         }
     }

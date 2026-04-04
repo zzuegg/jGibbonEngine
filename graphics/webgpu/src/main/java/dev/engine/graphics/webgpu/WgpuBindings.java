@@ -199,7 +199,9 @@ public interface WgpuBindings {
      * @return sampler handle
      */
     long deviceCreateSampler(long device, int addressU, int addressV, int addressW,
-                             int magFilter, int minFilter, int mipmapFilter);
+                             int magFilter, int minFilter, int mipmapFilter,
+                             float lodMinClamp, float lodMaxClamp,
+                             int compare, float maxAnisotropy);
 
     /** Releases a sampler. */
     void samplerRelease(long sampler);

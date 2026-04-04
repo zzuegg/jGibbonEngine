@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":graphics:api"))
     implementation(project(":graphics:common"))
+    implementation(project(":platforms:desktop"))
     implementation(project(":graphics:opengl"))
     implementation(project(":providers:lwjgl-gl"))
     implementation(project(":graphics:vulcan"))

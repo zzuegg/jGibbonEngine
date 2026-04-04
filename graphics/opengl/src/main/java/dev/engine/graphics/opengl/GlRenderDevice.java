@@ -324,6 +324,22 @@ public class GlRenderDevice implements RenderDevice {
         gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_MAG_FILTER, mapFilterMode(descriptor.magFilter()));
         gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_WRAP_S, mapWrapMode(descriptor.wrapS()));
         gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_WRAP_T, mapWrapMode(descriptor.wrapT()));
+        gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_WRAP_R, mapWrapMode(descriptor.wrapR()));
+        gl.glSamplerParameterf(glSampler, GlBindings.GL_TEXTURE_MIN_LOD, descriptor.minLod());
+        gl.glSamplerParameterf(glSampler, GlBindings.GL_TEXTURE_MAX_LOD, descriptor.maxLod());
+        gl.glSamplerParameterf(glSampler, GlBindings.GL_TEXTURE_LOD_BIAS, descriptor.lodBias());
+        if (descriptor.maxAnisotropy() > 1f) {
+            gl.glSamplerParameterf(glSampler, GlBindings.GL_MAX_TEXTURE_MAX_ANISOTROPY, descriptor.maxAnisotropy());
+        }
+        if (descriptor.compareFunc() != null) {
+            gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_COMPARE_MODE, GlBindings.GL_COMPARE_REF_TO_TEXTURE);
+            gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_COMPARE_FUNC, mapCompareFunc(descriptor.compareFunc()));
+        }
+        if (descriptor.wrapS() == dev.engine.graphics.sampler.WrapMode.CLAMP_TO_BORDER
+                || descriptor.wrapT() == dev.engine.graphics.sampler.WrapMode.CLAMP_TO_BORDER
+                || descriptor.wrapR() == dev.engine.graphics.sampler.WrapMode.CLAMP_TO_BORDER) {
+            gl.glSamplerParameterfv(glSampler, GlBindings.GL_TEXTURE_BORDER_COLOR, mapBorderColor(descriptor.borderColor()));
+        }
 
         return samplers.register(new GlSampler(glSampler, descriptor));
     }
@@ -349,6 +365,8 @@ public class GlRenderDevice implements RenderDevice {
         if (mode == FilterMode.NEAREST) return GlBindings.GL_NEAREST;
         if (mode == FilterMode.LINEAR) return GlBindings.GL_LINEAR;
         if (mode == FilterMode.NEAREST_MIPMAP_NEAREST) return GlBindings.GL_NEAREST_MIPMAP_NEAREST;
+        if (mode == FilterMode.NEAREST_MIPMAP_LINEAR) return GlBindings.GL_NEAREST_MIPMAP_LINEAR;
+        if (mode == FilterMode.LINEAR_MIPMAP_NEAREST) return GlBindings.GL_LINEAR_MIPMAP_NEAREST;
         if (mode == FilterMode.LINEAR_MIPMAP_LINEAR) return GlBindings.GL_LINEAR_MIPMAP_LINEAR;
         return GlBindings.GL_LINEAR;
     }
@@ -357,7 +375,26 @@ public class GlRenderDevice implements RenderDevice {
         if (mode == WrapMode.REPEAT) return GlBindings.GL_REPEAT;
         if (mode == WrapMode.CLAMP_TO_EDGE) return GlBindings.GL_CLAMP_TO_EDGE;
         if (mode == WrapMode.MIRRORED_REPEAT) return GlBindings.GL_MIRRORED_REPEAT;
+        if (mode == WrapMode.CLAMP_TO_BORDER) return GlBindings.GL_CLAMP_TO_BORDER;
         return GlBindings.GL_REPEAT;
+    }
+
+    private static int mapCompareFunc(dev.engine.graphics.sampler.CompareFunc func) {
+        if (func == dev.engine.graphics.sampler.CompareFunc.NEVER) return GlBindings.GL_NEVER;
+        if (func == dev.engine.graphics.sampler.CompareFunc.LESS) return GlBindings.GL_LESS;
+        if (func == dev.engine.graphics.sampler.CompareFunc.EQUAL) return GlBindings.GL_EQUAL;
+        if (func == dev.engine.graphics.sampler.CompareFunc.LESS_EQUAL) return GlBindings.GL_LEQUAL;
+        if (func == dev.engine.graphics.sampler.CompareFunc.GREATER) return GlBindings.GL_GREATER;
+        if (func == dev.engine.graphics.sampler.CompareFunc.NOT_EQUAL) return GlBindings.GL_NOTEQUAL;
+        if (func == dev.engine.graphics.sampler.CompareFunc.GREATER_EQUAL) return GlBindings.GL_GEQUAL;
+        if (func == dev.engine.graphics.sampler.CompareFunc.ALWAYS) return GlBindings.GL_ALWAYS;
+        return GlBindings.GL_LESS;
+    }
+
+    private static float[] mapBorderColor(dev.engine.graphics.sampler.BorderColor color) {
+        if (color == dev.engine.graphics.sampler.BorderColor.OPAQUE_BLACK) return new float[]{0, 0, 0, 1};
+        if (color == dev.engine.graphics.sampler.BorderColor.OPAQUE_WHITE) return new float[]{1, 1, 1, 1};
+        return new float[]{0, 0, 0, 0}; // TRANSPARENT_BLACK
     }
 
     private static int mapComponentType(ComponentType type) {

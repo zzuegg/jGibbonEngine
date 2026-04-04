@@ -1,9 +1,7 @@
 package dev.engine.core.scene;
 
 import dev.engine.core.handle.Handle;
-import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
-import dev.engine.core.mesh.MeshData;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.core.property.PropertyMap;
 import dev.engine.core.scene.component.Transform;
@@ -36,17 +34,7 @@ public abstract class AbstractScene {
     // --- Component change handling (called by Entity.add()) ---
 
     void componentChanged(Entity entity, Component component) {
-        switch (component) {
-            case Transform t ->
-                transactions.transformChanged(entity.handle(), t.toMatrix());
-            case MeshData m ->
-                transactions.meshChanged(entity.handle(), m);
-            case MaterialData md ->
-                transactions.materialDataChanged(entity.handle(), md);
-            default -> {
-                // Custom components — no built-in transaction
-            }
-        }
+        transactions.componentChanged(entity.handle(), component);
     }
 
     // --- Legacy compat (used by some internal code) ---
