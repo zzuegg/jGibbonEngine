@@ -54,8 +54,9 @@ public class ScreenshotReportGenerator {
         for (var s : discovery.scenes()) categoryMap.put(s.name(), s.category());
 
         return scenes.entrySet().stream()
+                .filter(e -> categoryMap.containsKey(e.getKey())) // only scenes known to discovery
                 .map(e -> new SceneResult(e.getKey(),
-                        categoryMap.getOrDefault(e.getKey(), "Other"),
+                        categoryMap.get(e.getKey()),
                         e.getValue()))
                 .sorted(Comparator.comparing(SceneResult::category).thenComparing(SceneResult::name))
                 .collect(Collectors.toList());
