@@ -44,6 +44,16 @@ public class UiSamplerExample extends BaseApplication {
     private int chartOffset = 0;
     private int chartCount = 0;
 
+    // Accordion state
+    private boolean accTransform = true;
+    private boolean accMaterial = true;
+    private boolean accLighting = false;
+    private boolean accPhysics = false;
+    private boolean accAudio = false;
+    private float lightIntensity = 0.8f;
+    private float lightAngle = 45f;
+    private int materialType = 0;
+
     // Scene state
     private dev.engine.core.scene.Entity cube;
     private float cubeRotation = 0;
@@ -335,6 +345,93 @@ public class UiSamplerExample extends BaseApplication {
         }
         ui.end();
 
+        // ═══════════════════════════════════════════════════════════
+        // Panel 7: Accordion Inspector (side panel style)
+        // ═══════════════════════════════════════════════════════════
+        if (ui.begin("Inspector", 860, 10, 240, 640,
+                NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE
+                        | NkContext.WINDOW_NO_SCROLLBAR)) {
+
+            // ── Transform section ──
+            ui.layoutRowDynamic(20, 1);
+            accTransform = ui.treePush("Transform", accTransform);
+            if (accTransform) {
+                ui.layoutRowDynamic(22, 3);
+                cubeX = ui.propertyFloat("X", -10, cubeX, 10, 0.1f, 0.02f);
+                cubeY = ui.propertyFloat("Y", -10, cubeY, 10, 0.1f, 0.02f);
+                cubeZ = ui.propertyFloat("Z", -10, cubeZ, 10, 0.1f, 0.02f);
+
+                ui.layoutRowDynamic(22, 1);
+                cubeScale = ui.propertyFloat("Scale", 0.1f, cubeScale, 5.0f, 0.1f, 0.01f);
+
+                ui.layoutRowDynamic(18, 2);
+                ui.label("Rotation:");
+                ui.label(String.format("%.0f°", Math.toDegrees(cubeRotation) % 360));
+                ui.treePop();
+            }
+
+            // ── Material section ──
+            ui.layoutRowDynamic(20, 1);
+            accMaterial = ui.treePush("Material", accMaterial);
+            if (accMaterial) {
+                ui.layoutRowDynamic(22, 1);
+                materialType = ui.combo(new String[]{"Unlit", "PBR", "Textured"}, materialType, 18);
+
+                ui.layoutRowDynamic(18, 1);
+                ui.label("Color");
+                ui.layoutRowDynamic(60, 1);
+                pickedColor = ui.colorPicker(pickedColor);
+
+                ui.layoutRowDynamic(24, 1);
+                pickedColor = ui.colorPalette(pickedColor, new NkColor[]{
+                        NkColor.rgb(255, 80, 80), NkColor.rgb(80, 200, 80), NkColor.rgb(80, 120, 255),
+                        NkColor.rgb(255, 200, 50), NkColor.rgb(200, 80, 255), NkColor.rgb(255, 255, 255),
+                });
+                ui.treePop();
+            }
+
+            // ── Lighting section ──
+            ui.layoutRowDynamic(20, 1);
+            accLighting = ui.treePush("Lighting", accLighting);
+            if (accLighting) {
+                ui.layoutRowDynamic(18, 1);
+                ui.label(String.format("Intensity: %.1f", lightIntensity));
+                ui.layoutRowDynamic(18, 1);
+                lightIntensity = ui.sliderFloat(0, lightIntensity, 2, 0.05f);
+
+                ui.layoutRowDynamic(18, 1);
+                ui.label(String.format("Angle: %.0f°", lightAngle));
+                ui.layoutRowDynamic(18, 1);
+                lightAngle = ui.sliderFloat(0, lightAngle, 360, 1);
+                ui.treePop();
+            }
+
+            // ── Physics section ──
+            ui.layoutRowDynamic(20, 1);
+            accPhysics = ui.treePush("Physics", accPhysics);
+            if (accPhysics) {
+                ui.layoutRowDynamic(18, 1);
+                ui.label("Gravity: -9.81");
+                ui.label("Mass: 1.0 kg");
+                ui.label("Friction: 0.5");
+                checkboxValue = ui.checkbox("Kinematic", checkboxValue);
+                ui.treePop();
+            }
+
+            // ── Audio section ──
+            ui.layoutRowDynamic(20, 1);
+            accAudio = ui.treePush("Audio", accAudio);
+            if (accAudio) {
+                ui.layoutRowDynamic(18, 1);
+                ui.label("No audio sources");
+                if (ui.button("Add Source")) {
+                    System.out.println("Add audio source clicked");
+                }
+                ui.treePop();
+            }
+        }
+        ui.end();
+
         // Tooltip demo — hover any panel to see tooltip
         if (ui.isWidgetHovered()) {
             ui.tooltip("This is a tooltip!");
@@ -352,7 +449,7 @@ public class UiSamplerExample extends BaseApplication {
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var config = EngineConfig.builder()
                 .windowTitle("UI Sampler — Debug UI Showcase")
-                .windowSize(880, 660)
+                .windowSize(1120, 680)
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(OpenGlBackend.factory(toolkit,
                         new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()))
