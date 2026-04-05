@@ -50,9 +50,12 @@ public class UiSamplerExample extends BaseApplication {
     private boolean accLighting = false;
     private boolean accPhysics = false;
     private boolean accAudio = false;
+    private boolean accMeta = false;
     private float lightIntensity = 0.8f;
     private float lightAngle = 45f;
     private int materialType = 0;
+    private String entityName = "MyCube";
+    private String entityTag = "player";
 
     // Scene state
     private dev.engine.core.scene.Entity cube;
@@ -406,17 +409,28 @@ public class UiSamplerExample extends BaseApplication {
                 ui.sectionEnd();
             } else { accLighting = false; }
 
-            // ── Physics section ──
+            // ── Physics section (property grid demo) ──
             ui.layoutRowDynamic(22, 1);
             if (ui.sectionBegin("Physics", accPhysics)) {
                 accPhysics = true;
-                ui.layoutRowDynamic(18, 1);
-                ui.label("Gravity: -9.81");
-                ui.label("Mass: 1.0 kg");
-                ui.label("Friction: 0.5");
-                checkboxValue = ui.checkbox("Kinematic", checkboxValue);
+                ui.propertyLabel("Gravity", "-9.81 m/s²");
+                ui.propertyLabel("Mass", "1.0 kg");
+                ui.propertyLabel("Friction", "0.5");
+                ui.propertyLabel("Restitution", "0.3");
+                checkboxValue = ui.propertyCheckbox("Kinematic", checkboxValue);
                 ui.sectionEnd();
             } else { accPhysics = false; }
+
+            // ── Metadata section (editable text properties) ──
+            ui.layoutRowDynamic(22, 1);
+            if (ui.sectionBegin("Metadata", accMeta)) {
+                accMeta = true;
+                entityName = ui.propertyEdit("Name", entityName, 32);
+                entityTag = ui.propertyEdit("Tag", entityTag, 16);
+                ui.propertyLabel("ID", "42");
+                ui.propertyLabel("Layer", "Default");
+                ui.sectionEnd();
+            } else { accMeta = false; }
 
             // ── Audio section ──
             ui.layoutRowDynamic(22, 1);

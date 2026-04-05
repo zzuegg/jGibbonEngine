@@ -746,6 +746,56 @@ public class NkContext {
         // Symmetry with sectionBegin — no action needed, layout handles spacing
     }
 
+    // ========================= Property Grid =========================
+
+    /**
+     * Draws a label-value property row: left-aligned label, right-aligned value text.
+     * Uses a 2-column dynamic layout for consistent alignment.
+     */
+    public void propertyLabel(String label, String value) {
+        layoutRowDynamic(18, 2);
+        label(label);
+        label(value, TEXT_RIGHT);
+    }
+
+    /** Property row with a float slider. Returns new value. */
+    public float propertySlider(String label, float min, float value, float max, float step) {
+        layoutRowDynamic(18, 2);
+        label(label);
+        // Use remaining column for the slider value display
+        label(String.format("%.2f", value), TEXT_RIGHT);
+        layoutRowDynamic(16, 1);
+        return sliderFloat(min, value, max, step);
+    }
+
+    /** Property row with a checkbox. Returns new state. */
+    public boolean propertyCheckbox(String label, boolean value) {
+        layoutRowDynamic(20, 1);
+        return checkbox(label, value);
+    }
+
+    /** Property row with a combo dropdown. Returns new index. */
+    public int propertyCombo(String label, String[] items, int selected) {
+        layoutRowDynamic(18, 1);
+        label(label);
+        layoutRowDynamic(22, 1);
+        return combo(items, selected, 18);
+    }
+
+    /** Property row with a text edit field. Returns new text. */
+    public String propertyEdit(String label, String value, int maxLength) {
+        layoutRowDynamic(18, 1);
+        label(label);
+        layoutRowDynamic(22, 1);
+        return editString(value, maxLength);
+    }
+
+    /** Property row with a drag-editable float (label + [-] value [+]). Returns new value. */
+    public float propertyDrag(String label, float min, float value, float max, float step, float incPerPixel) {
+        layoutRowDynamic(22, 1);
+        return propertyFloat(label, min, value, max, step, incPerPixel);
+    }
+
     /** Draws a simple combo box (dropdown). Returns the new selected index. */
     public int combo(String[] items, int selected, float itemHeight) {
         if (items.length == 0) return selected;
