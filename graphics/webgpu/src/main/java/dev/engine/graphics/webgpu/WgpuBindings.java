@@ -580,6 +580,7 @@ public interface WgpuBindings {
     int ADDRESS_MODE_MIRROR_REPEAT = 3;
 
     // --- Vertex format ---
+    int VERTEX_FORMAT_UNORM8X4   = 0x09;
     int VERTEX_FORMAT_FLOAT32    = 0x1C;
     int VERTEX_FORMAT_FLOAT32X2  = 0x1D;
     int VERTEX_FORMAT_FLOAT32X3  = 0x1E;

@@ -1530,6 +1530,11 @@ public class WgpuRenderDevice implements RenderDevice {
                 default -> WgpuBindings.VERTEX_FORMAT_FLOAT32X4;
             };
         }
+        if (attr.componentType() == ComponentType.UNSIGNED_BYTE || attr.componentType() == ComponentType.BYTE) {
+            if (attr.componentCount() == 4 && attr.normalized()) {
+                return WgpuBindings.VERTEX_FORMAT_UNORM8X4;
+            }
+        }
         return WgpuBindings.VERTEX_FORMAT_FLOAT32X4;
     }
 

@@ -80,7 +80,13 @@ public class DebugUiOverlay implements AutoCloseable {
         int texOffset = shaderManager.textureBindingOffset();
         String slangSource = loadShaderResource("shaders/debug_ui.slang")
                 .replace("TEXTURE_BINDING", String.valueOf(texOffset));
-        var compiled = shaderManager.compileSlangSource(slangSource, "debug_ui", VERTEX_FORMAT);
+        CompiledShader compiled;
+        try {
+            compiled = shaderManager.compileSlangSource(slangSource, "debug_ui", VERTEX_FORMAT);
+        } catch (Exception e) {
+            log.warn("Debug UI shader compilation failed — overlay disabled: {}", e.getMessage());
+            return;
+        }
         pipeline = compiled.pipeline();
 
         // Get binding indices from shader reflection
