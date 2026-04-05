@@ -37,7 +37,7 @@ public class UiSamplerExample extends BaseApplication {
     private NkColor pickedColor = NkColor.rgba(100, 150, 200, 255);
     private boolean treeOpen = true;
     private boolean subTreeOpen = false;
-    private int selectedTreeItem = -1;
+    private final java.util.Set<Integer> selectedTreeItems = new java.util.HashSet<>();
 
     // Chart state — ring buffer for live FPS/frame time
     private final float[] fpsHistory = new float[120];
@@ -258,12 +258,17 @@ public class UiSamplerExample extends BaseApplication {
             treeOpen = ui.treePush("Scene Graph", treeOpen);
             if (treeOpen) {
                 ui.layoutRowDynamic(18, 1);
-                if (ui.selectableLabel("  Root", selectedTreeItem == 0)) selectedTreeItem = 0;
+                if (ui.treeNode("Root", selectedTreeItems.contains(0), false))
+                    toggleSelect(0);
                 subTreeOpen = ui.treePush("Children", subTreeOpen);
                 if (subTreeOpen) {
                     ui.layoutRowDynamic(18, 1);
-                    if (ui.selectableLabel("    Cube", selectedTreeItem == 1)) selectedTreeItem = 1;
-                    if (ui.selectableLabel("    Ground", selectedTreeItem == 2)) selectedTreeItem = 2;
+                    if (ui.treeNode("  Cube", selectedTreeItems.contains(1), true))
+                        toggleSelect(1);
+                    if (ui.treeNode("  Ground", selectedTreeItems.contains(2), true))
+                        toggleSelect(2);
+                    if (ui.treeNode("  Light", selectedTreeItems.contains(3), true))
+                        toggleSelect(3);
                     ui.treePop();
                 }
                 ui.treePop();
@@ -454,6 +459,11 @@ public class UiSamplerExample extends BaseApplication {
 
         // Apply cube scale and rotation from UI controls
         cube.add(Transform.at(cubeX, cubeY, cubeZ).withScale(cubeScale).rotatedY(cubeRotation));
+    }
+
+    private void toggleSelect(int id) {
+        if (selectedTreeItems.contains(id)) selectedTreeItems.remove(id);
+        else selectedTreeItems.add(id);
     }
 
     // ═══════════════════════════════════════════════════════════════

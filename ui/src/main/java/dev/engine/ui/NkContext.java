@@ -661,13 +661,17 @@ public class NkContext {
             currentWindow.treeStates.put(title, state);
         }
 
-        boolean hovering = input.isMouseHovering(rect);
-        if (input.isMousePressed(0, rect)) {
+        // Arrow area — only toggle expand on arrow click
+        float arrowW = font.textWidth("v ") + 4;
+        var arrowRect = new NkRect(rect.x(), rect.y(), arrowW, rect.h());
+
+        if (windowAcceptsInput() && input.isMousePressed(0, arrowRect)) {
             state = !state;
             currentWindow.treeStates.put(title, state);
         }
 
-        // Draw hover highlight
+        // Draw hover highlight on full row
+        boolean hovering = input.isMouseHovering(rect);
         if (hovering) {
             emit(new NkDrawCommand.FilledRect(rect, 0, style.treeNodeHover));
         }
@@ -676,10 +680,55 @@ public class NkContext {
         String arrow = state ? "v " : "> ";
         float textY = rect.y() + (rect.h() - font.height()) / 2;
         emit(new NkDrawCommand.Text(
-                new NkRect(rect.x(), textY, font.textWidth(arrow + title), font.height()),
-                arrow + title, font, style.treeNodeText));
+                new NkRect(rect.x(), textY, font.textWidth(arrow), font.height()),
+                arrow, font, style.treeNodeText));
+        // Draw title
+        emit(new NkDrawCommand.Text(
+                new NkRect(rect.x() + arrowW, textY, font.textWidth(title), font.height()),
+                title, font, style.treeNodeText));
 
         return state;
+    }
+
+    /**
+     * Selectable tree node — draws a tree item that can be selected by clicking the label.
+     * Returns true if the item was clicked this frame.
+     *
+     * @param title    the node text
+     * @param selected whether this node is currently selected
+     * @param leaf     true if this node has no children (no expand arrow)
+     */
+    public boolean treeNode(String title, boolean selected, boolean leaf) {
+        var rect = allocateWidget();
+        if (rect == null) return false;
+
+        boolean clicked = false;
+
+        // Draw selection highlight
+        if (selected) {
+            emit(new NkDrawCommand.FilledRect(rect, 0, style.checkboxActive.withAlpha(60)));
+        }
+
+        // Hover highlight
+        boolean hovering = input.isMouseHovering(rect);
+        if (hovering && !selected) {
+            emit(new NkDrawCommand.FilledRect(rect, 0, style.treeNodeHover));
+        }
+
+        // Draw text
+        float textY = rect.y() + (rect.h() - font.height()) / 2;
+        String prefix = leaf ? "  " : "";
+        emit(new NkDrawCommand.Text(
+                new NkRect(rect.x(), textY, font.textWidth(prefix + title), font.height()),
+                prefix + title, font,
+                selected ? style.headerText : style.treeNodeText));
+
+        // Handle click on label area
+        if (windowAcceptsInput() && input.isMousePressed(0, rect)) {
+            clicked = true;
+        }
+
+        return clicked;
     }
 
     /** Ends a collapsible tree node (only call if treePush returned true). */
