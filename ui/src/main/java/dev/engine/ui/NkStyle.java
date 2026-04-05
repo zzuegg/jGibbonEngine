@@ -91,6 +91,12 @@ public class NkStyle {
     // Separator
     public NkColor separatorColor = NkColor.rgba(80, 80, 80, 255);
 
+    // Section (accordion headers)
+    public NkColor sectionBackground = NkColor.rgba(50, 50, 55, 255);
+    public NkColor sectionBackgroundHover = NkColor.rgba(60, 65, 75, 255);
+    public NkColor sectionText = NkColor.rgba(220, 220, 220, 255);
+    public NkColor sectionBorder = NkColor.rgba(70, 70, 70, 255);
+
     // General spacing
     public float itemSpacingX = 4;
     public float itemSpacingY = 4;
@@ -160,6 +166,10 @@ public class NkStyle {
         s.scrollbarThumbHover = scrollbarThumbHover;
         s.scrollbarWidth = scrollbarWidth;
         s.separatorColor = separatorColor;
+        s.sectionBackground = sectionBackground;
+        s.sectionBackgroundHover = sectionBackgroundHover;
+        s.sectionText = sectionText;
+        s.sectionBorder = sectionBorder;
         s.itemSpacingX = itemSpacingX;
         s.itemSpacingY = itemSpacingY;
         s.groupPadding = groupPadding;
