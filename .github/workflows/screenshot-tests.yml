@@ -1,0 +1,87 @@
+name: Screenshot Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: screenshot-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  screenshot-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Grant Gradle wrapper execute permission
+        run: chmod +x gradlew
+
+      - name: Install Mesa software rendering and virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            mesa-utils \
+            libegl-mesa0 \
+            libgl1-mesa-dri \
+            libglx-mesa0 \
+            libvulkan1 \
+            mesa-vulkan-drivers \
+            xvfb \
+            libjemalloc2
+
+      - name: Run screenshot tests (samples) with software rendering
+        run: |
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export MESA_GL_VERSION_OVERRIDE=4.5
+          export MESA_GLSL_VERSION_OVERRIDE=450
+          export GALLIUM_DRIVER=llvmpipe
+          export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          xvfb-run -a -s "-screen 0 1280x720x24" \
+            ./gradlew :samples:tests:screenshot:screenshotReport --no-daemon --continue \
+            || true
+
+      - name: Run screenshot tests (examples) with software rendering
+        run: |
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export MESA_GL_VERSION_OVERRIDE=4.5
+          export MESA_GLSL_VERSION_OVERRIDE=450
+          export GALLIUM_DRIVER=llvmpipe
+          export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          xvfb-run -a -s "-screen 0 1280x720x24" \
+            ./gradlew :examples:screenshotReport --no-daemon --continue \
+            || true
+
+      - name: Upload screenshot report (samples)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-report-samples
+          path: |
+            samples/tests/screenshot/build/screenshots/
+            samples/tests/screenshot/build/test-results/
+          retention-days: 30
+
+      - name: Upload screenshot report (examples)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-report-examples
+          path: |
+            examples/build/screenshots/
+            examples/build/test-results/
+          retention-days: 30
