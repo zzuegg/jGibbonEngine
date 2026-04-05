@@ -22,6 +22,8 @@ public class NkInput {
 
     public void begin() {
         active = true;
+        prevMouseX = mouseX;
+        prevMouseY = mouseY;
         for (int i = 0; i < 3; i++) mouseClicked[i] = false;
         scrollX = 0;
         scrollY = 0;
