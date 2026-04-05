@@ -50,7 +50,7 @@ public class Engine {
     private Thread renderThread;
 
     // Time tracking
-    private long frameNumber = 0;
+    private final java.util.concurrent.atomic.AtomicLong frameNumber = new java.util.concurrent.atomic.AtomicLong();
     private double totalTime = 0;
 
     // Input events for current frame (set before tick, read by modules)
@@ -89,7 +89,7 @@ public class Engine {
     public Profiler profiler() { return profiler; }
     public RenderStats renderStats() { return renderStats; }
     public EngineConfig config() { return config; }
-    public long frameNumber() { return frameNumber; }
+    public long frameNumber() { return frameNumber.get(); }
     public double totalTime() { return totalTime; }
 
     /** Returns the input events for the current frame. Set before each tick. */
@@ -130,7 +130,7 @@ public class Engine {
             renderer.renderFrame(transactions);
         }
 
-        frameNumber++;
+        frameNumber.incrementAndGet();
     }
 
     // --- Threaded mode ---
@@ -152,7 +152,7 @@ public class Engine {
             while (running) {
                 var transactions = dev.engine.core.scene.SceneAccess.drainTransactions(scene);
                 renderer.renderFrame(transactions);
-                frameNumber++;
+                frameNumber.incrementAndGet();
             }
             log.info("Render thread stopped");
         });

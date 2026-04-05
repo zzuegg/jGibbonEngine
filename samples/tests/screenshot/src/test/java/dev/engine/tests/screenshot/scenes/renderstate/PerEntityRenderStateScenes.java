@@ -33,7 +33,7 @@ public class PerEntityRenderStateScenes {
         var nearNoDepth = scene.createEntity();
         nearNoDepth.add(PrimitiveMeshes.cube());
         nearNoDepth.add(MaterialData.unlit(new Vec3(0.9f, 0.2f, 0.2f))
-                .set(RenderState.DEPTH_WRITE, false));
+                .withRenderState(RenderState.DEPTH_WRITE, false));
         nearNoDepth.add(Transform.at(-1.5f, 0, 0));
 
         // Far cube on the right
@@ -69,14 +69,14 @@ public class PerEntityRenderStateScenes {
         var noCull = scene.createEntity();
         noCull.add(PrimitiveMeshes.cube());
         noCull.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f))
-                .set(RenderState.CULL_MODE, CullMode.NONE));
+                .withRenderState(RenderState.CULL_MODE, CullMode.NONE));
         noCull.add(Transform.IDENTITY);
 
         // Front-face culling — inside visible
         var frontCull = scene.createEntity();
         frontCull.add(PrimitiveMeshes.cube());
         frontCull.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f))
-                .set(RenderState.CULL_MODE, CullMode.FRONT));
+                .withRenderState(RenderState.CULL_MODE, CullMode.FRONT));
         frontCull.add(Transform.at(2, 0, 0));
     };
 
@@ -99,7 +99,7 @@ public class PerEntityRenderStateScenes {
         var additive = scene.createEntity();
         additive.add(PrimitiveMeshes.cube());
         additive.add(MaterialData.unlit(new Vec3(0.0f, 0.5f, 0.0f))
-                .set(RenderState.BLEND_MODE, BlendMode.ADDITIVE));
+                .withRenderState(RenderState.BLEND_MODE, BlendMode.ADDITIVE));
         additive.add(Transform.at(-1.5f, 0, 0));
 
         // Opaque entity next — should NOT inherit additive blend

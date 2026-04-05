@@ -1,5 +1,6 @@
 package dev.engine.graphics.texture;
 
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.property.PropertyKey;
 
 /**
@@ -16,10 +17,10 @@ public final class TextureKeys {
 
     private TextureKeys() {}
 
-    public static final PropertyKey<SampledTexture> ALBEDO_TEXTURE = PropertyKey.of("albedoTexture", SampledTexture.class);
-    public static final PropertyKey<SampledTexture> NORMAL_TEXTURE = PropertyKey.of("normalTexture", SampledTexture.class);
-    public static final PropertyKey<SampledTexture> ROUGHNESS_TEXTURE = PropertyKey.of("roughnessTexture", SampledTexture.class);
-    public static final PropertyKey<SampledTexture> METALLIC_TEXTURE = PropertyKey.of("metallicTexture", SampledTexture.class);
-    public static final PropertyKey<SampledTexture> EMISSIVE_TEXTURE = PropertyKey.of("emissiveTexture", SampledTexture.class);
-    public static final PropertyKey<SampledTexture> AO_TEXTURE = PropertyKey.of("aoTexture", SampledTexture.class);
+    public static final PropertyKey<MaterialData, SampledTexture> ALBEDO_TEXTURE = PropertyKey.of("albedoTexture", SampledTexture.class);
+    public static final PropertyKey<MaterialData, SampledTexture> NORMAL_TEXTURE = PropertyKey.of("normalTexture", SampledTexture.class);
+    public static final PropertyKey<MaterialData, SampledTexture> ROUGHNESS_TEXTURE = PropertyKey.of("roughnessTexture", SampledTexture.class);
+    public static final PropertyKey<MaterialData, SampledTexture> METALLIC_TEXTURE = PropertyKey.of("metallicTexture", SampledTexture.class);
+    public static final PropertyKey<MaterialData, SampledTexture> EMISSIVE_TEXTURE = PropertyKey.of("emissiveTexture", SampledTexture.class);
+    public static final PropertyKey<MaterialData, SampledTexture> AO_TEXTURE = PropertyKey.of("aoTexture", SampledTexture.class);
 }

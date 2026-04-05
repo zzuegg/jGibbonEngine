@@ -3,6 +3,7 @@ package dev.engine.graphics.common;
 import dev.engine.core.handle.Handle;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.property.PropertyKey;
+import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.core.scene.MeshTag;
 import dev.engine.core.scene.camera.Camera;
 import dev.engine.graphics.shader.GlobalParamsRegistry;
@@ -58,7 +59,10 @@ public class Renderer implements AutoCloseable {
 
 
     // Viewport
-    private Viewport viewport = Viewport.of(800, 600);
+    private Viewport viewport = Viewport.of(1, 1); // Placeholder until window sets actual size
+
+    // Clear color
+    private float clearR = 0.05f, clearG = 0.05f, clearB = 0.08f, clearA = 1f;
 
     public Renderer(RenderDevice device, ShaderCompiler compiler) {
         this.device = device;
@@ -145,17 +149,24 @@ public class Renderer implements AutoCloseable {
         this.viewport = Viewport.of(width, height);
     }
 
+    public void setClearColor(float r, float g, float b, float a) {
+        this.clearR = r;
+        this.clearG = g;
+        this.clearB = b;
+        this.clearA = a;
+    }
+
     // --- Render state (delegates to RenderStateManager) ---
 
-    public <T> void setDefault(PropertyKey<T> key, T value) {
+    public <T> void setDefault(PropertyKey<RenderState, T> key, T value) {
         renderStateManager.setDefault(key, value);
     }
 
-    public <T> void forceProperty(PropertyKey<T> key, T value) {
+    public <T> void forceProperty(PropertyKey<RenderState, T> key, T value) {
         renderStateManager.forceProperty(key, value);
     }
 
-    public <T> void clearForced(PropertyKey<T> key) {
+    public <T> void clearForced(PropertyKey<RenderState, T> key) {
         renderStateManager.clearForced(key);
     }
 
@@ -208,7 +219,7 @@ public class Renderer implements AutoCloseable {
         var setup = new CommandRecorder();
         setup.viewport(viewport.x(), viewport.y(), viewport.width(), viewport.height());
         setup.setRenderState(RenderState.defaults());
-        setup.clear(0.05f, 0.05f, 0.08f, 1f);
+        setup.clear(clearR, clearG, clearB, clearA);
         if (defaultPipeline != null) {
             setup.bindPipeline(defaultPipeline);
         }

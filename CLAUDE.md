@@ -31,6 +31,10 @@ See `NOTES.md` for all engine code conventions. Key points:
 - All native resources tracked via Cleaner
 - Thread-safe from the start
 - Minimal external dependencies
+- **No ServiceLoader** — all wiring is explicit. Platforms assemble providers directly, not via SPI discovery.
+- No implicit magic — prefer explicit configuration and construction over classpath scanning
+- Prefer abstract classes over interfaces when shared state/behavior exists (e.g., `GraphicsConfig`)
+- Don't force records everywhere — use them for value types and immutable data, not for configuration objects that benefit from mutability or inheritance
 
 ## Project Structure
 

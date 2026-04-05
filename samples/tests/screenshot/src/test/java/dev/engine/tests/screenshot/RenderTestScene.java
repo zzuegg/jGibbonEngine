@@ -1,6 +1,10 @@
 package dev.engine.tests.screenshot;
 
+import dev.engine.core.input.InputEvent;
 import dev.engine.graphics.common.engine.Engine;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * Defines a visual test scene. Implement {@link #setup(Engine)} to create
@@ -32,6 +36,17 @@ import dev.engine.graphics.common.engine.Engine;
  *     }
  *     public int[] captureFrames() { return new int[]{0, 15, 30}; }
  * };
+ *
+ * // Input-scripted scene — simulate key press on frame 2
+ * static final RenderTestScene WITH_INPUT = new RenderTestScene() {
+ *     public void setup(Engine engine) {
+ *         // ... setup scene, use engine.inputEvents() in modules ...
+ *     }
+ *     public int[] captureFrames() { return new int[]{1, 3}; }
+ *     public Map&lt;Integer, List&lt;InputEvent&gt;&gt; inputScript() {
+ *         return Map.of(2, List.of(new InputEvent.KeyPressed(...)));
+ *     }
+ * };
  * }</pre>
  */
 @FunctionalInterface
@@ -42,4 +57,11 @@ public interface RenderTestScene {
 
     /** Frame indices at which to capture screenshots. Default: single capture at frame 3. */
     default int[] captureFrames() { return new int[]{3}; }
+
+    /**
+     * Input events to inject at specific frames. The harness pushes these into
+     * the engine's input queue before ticking the frame.
+     * Default: no scripted input.
+     */
+    default Map<Integer, List<InputEvent>> inputScript() { return Map.of(); }
 }

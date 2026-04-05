@@ -1,6 +1,7 @@
 package dev.engine.graphics.window;
 
 import dev.engine.core.property.PropertyKey;
+import dev.engine.core.versioned.Reference;
 
 public interface WindowHandle extends AutoCloseable {
 
@@ -13,11 +14,39 @@ public interface WindowHandle extends AutoCloseable {
     /** Returns the raw platform window handle (e.g., GLFW handle, SDL window pointer). */
     long nativeHandle();
 
-    default <T> void set(PropertyKey<T> key, T value) {
+    /**
+     * Platform-specific surface information for WebGPU/Vulkan surface creation.
+     * Each windowing toolkit provides the correct handles for its platform.
+     */
+    record SurfaceInfo(SurfaceType type, long display, long window) {
+        public enum SurfaceType { WAYLAND, X11, WINDOWS, COCOA }
+    }
+
+    /**
+     * Returns platform surface info for GPU surface creation.
+     * Returns null if the toolkit doesn't support surface info.
+     */
+    default SurfaceInfo surfaceInfo() { return null; }
+
+    /**
+     * Versioned window size. Updates are detected via {@code ref.update()}.
+     * Returns null if the provider does not support versioned tracking.
+     */
+    default Reference<int[]> sizeRef() { return null; }
+
+    /**
+     * Versioned focus state. Returns null if not supported.
+     */
+    default Reference<Boolean> focusedRef() { return null; }
+
+    /** Swaps front/back buffers. Called by the render device at end of frame. */
+    default void swapBuffers() {}
+
+    default <T> void set(PropertyKey<WindowHandle, T> key, T value) {
         throw new UnsupportedOperationException("Property not supported: " + key.name());
     }
 
-    default <T> T get(PropertyKey<T> key) {
+    default <T> T get(PropertyKey<WindowHandle, T> key) {
         throw new UnsupportedOperationException("Property not supported: " + key.name());
     }
 

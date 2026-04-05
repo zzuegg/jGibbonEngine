@@ -25,7 +25,7 @@ class PostProcessChainTest {
 
     @Test void addAndExecuteEffect() {
         chain.add("tonemap", ctx -> executionOrder.add("tonemap"));
-        chain.execute(new PostProcessContext());
+        chain.execute(new PostProcessContext(null, null, 0, 0, null));
         assertEquals(List.of("tonemap"), executionOrder);
     }
 
@@ -33,7 +33,7 @@ class PostProcessChainTest {
         chain.add("bloom", ctx -> executionOrder.add("bloom"));
         chain.add("tonemap", ctx -> executionOrder.add("tonemap"));
         chain.add("fxaa", ctx -> executionOrder.add("fxaa"));
-        chain.execute(new PostProcessContext());
+        chain.execute(new PostProcessContext(null, null, 0, 0, null));
         assertEquals(List.of("bloom", "tonemap", "fxaa"), executionOrder);
     }
 
@@ -41,18 +41,18 @@ class PostProcessChainTest {
         chain.add("bloom", ctx -> executionOrder.add("bloom"));
         chain.add("fxaa", ctx -> executionOrder.add("fxaa"));
         chain.remove("bloom");
-        chain.execute(new PostProcessContext());
+        chain.execute(new PostProcessContext(null, null, 0, 0, null));
         assertEquals(List.of("fxaa"), executionOrder);
     }
 
     @Test void enableDisableEffect() {
         chain.add("tonemap", ctx -> executionOrder.add("tonemap"));
         chain.setEnabled("tonemap", false);
-        chain.execute(new PostProcessContext());
+        chain.execute(new PostProcessContext(null, null, 0, 0, null));
         assertTrue(executionOrder.isEmpty());
 
         chain.setEnabled("tonemap", true);
-        chain.execute(new PostProcessContext());
+        chain.execute(new PostProcessContext(null, null, 0, 0, null));
         assertEquals(List.of("tonemap"), executionOrder);
     }
 }

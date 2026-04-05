@@ -2,7 +2,11 @@ plugins {
     application
 }
 
-val lwjglNatives = "natives-linux"
+val lwjglNatives = when {
+    System.getProperty("os.name").startsWith("Windows") -> "natives-windows"
+    System.getProperty("os.name").startsWith("Mac") -> if (System.getProperty("os.arch") == "aarch64") "natives-macos-arm64" else "natives-macos"
+    else -> "natives-linux"
+}
 
 dependencies {
     implementation(project(":core"))

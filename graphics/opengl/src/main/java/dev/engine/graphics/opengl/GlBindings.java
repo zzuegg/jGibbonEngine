@@ -88,9 +88,15 @@ public interface GlBindings {
     int GL_DEPTH32F_STENCIL8   = 0x8CAD;
 
     // --- Texture upload formats ---
-    int GL_RED  = 0x1903;
-    int GL_RGB  = 0x1907;
-    int GL_RGBA = 0x1908;
+    int GL_RED              = 0x1903;
+    int GL_RGB              = 0x1907;
+    int GL_RGBA             = 0x1908;
+    int GL_DEPTH_COMPONENT  = 0x1902;
+    int GL_DEPTH_STENCIL    = 0x84F9;
+
+    // --- Additional data types for depth ---
+    int GL_UNSIGNED_INT_24_8                  = 0x84FA;
+    int GL_FLOAT_32_UNSIGNED_INT_24_8_REV     = 0x8DAD;
 
     // --- Texture / sampler parameters ---
     int GL_TEXTURE_MIN_FILTER    = 0x2801;
@@ -198,8 +204,6 @@ public interface GlBindings {
     void makeContextCurrent(long window);
 
     void createCapabilities();
-
-    void swapBuffers(long window);
 
     // ===== Query operations =====
 

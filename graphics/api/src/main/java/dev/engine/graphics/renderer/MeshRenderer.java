@@ -27,7 +27,7 @@ public class MeshRenderer {
 
     private final Map<Handle<?>, Mat4> transforms = new HashMap<>();
     private final Map<Handle<?>, Renderable> renderables = new HashMap<>();
-    private final Map<Handle<?>, MutablePropertyMap> materials = new HashMap<>();
+    private final Map<Handle<?>, MutablePropertyMap<MaterialData>> materials = new HashMap<>();
     private final Map<Handle<?>, MeshData> meshDataAssignments = new HashMap<>();
     private final Map<Handle<?>, MaterialData> materialData = new HashMap<>();
     private final Map<Handle<?>, Handle<MeshTag>> meshAssignments = new HashMap<>();
@@ -37,7 +37,7 @@ public class MeshRenderer {
         switch (txn) {
             case Transaction.EntityAdded added -> {
                 transforms.put(added.entity(), Mat4.IDENTITY);
-                materials.put(added.entity(), new MutablePropertyMap());
+                materials.put(added.entity(), new MutablePropertyMap<>());
             }
             case Transaction.EntityRemoved removed -> {
                 transforms.remove(removed.entity());
@@ -53,7 +53,7 @@ public class MeshRenderer {
                 var mat = materials.get(changed.entity());
                 if (mat != null) {
                     @SuppressWarnings("unchecked")
-                    var key = (PropertyKey<Object>) changed.key();
+                    var key = (PropertyKey<MaterialData, Object>) changed.key();
                     mat.set(key, changed.value());
                 }
             }
@@ -62,8 +62,8 @@ public class MeshRenderer {
                 if (mat != null && replaced.material() != null) {
                     for (var key : replaced.material().keys()) {
                         @SuppressWarnings("unchecked")
-                        var typedKey = (PropertyKey<Object>) key;
-                        mat.set(typedKey, replaced.material().get(key));
+                        var typedKey = (PropertyKey<MaterialData, Object>) key;
+                        mat.set(typedKey, replaced.material().get(typedKey));
                     }
                 }
             }
@@ -125,7 +125,7 @@ public class MeshRenderer {
         return renderables.get(entity);
     }
 
-    public MutablePropertyMap getMaterial(Handle<?> entity) {
+    public MutablePropertyMap<MaterialData> getMaterial(Handle<?> entity) {
         return materials.get(entity);
     }
 
@@ -151,7 +151,7 @@ public class MeshRenderer {
             var entity = entry.getKey();
             var transform = transforms.getOrDefault(entity, Mat4.IDENTITY);
             var mat = materials.get(entity);
-            var snapshot = mat != null ? mat.snapshot() : PropertyMap.builder().build();
+            var snapshot = mat != null ? mat.snapshot() : PropertyMap.<MaterialData>builder().build();
             batch.add(new DrawCommand(entity, entry.getValue(), transform, snapshot));
         }
         return batch;

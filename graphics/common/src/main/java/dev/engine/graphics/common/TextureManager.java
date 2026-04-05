@@ -11,11 +11,15 @@ import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.sampler.SamplerDescriptor;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.graphics.texture.TextureFormat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Manages GPU texture resources: upload, identity-based caching, and material texture binding.
  */
 public class TextureManager {
+
+    private static final Logger log = LoggerFactory.getLogger(TextureManager.class);
 
     private final GpuResourceManager gpu;
     private final WeakCache<TextureData, Handle<TextureResource>> textureCache = new WeakCache<>();
@@ -72,6 +76,9 @@ public class TextureManager {
         var handle = gpu.createTexture(desc);
         if (!data.compressed()) {
             gpu.uploadTexture(handle, data.pixels());
+        } else {
+            log.warn("Compressed texture upload not yet supported, skipping pixel upload for {}x{} {} texture",
+                    data.width(), data.height(), data.format());
         }
         return handle;
     }
@@ -80,6 +87,11 @@ public class TextureManager {
         if (format == TextureData.PixelFormat.RGBA8) return TextureFormat.RGBA8;
         if (format == TextureData.PixelFormat.RGB8) return TextureFormat.RGB8;
         if (format == TextureData.PixelFormat.R8) return TextureFormat.R8;
+        if (format == TextureData.PixelFormat.RGBA16F) return TextureFormat.RGBA16F;
+        if (format == TextureData.PixelFormat.RGBA32F) return TextureFormat.RGBA32F;
+        if (format == TextureData.PixelFormat.R16F) return TextureFormat.R16F;
+        if (format == TextureData.PixelFormat.R32F) return TextureFormat.R32F;
+        log.warn("Unknown pixel format '{}', falling back to RGBA8", format.name());
         return TextureFormat.RGBA8;
     }
 }

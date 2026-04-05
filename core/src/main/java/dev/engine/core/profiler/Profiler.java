@@ -4,23 +4,25 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Profiler {
 
-    private final Deque<ScopeEntry> scopeStack = new ArrayDeque<>();
-    private Map<String, ProfileResult> currentFrame = new LinkedHashMap<>();
-    private Map<String, ProfileResult> lastFrame = new LinkedHashMap<>();
+    private final ThreadLocal<Deque<ScopeEntry>> scopeStack =
+            ThreadLocal.withInitial(ArrayDeque::new);
+    private volatile Map<String, ProfileResult> currentFrame = new ConcurrentHashMap<>();
+    private volatile Map<String, ProfileResult> lastFrame = new ConcurrentHashMap<>();
 
     public ProfileScope scope(String name) {
         long start = System.nanoTime();
         var entry = new ScopeEntry(name, start, new LinkedHashMap<>());
-        scopeStack.push(entry);
+        scopeStack.get().push(entry);
         return new ProfileScope(() -> endScope(entry));
     }
 
     public void newFrame() {
         lastFrame = currentFrame;
-        currentFrame = new LinkedHashMap<>();
+        currentFrame = new ConcurrentHashMap<>();
     }
 
     public Map<String, ProfileResult> lastFrame() {
@@ -33,13 +35,14 @@ public class Profiler {
 
     private void endScope(ScopeEntry entry) {
         long elapsed = System.nanoTime() - entry.startNanos;
-        scopeStack.pop();
+        var stack = scopeStack.get();
+        stack.pop();
         var result = new ProfileResult(entry.name, elapsed, entry.children);
 
-        if (scopeStack.isEmpty()) {
+        if (stack.isEmpty()) {
             currentFrame.put(entry.name, result);
         } else {
-            scopeStack.peek().children.put(entry.name, result);
+            stack.peek().children.put(entry.name, result);
         }
     }
 

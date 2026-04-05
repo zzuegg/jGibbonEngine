@@ -1,6 +1,7 @@
 package dev.engine.graphics.postprocess;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,9 +10,9 @@ import java.util.HashSet;
 
 public class PostProcessChain {
 
-    private final List<String> order = new ArrayList<>();
-    private final Map<String, PostProcessEffect> effects = new LinkedHashMap<>();
-    private final Set<String> disabled = new HashSet<>();
+    private final List<String> order = Collections.synchronizedList(new ArrayList<>());
+    private final Map<String, PostProcessEffect> effects = Collections.synchronizedMap(new LinkedHashMap<>());
+    private final Set<String> disabled = Collections.synchronizedSet(new HashSet<>());
 
     public void add(String name, PostProcessEffect effect) {
         order.add(name);
@@ -31,7 +32,7 @@ public class PostProcessChain {
 
     public int size() { return order.size(); }
 
-    public void execute(PostProcessContext context) {
+    public synchronized void execute(PostProcessContext context) {
         for (var name : order) {
             if (!disabled.contains(name)) {
                 effects.get(name).apply(context);

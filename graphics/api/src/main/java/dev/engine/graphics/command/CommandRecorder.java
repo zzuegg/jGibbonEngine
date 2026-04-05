@@ -2,6 +2,7 @@ package dev.engine.graphics.command;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.core.property.PropertyMap;
+import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.graphics.*;
 import dev.engine.graphics.renderstate.BarrierScope;
 
@@ -57,7 +58,7 @@ public class CommandRecorder {
     @Deprecated public void setWireframe(boolean enabled) { commands.add(new RenderCommand.SetWireframe(enabled)); }
 
     // --- Render state (property-based) ---
-    public void setRenderState(PropertyMap properties) { commands.add(new RenderCommand.SetRenderState(properties)); }
+    public void setRenderState(PropertyMap<RenderState> properties) { commands.add(new RenderCommand.SetRenderState(properties)); }
 
     // --- Push constants ---
     public void pushConstants(ByteBuffer data) { commands.add(new RenderCommand.PushConstants(data)); }

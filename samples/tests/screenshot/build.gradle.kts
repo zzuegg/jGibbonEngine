@@ -1,4 +1,8 @@
-val lwjglNatives = "natives-linux"
+val lwjglNatives = when {
+    System.getProperty("os.name").startsWith("Windows") -> "natives-windows"
+    System.getProperty("os.name").startsWith("Mac") -> if (System.getProperty("os.arch") == "aarch64") "natives-macos-arm64" else "natives-macos"
+    else -> "natives-linux"
+}
 
 dependencies {
     testImplementation(project(":core"))
@@ -30,9 +34,14 @@ tasks.test {
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     forkEvery = 1
     outputs.upToDateWhen { false }
-    val jemalloc = file("/lib/x86_64-linux-gnu/libjemalloc.so.2")
-    if (jemalloc.exists()) {
-        environment("LD_PRELOAD", jemalloc.absolutePath)
+    val jemallocPaths = listOf(
+        "/lib/x86_64-linux-gnu/libjemalloc.so.2",
+        "/usr/lib/libjemalloc.so.2",
+        "/usr/lib64/libjemalloc.so.2",
+        "/opt/homebrew/lib/libjemalloc.dylib"
+    )
+    jemallocPaths.map { file(it) }.firstOrNull { it.exists() }?.let {
+        environment("LD_PRELOAD", it.absolutePath)
     }
 }
 
@@ -43,9 +52,14 @@ tasks.register<JavaExec>("saveReferences") {
     mainClass = "dev.engine.tests.screenshot.SaveReferences"
     workingDir = projectDir
     jvmArgs("--enable-native-access=ALL-UNNAMED")
-    val jemalloc = file("/lib/x86_64-linux-gnu/libjemalloc.so.2")
-    if (jemalloc.exists()) {
-        environment("LD_PRELOAD", jemalloc.absolutePath)
+    val jemallocPaths = listOf(
+        "/lib/x86_64-linux-gnu/libjemalloc.so.2",
+        "/usr/lib/libjemalloc.so.2",
+        "/usr/lib64/libjemalloc.so.2",
+        "/opt/homebrew/lib/libjemalloc.dylib"
+    )
+    jemallocPaths.map { file(it) }.firstOrNull { it.exists() }?.let {
+        environment("LD_PRELOAD", it.absolutePath)
     }
 }
 

@@ -32,13 +32,18 @@ public class GlfwWindowToolkit implements WindowToolkit {
 
     private static final Logger log = LoggerFactory.getLogger(GlfwWindowToolkit.class);
 
-    /** OpenGL 4.5 Core Profile hints. */
-    public static final Consumer<Void> OPENGL_HINTS = v -> {
-        GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MAJOR, 4);
-        GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MINOR, 5);
-        GLFW.glfwWindowHint(GLFW.GLFW_OPENGL_PROFILE, GLFW.GLFW_OPENGL_CORE_PROFILE);
-        GLFW.glfwWindowHint(GLFW.GLFW_OPENGL_FORWARD_COMPAT, GLFW.GLFW_TRUE);
-    };
+    /** OpenGL 4.5 Core Profile hints (default). */
+    public static final Consumer<Void> OPENGL_HINTS = openGlHints(4, 5);
+
+    /** Creates OpenGL Core Profile hints for a specific version. */
+    public static Consumer<Void> openGlHints(int major, int minor) {
+        return v -> {
+            GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MAJOR, major);
+            GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MINOR, minor);
+            GLFW.glfwWindowHint(GLFW.GLFW_OPENGL_PROFILE, GLFW.GLFW_OPENGL_CORE_PROFILE);
+            GLFW.glfwWindowHint(GLFW.GLFW_OPENGL_FORWARD_COMPAT, GLFW.GLFW_TRUE);
+        };
+    }
 
     /** No API — for Vulkan or other non-GL backends. */
     public static final Consumer<Void> NO_API_HINTS = v -> {
@@ -47,11 +52,12 @@ public class GlfwWindowToolkit implements WindowToolkit {
 
     private final Consumer<Void> windowHints;
     private final List<GlfwWindowHandle> windows = new ArrayList<>();
+    private GLFWErrorCallback errorCallback;
     private boolean initialized = false;
 
     public GlfwWindowToolkit(Consumer<Void> windowHints) {
         this.windowHints = windowHints;
-        GLFWErrorCallback.createPrint(System.err).set();
+        errorCallback = GLFWErrorCallback.createPrint(System.err).set();
         if (!GLFW.glfwInit()) {
             throw new RuntimeException("Failed to initialize GLFW");
         }
@@ -104,6 +110,10 @@ public class GlfwWindowToolkit implements WindowToolkit {
         windows.clear();
         if (initialized) {
             GLFW.glfwTerminate();
+            if (errorCallback != null) {
+                errorCallback.free();
+                errorCallback = null;
+            }
             initialized = false;
             log.info("GLFW terminated");
         }
@@ -155,6 +165,8 @@ public class GlfwWindowToolkit implements WindowToolkit {
         private final MutablePropertyMap<WindowHandle> properties = new MutablePropertyMap<>();
         private final dev.engine.core.versioned.Versioned<int[]> size;
         private final dev.engine.core.versioned.Versioned<Boolean> focused;
+        // Saved windowed-mode geometry for fullscreen toggle
+        private int savedX, savedY, savedWidth, savedHeight;
 
         GlfwWindowHandle(long handle, WindowDescriptor descriptor) {
             this.handle = handle;
@@ -229,8 +241,28 @@ public class GlfwWindowToolkit implements WindowToolkit {
                 if ((Boolean) value) GLFW.glfwShowWindow(handle);
                 else GLFW.glfwHideWindow(handle);
             } else if (key == WindowProperty.FULLSCREEN) {
-                // Fullscreen toggle is complex — store but don't apply for now
-                // Would need monitor info, video mode, etc.
+                boolean fullscreen = (Boolean) value;
+                if (fullscreen) {
+                    // Save windowed position and size
+                    int[] xBuf = new int[1], yBuf = new int[1];
+                    GLFW.glfwGetWindowPos(handle, xBuf, yBuf);
+                    savedX = xBuf[0];
+                    savedY = yBuf[0];
+                    savedWidth = width();
+                    savedHeight = height();
+                    // Switch to fullscreen on primary monitor
+                    long monitor = GLFW.glfwGetPrimaryMonitor();
+                    var mode = GLFW.glfwGetVideoMode(monitor);
+                    if (mode != null) {
+                        GLFW.glfwSetWindowMonitor(handle, monitor, 0, 0,
+                                mode.width(), mode.height(), mode.refreshRate());
+                    }
+                } else {
+                    // Restore windowed mode
+                    GLFW.glfwSetWindowMonitor(handle, 0L, savedX, savedY,
+                            savedWidth > 0 ? savedWidth : 1280,
+                            savedHeight > 0 ? savedHeight : 720, GLFW.GLFW_DONT_CARE);
+                }
             } else if (key == WindowProperty.SWAP_INTERVAL) {
                 GLFW.glfwSwapInterval((Integer) value);
             }

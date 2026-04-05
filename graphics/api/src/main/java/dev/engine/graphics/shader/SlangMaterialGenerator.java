@@ -31,7 +31,7 @@ public final class SlangMaterialGenerator {
      * Each scalar/vector parameter becomes a getter method.
      * Textures are excluded from the interface — they're bound separately.
      */
-    public static String generateInterface(Set<PropertyKey<?>> keys) {
+    public static String generateInterface(Set<? extends PropertyKey<?, ?>> keys) {
         var scalarKeys = filterScalarKeys(keys);
         var sb = new StringBuilder();
         sb.append("interface IMaterialParams {\n");
@@ -48,7 +48,7 @@ public final class SlangMaterialGenerator {
      * Generates a UBO-backed implementation of IMaterialParams.
      * Each parameter is a field in a cbuffer, accessor returns the field.
      */
-    public static String generateUboImplementation(Set<PropertyKey<?>> keys) {
+    public static String generateUboImplementation(Set<? extends PropertyKey<?, ?>> keys) {
         var scalarKeys = filterScalarKeys(keys);
         var sb = new StringBuilder();
 
@@ -81,7 +81,7 @@ public final class SlangMaterialGenerator {
      * Generates an SSBO-backed implementation for instanced rendering.
      * All instance data in a StructuredBuffer, indexed by instance ID.
      */
-    public static String generateSsboImplementation(Set<PropertyKey<?>> keys) {
+    public static String generateSsboImplementation(Set<? extends PropertyKey<?, ?>> keys) {
         var scalarKeys = filterScalarKeys(keys);
         var sb = new StringBuilder();
 
@@ -112,7 +112,7 @@ public final class SlangMaterialGenerator {
     /**
      * Generates the full material injection block (interface + chosen implementation).
      */
-    public static String generate(Set<PropertyKey<?>> keys, UploadMode mode) {
+    public static String generate(Set<? extends PropertyKey<?, ?>> keys, UploadMode mode) {
         var sb = new StringBuilder();
         sb.append(generateInterface(keys)).append("\n");
         switch (mode) {
@@ -123,7 +123,7 @@ public final class SlangMaterialGenerator {
     }
 
     /** Filters to only scalar/vector keys (no textures). */
-    private static List<PropertyKey<?>> filterScalarKeys(Set<PropertyKey<?>> keys) {
+    private static List<? extends PropertyKey<?, ?>> filterScalarKeys(Set<? extends PropertyKey<?, ?>> keys) {
         return keys.stream()
                 .filter(k -> TYPE_MAP.containsKey(k.type()))
                 .sorted(Comparator.comparing(PropertyKey::name))

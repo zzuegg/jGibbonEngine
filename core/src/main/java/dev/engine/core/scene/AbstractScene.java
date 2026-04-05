@@ -1,6 +1,7 @@
 package dev.engine.core.scene;
 
 import dev.engine.core.handle.Handle;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.core.property.PropertyMap;
@@ -74,17 +75,17 @@ public abstract class AbstractScene {
         destroyEntity(entity.handle());
     }
 
-    public <T> void setMaterialProperty(Handle<EntityTag> entity, PropertyKey<T> key, T value) {
+    public <T> void setMaterialProperty(Handle<EntityTag> entity, PropertyKey<MaterialData, T> key, T value) {
         transactions.materialPropertyChanged(entity, key, value);
     }
 
     /** Convenience overload accepting Entity directly. */
-    public <T> void setMaterialProperty(Entity entity, PropertyKey<T> key, T value) {
+    public <T> void setMaterialProperty(Entity entity, PropertyKey<MaterialData, T> key, T value) {
         setMaterialProperty(entity.handle(), key, value);
     }
 
     /** Sets all material properties at once via a PropertyMap. */
-    public void setMaterialProperties(Entity entity, PropertyMap props) {
+    public void setMaterialProperties(Entity entity, PropertyMap<MaterialData> props) {
         transactions.materialReplaced(entity.handle(), props);
     }
 

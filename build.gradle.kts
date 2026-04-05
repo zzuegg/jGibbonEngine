@@ -90,9 +90,14 @@ subprojects {
         // Slang's C++ runtime can trigger glibc heap metadata corruption on
         // certain glibc versions when COM objects are released (free/delete).
         // Using jemalloc as a drop-in replacement avoids the issue.
-        val jemalloc = file("/lib/x86_64-linux-gnu/libjemalloc.so.2")
-        if (jemalloc.exists()) {
-            environment("LD_PRELOAD", jemalloc.absolutePath)
+        val jemallocPaths = listOf(
+            "/lib/x86_64-linux-gnu/libjemalloc.so.2",
+            "/usr/lib/libjemalloc.so.2",
+            "/usr/lib64/libjemalloc.so.2",
+            "/opt/homebrew/lib/libjemalloc.dylib"
+        )
+        jemallocPaths.map { file(it) }.firstOrNull { it.exists() }?.let {
+            environment("LD_PRELOAD", it.absolutePath)
         }
     }
 

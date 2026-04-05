@@ -30,7 +30,7 @@ public class WeakCache<K, V> {
      * Gets or creates a cached value for the given key.
      * Uses identity (==) comparison, not equals().
      */
-    public V getOrCreate(K key, Function<K, V> factory) {
+    public synchronized V getOrCreate(K key, Function<K, V> factory) {
         // Try to find existing entry by identity scan
         for (var entry : map.entrySet()) {
             K existing = entry.getKey().get();

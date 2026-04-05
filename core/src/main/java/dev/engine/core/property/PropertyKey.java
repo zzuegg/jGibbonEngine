@@ -2,7 +2,7 @@ package dev.engine.core.property;
 
 import java.util.Objects;
 
-public final class PropertyKey<T> {
+public final class PropertyKey<O, T> {
 
     private final String name;
     private final Class<T> type;
@@ -12,7 +12,7 @@ public final class PropertyKey<T> {
         this.type = Objects.requireNonNull(type);
     }
 
-    public static <T> PropertyKey<T> of(String name, Class<T> type) {
+    public static <O, T> PropertyKey<O, T> of(String name, Class<T> type) {
         return new PropertyKey<>(name, type);
     }
 
@@ -21,7 +21,7 @@ public final class PropertyKey<T> {
 
     @Override
     public boolean equals(Object o) {
-        return this == o || (o instanceof PropertyKey<?> k && name.equals(k.name) && type.equals(k.type));
+        return this == o || (o instanceof PropertyKey<?, ?> k && name.equals(k.name) && type.equals(k.type));
     }
 
     @Override

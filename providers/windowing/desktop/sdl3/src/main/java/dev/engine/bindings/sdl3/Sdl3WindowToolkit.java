@@ -30,26 +30,36 @@ public class Sdl3WindowToolkit implements WindowToolkit {
 
     /** Creates a plain SDL3 toolkit (no graphics API). */
     public Sdl3WindowToolkit() {
-        this(false);
+        this(false, 4, 5);
     }
 
     /**
      * Creates an SDL3 toolkit.
-     * @param opengl if true, sets up OpenGL 4.5 core context on created windows
+     * @param opengl if true, sets up an OpenGL core context on created windows
      */
     public Sdl3WindowToolkit(boolean opengl) {
+        this(opengl, 4, 5);
+    }
+
+    /**
+     * Creates an SDL3 toolkit with a specific OpenGL version.
+     * @param opengl if true, sets up an OpenGL core context on created windows
+     * @param glMajor OpenGL major version (e.g., 4)
+     * @param glMinor OpenGL minor version (e.g., 5)
+     */
+    public Sdl3WindowToolkit(boolean opengl, int glMajor, int glMinor) {
         this.opengl = opengl;
         if (!SDL_Init(SDL_INIT_VIDEO)) {
             throw new RuntimeException("Failed to initialize SDL3");
         }
         if (opengl) {
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 5);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, glMajor);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, glMinor);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
             SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         }
         initialized = true;
-        log.info("SDL3 initialized (opengl={})", opengl);
+        log.info("SDL3 initialized (opengl={}, version={}.{})", opengl, glMajor, glMinor);
     }
 
     /** Register an input provider to receive events during pollEvents(). */

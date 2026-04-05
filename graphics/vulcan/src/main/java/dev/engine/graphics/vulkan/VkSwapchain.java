@@ -24,6 +24,14 @@ class VkSwapchain implements AutoCloseable {
         this.surface = surface;
     }
 
+    private int preferredFormat = VkBindings.VK_FORMAT_B8G8R8A8_UNORM;
+    private int preferredPresentMode = VkBindings.VK_PRESENT_MODE_FIFO_KHR;
+
+    void setPreferences(int format, int presentMode) {
+        this.preferredFormat = format;
+        this.preferredPresentMode = presentMode;
+    }
+
     void create(int requestedWidth, int requestedHeight) {
         long oldSwapchain = swapchain;
 
@@ -33,7 +41,8 @@ class VkSwapchain implements AutoCloseable {
         }
 
         var result = vk.createSwapchain(device, physicalDevice, surface,
-                requestedWidth, requestedHeight, oldSwapchain);
+                requestedWidth, requestedHeight, oldSwapchain,
+                preferredFormat, preferredPresentMode);
 
         // Destroy old swapchain handle
         if (oldSwapchain != VkBindings.VK_NULL_HANDLE) {

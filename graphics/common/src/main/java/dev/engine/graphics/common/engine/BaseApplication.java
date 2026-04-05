@@ -67,8 +67,16 @@ public abstract class BaseApplication {
         try {
             var windowDesc = new WindowDescriptor(
                     config.windowTitle(), config.windowSize().x(), config.windowSize().y());
-            var gfxConfig = new dev.engine.graphics.GraphicsConfig(config.headless());
-            var backend = config.graphicsBackend().create(windowDesc, gfxConfig);
+            dev.engine.graphics.GraphicsBackend backend;
+            if (config.graphics() != null) {
+                backend = config.graphics().create(windowDesc);
+            } else if (config.graphicsBackend() != null) {
+                // Legacy path
+                backend = config.graphicsBackend().create(windowDesc,
+                        new dev.engine.graphics.GraphicsConfigLegacy(config.headless()));
+                } else {
+                throw new IllegalStateException("No graphics configuration provided");
+            }
             this.toolkit = backend.toolkit();
             this.window = backend.window();
             runInternal(config, backend);
@@ -119,8 +127,6 @@ public abstract class BaseApplication {
                 }
 
                 engine.renderer().setViewport(window.width(), window.height());
-                float aspect = (float) window.width() / Math.max(window.height(), 1);
-
                 engine.setInputEvents(inputEvents);
                 update((float) delta, inputEvents);
                 engine.tick(delta);

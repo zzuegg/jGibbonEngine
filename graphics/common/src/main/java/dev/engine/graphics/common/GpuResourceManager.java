@@ -48,9 +48,9 @@ public class GpuResourceManager {
     private final AtomicInteger liveSamplers = new AtomicInteger();
     private final AtomicInteger liveVertexInputs = new AtomicInteger();
 
-    // Deferred deletion queues
-    private List<Runnable> deletionQueue = new ArrayList<>();
-    private List<Runnable> pendingQueue = new ArrayList<>();
+    // Deferred deletion queues (thread-safe for concurrent destroy calls)
+    private volatile java.util.Queue<Runnable> deletionQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private volatile java.util.Queue<Runnable> pendingQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
     public GpuResourceManager(RenderDevice device) {
         this.device = device;
@@ -176,9 +176,10 @@ public class GpuResourceManager {
         // Swap queues — pending from last frame is now safe to delete
         var toDelete = pendingQueue;
         pendingQueue = deletionQueue;
-        deletionQueue = new ArrayList<>();
+        deletionQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
-        for (var action : toDelete) {
+        Runnable action;
+        while ((action = toDelete.poll()) != null) {
             action.run();
         }
     }

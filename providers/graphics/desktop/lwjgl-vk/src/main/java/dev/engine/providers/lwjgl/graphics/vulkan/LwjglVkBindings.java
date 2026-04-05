@@ -259,6 +259,15 @@ public class LwjglVkBindings implements VkBindings {
     @Override
     public SwapchainResult createSwapchain(long deviceHandle, long physicalDeviceHandle, long surface,
                                             int requestedWidth, int requestedHeight, long oldSwapchain) {
+        return createSwapchain(deviceHandle, physicalDeviceHandle, surface,
+                requestedWidth, requestedHeight, oldSwapchain,
+                VK_FORMAT_B8G8R8A8_UNORM, VK_PRESENT_MODE_FIFO_KHR);
+    }
+
+    @Override
+    public SwapchainResult createSwapchain(long deviceHandle, long physicalDeviceHandle, long surface,
+                                            int requestedWidth, int requestedHeight, long oldSwapchain,
+                                            int preferredFormat, int preferredPresentMode) {
         var device = deviceCache.get(deviceHandle);
         var instance = device.getPhysicalDevice().getInstance();
         var physicalDevice = new VkPhysicalDevice(physicalDeviceHandle, instance);
@@ -272,11 +281,11 @@ public class LwjglVkBindings implements VkBindings {
             var formats = VkSurfaceFormatKHR.calloc(formatCount.get(0), stack);
             vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, formatCount, formats);
 
-            int chosenFormat = VK_FORMAT_B8G8R8A8_UNORM;
+            int chosenFormat = preferredFormat;
             int chosenColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
             boolean found = false;
             for (int i = 0; i < formats.capacity(); i++) {
-                if (formats.get(i).format() == VK_FORMAT_B8G8R8A8_UNORM) {
+                if (formats.get(i).format() == preferredFormat) {
                     chosenColorSpace = formats.get(i).colorSpace();
                     found = true;
                     break;
@@ -285,6 +294,19 @@ public class LwjglVkBindings implements VkBindings {
             if (!found) {
                 chosenFormat = formats.get(0).format();
                 chosenColorSpace = formats.get(0).colorSpace();
+            }
+
+            // Negotiate present mode — fall back to FIFO (guaranteed available)
+            IntBuffer presentModeCount = stack.ints(0);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, presentModeCount, null);
+            IntBuffer presentModes = stack.mallocInt(presentModeCount.get(0));
+            vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, presentModeCount, presentModes);
+            int chosenPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+            for (int i = 0; i < presentModes.capacity(); i++) {
+                if (presentModes.get(i) == preferredPresentMode) {
+                    chosenPresentMode = preferredPresentMode;
+                    break;
+                }
             }
 
             int width, height;
@@ -315,7 +337,7 @@ public class LwjglVkBindings implements VkBindings {
                     .imageSharingMode(VK_SHARING_MODE_EXCLUSIVE)
                     .preTransform(capabilities.currentTransform())
                     .compositeAlpha(VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)
-                    .presentMode(VK_PRESENT_MODE_FIFO_KHR)
+                    .presentMode(chosenPresentMode)
                     .clipped(true)
                     .oldSwapchain(oldSwapchain);
 
@@ -1587,6 +1609,9 @@ public class LwjglVkBindings implements VkBindings {
     public void destroyDevice(long deviceHandle) {
         var device = deviceCache.remove(deviceHandle);
         if (device != null) {
+            // Clean up queue and command buffer caches associated with this device
+            queueCache.clear();
+            cmdCache.clear();
             vkDestroyDevice(device, null);
         }
     }

@@ -40,7 +40,7 @@ class RenderStateTest {
     }
 
     @Test void canBuildCustomState() {
-        PropertyMap state = PropertyMap.builder()
+        var state = PropertyMap.<RenderState>builder()
             .set(RenderState.BLEND_MODE, BlendMode.ALPHA)
             .set(RenderState.DEPTH_WRITE, false)
             .build();

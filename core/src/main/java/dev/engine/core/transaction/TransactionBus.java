@@ -38,6 +38,13 @@ public class TransactionBus {
     }
 
     /**
+     * Removes a subscriber, freeing its buffers.
+     */
+    public void unsubscribe(Object subscriberKey) {
+        subscribers.remove(subscriberKey);
+    }
+
+    /**
      * Emits a transaction. For ComponentChanged, only subscribers interested
      * in that component's slotType receive it. All other types go to all subscribers.
      */

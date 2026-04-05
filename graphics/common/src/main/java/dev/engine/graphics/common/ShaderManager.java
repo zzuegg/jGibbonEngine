@@ -42,6 +42,7 @@ public class ShaderManager {
     private final int slangTarget; // ShaderCompiler.TARGET_GLSL / TARGET_SPIRV / TARGET_WGSL
     private AssetManager assetManager;
     private final ShaderCompiler compiler;
+    private final int textureBindingOffset;
 
     public ShaderManager(RenderDevice device, GlobalParamsRegistry globalParams, ShaderCompiler compiler) {
         this.device = device;
@@ -55,6 +56,10 @@ public class ShaderManager {
             case "WebGPU" -> ShaderCompiler.TARGET_WGSL;
             default -> ShaderCompiler.TARGET_GLSL;
         };
+
+        // Query texture binding offset from backend (Vulkan uses 16, others 0)
+        var texOffset = device.queryCapability(DeviceCapability.TEXTURE_BINDING_OFFSET);
+        this.textureBindingOffset = texOffset != null ? texOffset : 0;
 
         if (!compiler.isAvailable()) {
             log.warn("Shader compiler is not available — shader compilation will fail at runtime");
@@ -149,7 +154,7 @@ public class ShaderManager {
 
         var compiled = resolvedShaders.computeIfAbsent(cacheKey, k -> {
             try {
-                if (hint.contains("/") || hint.contains(".")) {
+                if (hint.contains("/") || hint.contains("\\") || hint.contains(".")) {
                     return compileSlangSource(loadShaderFile(hint), hint);
                 }
                 return getShaderWithMaterial(hint, shaderKeys);
@@ -303,7 +308,7 @@ public class ShaderManager {
             //   - SPIRV/Vulkan: The Vulkan descriptor set layout has textures at a fixed
             //           offset (TEXTURE_BINDING_OFFSET=16). We annotate [[vk::binding(16+i)]]
             //           so the SPIRV matches the descriptor layout.
-            int vkTexOffset = 16; // Must match VkDescriptorManager.TEXTURE_BINDING_OFFSET
+            int vkTexOffset = textureBindingOffset;
             int texIndex = 0;
 
             var sortedTexKeys = materialKeys.stream()

@@ -10,7 +10,7 @@ public final class StructLayout {
 
     public record Field(String name, Class<?> type, int offset, int size, int alignment) {}
 
-    private static final Map<String, StructLayout> CACHE = new java.util.HashMap<>();
+    private static final Map<String, StructLayout> CACHE = new java.util.concurrent.ConcurrentHashMap<>();
 
     private final List<Field> fields;
     private final int size;

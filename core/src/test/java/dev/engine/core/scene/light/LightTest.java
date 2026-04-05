@@ -55,7 +55,7 @@ class LightTest {
             var light = new LightData(areaLight);
             assertEquals("AREA", light.type().name());
             // Can set arbitrary properties
-            var AREA_WIDTH = PropertyKey.of("areaWidth", Float.class);
+            var AREA_WIDTH = PropertyKey.<LightData, Float>of("areaWidth", Float.class);
             light.set(AREA_WIDTH, 2f);
             assertEquals(2f, light.get(AREA_WIDTH));
         }

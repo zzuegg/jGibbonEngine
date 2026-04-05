@@ -61,7 +61,7 @@ class MaterialTest {
         }
 
         @Test void customProperties() {
-            var TINT = PropertyKey.of("tint", Vec3.class);
+            var TINT = PropertyKey.<MaterialData, Vec3>of("tint", Vec3.class);
             var mat = MaterialData.create("UNLIT")
                     .set(TINT, new Vec3(0f, 1f, 0f));
             assertEquals(new Vec3(0f, 1f, 0f), mat.get(TINT));

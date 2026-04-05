@@ -3,6 +3,7 @@ package dev.engine.graphics.common.engine;
 import dev.engine.core.math.Vec2i;
 import dev.engine.core.scene.AbstractScene;
 import dev.engine.graphics.GraphicsBackendFactory;
+import dev.engine.graphics.GraphicsConfig;
 
 /**
  * Configuration for the Engine. Determines threading mode, backend, window, scene type.
@@ -12,7 +13,7 @@ import dev.engine.graphics.GraphicsBackendFactory;
  *     .windowTitle("My Game")
  *     .windowSize(1280, 720)
  *     .platform(DesktopPlatform.builder().build())
- *     .graphicsBackend(OpenGlBackend.factory(glBindings))
+ *     .graphics(new OpenGlConfig(toolkit, glBindings))
  *     .build();
  *
  * new MyGame().launch(config);
@@ -26,6 +27,7 @@ public record EngineConfig(
         AbstractScene scene,
         int maxFrames,
         Platform platform,
+        GraphicsConfig graphics,
         GraphicsBackendFactory graphicsBackend
 ) {
     public static Builder builder() { return new Builder(); }
@@ -38,6 +40,7 @@ public record EngineConfig(
         private AbstractScene scene = null;
         private int maxFrames = 0; // 0 = unlimited
         private Platform platform = null;
+        private GraphicsConfig graphics = null;
         private GraphicsBackendFactory graphicsBackend = null;
 
         public Builder headless(boolean headless) { this.headless = headless; return this; }
@@ -48,13 +51,17 @@ public record EngineConfig(
         public Builder scene(AbstractScene scene) { this.scene = scene; return this; }
         public Builder maxFrames(int maxFrames) { this.maxFrames = maxFrames; return this; }
         public Builder platform(Platform platform) { this.platform = platform; return this; }
+        /** Sets the graphics configuration (new API — preferred over graphicsBackend). */
+        public Builder graphics(GraphicsConfig graphics) { this.graphics = graphics; return this; }
+        /** @deprecated Use {@link #graphics(GraphicsConfig)} instead. */
+        @Deprecated
         public Builder graphicsBackend(GraphicsBackendFactory graphicsBackend) { this.graphicsBackend = graphicsBackend; return this; }
 
         public EngineConfig build() {
             if (headless) {
                 if (platform == null) platform = HeadlessPlatform.INSTANCE;
             }
-            return new EngineConfig(headless, threaded, windowTitle, windowSize, scene, maxFrames, platform, graphicsBackend);
+            return new EngineConfig(headless, threaded, windowTitle, windowSize, scene, maxFrames, platform, graphics, graphicsBackend);
         }
     }
 }

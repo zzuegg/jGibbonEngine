@@ -41,8 +41,12 @@ public class NativeLibraryLoader {
         this.cacheDir = cacheDir;
     }
 
-    /** Creates a loader with the default cache at ~/.engine/natives/ */
+    /** Creates a loader with the default cache at ~/.engine/natives/ (override via ENGINE_NATIVE_CACHE env var) */
     public static NativeLibraryLoader defaultLoader() {
+        var envPath = System.getenv("ENGINE_NATIVE_CACHE");
+        if (envPath != null && !envPath.isBlank()) {
+            return new NativeLibraryLoader(Path.of(envPath));
+        }
         var home = System.getProperty("user.home");
         return new NativeLibraryLoader(Path.of(home, ".engine", "natives"));
     }
@@ -207,44 +211,94 @@ public class NativeLibraryLoader {
     }
 
     private void extractTarGz(InputStream is, Path targetDir) throws IOException {
-        // Use system tar for extraction (available on Linux/macOS)
-        var tarFile = Files.createTempFile("native_", ".tar.gz");
-        try {
-            Files.copy(is, tarFile, StandardCopyOption.REPLACE_EXISTING);
-            var proc = new ProcessBuilder("tar", "xzf", tarFile.toString(),
-                    "--strip-components=1", "-C", targetDir.toString())
-                    .redirectErrorStream(true).start();
-            proc.getInputStream().readAllBytes();
-            int exit = proc.waitFor();
-            if (exit != 0) {
-                // Try without --strip-components (some archives aren't nested)
-                var proc2 = new ProcessBuilder("tar", "xzf", tarFile.toString(),
-                        "-C", targetDir.toString())
-                        .redirectErrorStream(true).start();
-                proc2.getInputStream().readAllBytes();
-                proc2.waitFor();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            Files.deleteIfExists(tarFile);
+        // Pure Java tar.gz extraction — no system 'tar' dependency
+        try (var gzis = new java.util.zip.GZIPInputStream(is)) {
+            extractTar(gzis, targetDir);
         }
     }
 
-    private void extractZip(InputStream is, Path targetDir) throws IOException {
-        var zipFile = Files.createTempFile("native_", ".zip");
-        try {
-            Files.copy(is, zipFile, StandardCopyOption.REPLACE_EXISTING);
-            var proc = new ProcessBuilder("unzip", "-o", zipFile.toString(), "-d", targetDir.toString())
-                    .redirectErrorStream(true).start();
-            try {
-                proc.getInputStream().readAllBytes();
-                proc.waitFor();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+    private void extractTar(InputStream is, Path targetDir) throws IOException {
+        byte[] header = new byte[512];
+        while (true) {
+            int read = is.readNBytes(header, 0, 512);
+            if (read < 512 || header[0] == 0) break;
+
+            String name = tarString(header, 0, 100);
+            String prefix = tarString(header, 345, 155);
+            if (!prefix.isEmpty()) name = prefix + "/" + name;
+
+            long size = tarOctal(header, 124, 12);
+            byte typeFlag = header[156];
+
+            Path entryPath = targetDir.resolve(name).normalize();
+            if (!entryPath.startsWith(targetDir)) {
+                // Security: skip path traversal attempts
+                tarSkip(is, size);
+                continue;
             }
-        } finally {
-            Files.deleteIfExists(zipFile);
+
+            if (typeFlag == '5' || name.endsWith("/")) {
+                Files.createDirectories(entryPath);
+            } else if (typeFlag == '0' || typeFlag == 0) {
+                Files.createDirectories(entryPath.getParent());
+                try (var out = Files.newOutputStream(entryPath)) {
+                    long remaining = size;
+                    byte[] buf = new byte[8192];
+                    while (remaining > 0) {
+                        int toRead = (int) Math.min(buf.length, remaining);
+                        int n = is.read(buf, 0, toRead);
+                        if (n < 0) break;
+                        out.write(buf, 0, n);
+                        remaining -= n;
+                    }
+                }
+                // Tar pads entries to 512-byte blocks
+                long padding = (512 - (size % 512)) % 512;
+                is.readNBytes((int) padding);
+            } else {
+                tarSkip(is, size);
+            }
+        }
+    }
+
+    private static String tarString(byte[] header, int offset, int length) {
+        int end = offset;
+        while (end < offset + length && header[end] != 0) end++;
+        return new String(header, offset, end - offset, java.nio.charset.StandardCharsets.US_ASCII);
+    }
+
+    private static long tarOctal(byte[] header, int offset, int length) {
+        var s = tarString(header, offset, length).strip();
+        if (s.isEmpty()) return 0;
+        return Long.parseLong(s, 8);
+    }
+
+    private static void tarSkip(InputStream is, long size) throws IOException {
+        long total = size + (512 - (size % 512)) % 512;
+        is.readNBytes((int) Math.min(total, Integer.MAX_VALUE));
+    }
+
+    private void extractZip(InputStream is, Path targetDir) throws IOException {
+        // Pure Java zip extraction — no system 'unzip' dependency
+        try (var zis = new java.util.zip.ZipInputStream(is)) {
+            java.util.zip.ZipEntry entry;
+            byte[] buf = new byte[8192];
+            while ((entry = zis.getNextEntry()) != null) {
+                Path entryPath = targetDir.resolve(entry.getName()).normalize();
+                if (!entryPath.startsWith(targetDir)) continue; // Prevent path traversal
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    try (var out = Files.newOutputStream(entryPath)) {
+                        int n;
+                        while ((n = zis.read(buf)) > 0) {
+                            out.write(buf, 0, n);
+                        }
+                    }
+                }
+                zis.closeEntry();
+            }
         }
     }
 

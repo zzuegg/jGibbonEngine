@@ -110,6 +110,7 @@ public class WgpuRenderDevice implements RenderDevice {
     private long wgpuAdapter;
     private long wgpuDevice;
     private long wgpuQueue;
+    private WgpuBindings.DeviceLimits deviceLimits;
 
     // ── Per-frame state ───────────────────────────────────────────────
 
@@ -191,7 +192,9 @@ public class WgpuRenderDevice implements RenderDevice {
             int colorTargetFormat
     ) {}
 
-    private final Map<PipelineStateKey, Long> pipelineVariants = new HashMap<>();
+    private final dev.engine.graphics.pipeline.PipelineVariantCache<PipelineStateKey> pipelineVariants =
+            new dev.engine.graphics.pipeline.PipelineVariantCache<>();
+    private long wgpuFrameCounter = 0;
     private boolean pipelineStateDirty = false;
     /** Tracks the pipeline that was last set on the render pass encoder. */
     private long currentActivePipeline = 0;
@@ -241,6 +244,7 @@ public class WgpuRenderDevice implements RenderDevice {
             }
 
             wgpuQueue = gpu.deviceGetQueue(wgpuDevice);
+            deviceLimits = gpu.deviceGetLimits(wgpuDevice);
 
             // Configure presentation surface if requested
             if (presentToSurface) {
@@ -303,7 +307,7 @@ public class WgpuRenderDevice implements RenderDevice {
     @Override
     public BufferWriter writeBuffer(Handle<BufferResource> buffer, long offset, long length) {
         var buf = buffers.get(buffer);
-        var bb = ByteBuffer.allocate((int) length).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        var staging = ByteBuffer.allocate((int) length).order(java.nio.ByteOrder.LITTLE_ENDIAN);
         var gpuMemory = memoryFactory.apply((int) length);
         return new BufferWriter() {
             @Override
@@ -312,12 +316,15 @@ public class WgpuRenderDevice implements RenderDevice {
             @Override
             public void close() {
                 if (nativeAvailable && buf != null && buf.nativeBuffer() != 0) {
-                    // Copy from NativeMemory to ByteBuffer for upload
+                    // Bulk copy from NativeMemory to direct ByteBuffer for upload
                     ByteBuffer upload = ByteBuffer.allocateDirect((int) length).order(java.nio.ByteOrder.LITTLE_ENDIAN);
-                    for (int i = 0; i < length; i++) {
-                        upload.put(gpuMemory.getByte(i));
+                    for (int i = 0; i < (int) length / 4; i++) {
+                        upload.putFloat(i * 4, gpuMemory.getFloat(i * 4L));
                     }
-                    upload.flip();
+                    // Copy remaining bytes
+                    for (int i = ((int) length / 4) * 4; i < (int) length; i++) {
+                        upload.put(i, gpuMemory.getByte(i));
+                    }
                     gpu.queueWriteBuffer(wgpuQueue, buf.nativeBuffer(), (int) offset, upload, (int) length);
                 }
             }
@@ -823,7 +830,7 @@ public class WgpuRenderDevice implements RenderDevice {
                 currentColorTargetFormat()
         );
 
-        return pipelineVariants.computeIfAbsent(key, k -> buildPipelineVariant(basePipeline));
+        return pipelineVariants.getOrCreate(key, wgpuFrameCounter, k -> buildPipelineVariant(basePipeline));
     }
 
     @Override
@@ -835,16 +842,9 @@ public class WgpuRenderDevice implements RenderDevice {
             if (p.bindGroupLayout() != 0) gpu.bindGroupLayoutRelease(p.bindGroupLayout());
         }
         // Clean up any pipeline variants for this pipeline
-        var it = pipelineVariants.entrySet().iterator();
-        while (it.hasNext()) {
-            var entry = it.next();
-            if (entry.getKey().basePipelineIndex() == pipeline.index()) {
-                if (nativeAvailable && entry.getValue() != 0) {
-                    gpu.renderPipelineRelease(entry.getValue());
-                }
-                it.remove();
-            }
-        }
+        pipelineVariants.removeIf(
+                k -> k.basePipelineIndex() == pipeline.index(),
+                variant -> { if (nativeAvailable) { gpu.renderPipelineRelease(variant); } });
     }
 
     @Override
@@ -963,6 +963,9 @@ public class WgpuRenderDevice implements RenderDevice {
         if (surfaceHandle != 0) {
             gpu.surfacePresent(surfaceHandle);
         }
+
+        wgpuFrameCounter++;
+        pipelineVariants.evict(wgpuFrameCounter, p -> gpu.renderPipelineRelease(p));
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1284,15 +1287,6 @@ public class WgpuRenderDevice implements RenderDevice {
             currentBindGroup = 0;
         }
 
-        // Track Nth texture/sampler
-        int texIdx = 0;
-        int smpIdx = 0;
-
-        var boundTexList = new ArrayList<Handle<TextureResource>>();
-        var boundSmpList = new ArrayList<Handle<SamplerResource>>();
-        for (var bt : boundTextures) { if (bt != null) boundTexList.add(bt); }
-        for (var bs : boundSamplers) { if (bs != null) boundSmpList.add(bs); }
-
         var entries = new WgpuBindings.BindGroupEntry[bindingTypes.size()];
         int i = 0;
         for (var entry : bindingTypes.entrySet()) {
@@ -1311,25 +1305,25 @@ public class WgpuRenderDevice implements RenderDevice {
                     }
                 }
                 case TEXTURE -> {
-                    if (texIdx < boundTexList.size()) {
-                        var tex = textures.get(boundTexList.get(texIdx));
+                    // Look up texture by its binding index (textures are bound to units matching shader bindings)
+                    if (binding < boundTextures.length && boundTextures[binding] != null) {
+                        var tex = textures.get(boundTextures[binding]);
                         if (tex != null && tex.view() != 0) {
                             entries[i] = new WgpuBindings.BindGroupEntry(binding,
                                     WgpuBindings.BindingResourceType.TEXTURE_VIEW,
                                     tex.view(), 0, 0);
                         }
-                        texIdx++;
                     }
                 }
                 case SAMPLER -> {
-                    if (smpIdx < boundSmpList.size()) {
-                        var smp = samplers.get(boundSmpList.get(smpIdx));
+                    // Look up sampler by its binding index (samplers are bound to units matching shader bindings)
+                    if (binding < boundSamplers.length && boundSamplers[binding] != null) {
+                        var smp = samplers.get(boundSamplers[binding]);
                         if (smp != null && smp.nativeSampler() != 0) {
                             entries[i] = new WgpuBindings.BindGroupEntry(binding,
                                     WgpuBindings.BindingResourceType.SAMPLER,
                                     smp.nativeSampler(), 0, 0);
                         }
-                        smpIdx++;
                     }
                 }
                 case STORAGE -> {
@@ -1425,9 +1419,13 @@ public class WgpuRenderDevice implements RenderDevice {
     @Override
     @SuppressWarnings("unchecked")
     public <T> T queryCapability(DeviceCapability<T> capability) {
-        if (capability == DeviceCapability.MAX_TEXTURE_SIZE) return (T) Integer.valueOf(8192);
-        if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) return (T) Integer.valueOf(8192);
-        if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) return (T) Integer.valueOf(8192);
+        int texSize = deviceLimits != null ? deviceLimits.maxTextureDimension2D() : 8192;
+        int maxUbo = deviceLimits != null ? deviceLimits.maxUniformBufferBindingSize() : 65536;
+        int maxSsbo = deviceLimits != null ? deviceLimits.maxStorageBufferBindingSize() : 134217728;
+
+        if (capability == DeviceCapability.MAX_TEXTURE_SIZE) return (T) Integer.valueOf(texSize);
+        if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) return (T) Integer.valueOf(texSize);
+        if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) return (T) Integer.valueOf(texSize);
         if (capability == DeviceCapability.BACKEND_NAME) return (T) "WebGPU";
         if (capability == DeviceCapability.DEVICE_NAME) return (T) "WebGPU";
         if (capability == DeviceCapability.API_VERSION) return (T) "WebGPU";
@@ -1436,8 +1434,10 @@ public class WgpuRenderDevice implements RenderDevice {
         if (capability == DeviceCapability.TESSELLATION) return (T) Boolean.FALSE;
         if (capability == DeviceCapability.ANISOTROPIC_FILTERING) return (T) Boolean.TRUE;
         if (capability == DeviceCapability.BINDLESS_TEXTURES) return (T) Boolean.FALSE;
-        if (capability == DeviceCapability.MAX_UNIFORM_BUFFER_SIZE) return (T) Integer.valueOf(65536);
-        if (capability == DeviceCapability.MAX_STORAGE_BUFFER_SIZE) return (T) Integer.valueOf(134217728);
+        if (capability == DeviceCapability.MAX_UNIFORM_BUFFER_SIZE) return (T) Integer.valueOf(maxUbo);
+        if (capability == DeviceCapability.MAX_STORAGE_BUFFER_SIZE) return (T) Integer.valueOf(maxSsbo);
+        if (capability == DeviceCapability.MAX_ANISOTROPY) return (T) Float.valueOf(
+                deviceLimits != null ? deviceLimits.maxSamplerAnisotropy() : 16.0f);
         return null;
     }
 
@@ -1448,12 +1448,7 @@ public class WgpuRenderDevice implements RenderDevice {
     @Override
     public void close() {
         // Destroy pipeline variants
-        if (nativeAvailable) {
-            for (var variant : pipelineVariants.values()) {
-                if (variant != 0) gpu.renderPipelineRelease(variant);
-            }
-        }
-        pipelineVariants.clear();
+        pipelineVariants.clear(p -> { if (nativeAvailable) { gpu.renderPipelineRelease(p); } });
 
         if (defaultRenderTarget != null) {
             destroyRenderTarget(defaultRenderTarget);
@@ -1495,7 +1490,10 @@ public class WgpuRenderDevice implements RenderDevice {
         if (format == TextureFormat.DEPTH32F) return WgpuBindings.TEXTURE_FORMAT_DEPTH32_FLOAT;
         if (format == TextureFormat.DEPTH24) return WgpuBindings.TEXTURE_FORMAT_DEPTH24_PLUS;
         if (format == TextureFormat.DEPTH24_STENCIL8) return WgpuBindings.TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8;
-        if (format == TextureFormat.RGB8) return WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM;
+        if (format == TextureFormat.RGB8) {
+            log.warn("WebGPU does not support RGB8 — mapping to RGBA8. Pixel data must be 4 bytes/pixel.");
+            return WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM;
+        }
         if (format == TextureFormat.R8) return WgpuBindings.TEXTURE_FORMAT_R8_UNORM;
         if (format == TextureFormat.RGBA16F) return WgpuBindings.TEXTURE_FORMAT_RGBA16_FLOAT;
         if (format == TextureFormat.RGBA32F) return WgpuBindings.TEXTURE_FORMAT_RGBA32_FLOAT;

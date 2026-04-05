@@ -23,7 +23,7 @@ class CommandListTest {
         var ctx = new CommandRecorder();
         ctx.clear(0.1f, 0.1f, 0.1f, 1f);
         ctx.viewport(0, 0, 800, 600);
-        ctx.setRenderState(PropertyMap.builder()
+        ctx.setRenderState(PropertyMap.<RenderState>builder()
                 .set(RenderState.DEPTH_TEST, true)
                 .build());
         ctx.bindPipeline(new Handle<>(0, 0));
@@ -68,7 +68,7 @@ class CommandListTest {
 
     @Test void setRenderStateWithMultipleProperties() {
         var ctx = new CommandRecorder();
-        ctx.setRenderState(PropertyMap.builder()
+        ctx.setRenderState(PropertyMap.<RenderState>builder()
                 .set(RenderState.DEPTH_TEST, true)
                 .set(RenderState.BLEND_MODE, BlendMode.ALPHA)
                 .set(RenderState.CULL_MODE, CullMode.BACK)
@@ -101,7 +101,7 @@ class CommandListTest {
     }
 
     @Test void setRenderStateCommand() {
-        var state = PropertyMap.builder()
+        var state = PropertyMap.<RenderState>builder()
             .set(RenderState.DEPTH_TEST, true)
             .set(RenderState.BLEND_MODE, BlendMode.ALPHA)
             .build();

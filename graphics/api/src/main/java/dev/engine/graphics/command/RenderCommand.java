@@ -4,6 +4,7 @@ import dev.engine.core.handle.Handle;
 import dev.engine.core.property.PropertyMap;
 import dev.engine.graphics.*;
 import dev.engine.graphics.renderstate.BarrierScope;
+import dev.engine.graphics.renderstate.RenderState;
 
 import java.nio.ByteBuffer;
 
@@ -49,7 +50,7 @@ public sealed interface RenderCommand {
     @Deprecated record SetWireframe(boolean enabled) implements RenderCommand {}
 
     // --- Render state (property-based) ---
-    record SetRenderState(PropertyMap properties) implements RenderCommand {}
+    record SetRenderState(PropertyMap<RenderState> properties) implements RenderCommand {}
 
     // --- Push constants ---
     record PushConstants(ByteBuffer data) implements RenderCommand {}

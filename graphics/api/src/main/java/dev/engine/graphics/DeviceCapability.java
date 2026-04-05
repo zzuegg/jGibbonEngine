@@ -24,6 +24,10 @@ public interface DeviceCapability<T> {
     DeviceCapability<Boolean> MULTI_DRAW_INDIRECT = boolCap("MULTI_DRAW_INDIRECT");
     DeviceCapability<Boolean> BINDLESS_TEXTURES = boolCap("BINDLESS_TEXTURES");
 
+    // --- Backend binding layout ---
+    DeviceCapability<Integer> TEXTURE_BINDING_OFFSET = intCap("TEXTURE_BINDING_OFFSET");
+    DeviceCapability<Integer> SSBO_BINDING_OFFSET = intCap("SSBO_BINDING_OFFSET");
+
     // --- Device info ---
     DeviceCapability<String> DEVICE_NAME = stringCap("DEVICE_NAME");
     DeviceCapability<String> API_VERSION = stringCap("API_VERSION");

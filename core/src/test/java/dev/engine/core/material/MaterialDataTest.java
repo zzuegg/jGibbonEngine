@@ -87,8 +87,8 @@ class MaterialDataTest {
         }
 
         @Test void customKeys() {
-            var TINT = PropertyKey.of("tint", Vec3.class);
-            var STRENGTH = PropertyKey.of("strength", Float.class);
+            var TINT = PropertyKey.<MaterialData, Vec3>of("tint", Vec3.class);
+            var STRENGTH = PropertyKey.<MaterialData, Float>of("strength", Float.class);
             var mat = MaterialData.create()
                     .set(TINT, new Vec3(0, 1, 0))
                     .set(STRENGTH, 2.0f);
@@ -100,7 +100,7 @@ class MaterialDataTest {
             var mat = MaterialData.pbr(Vec3.ONE, 0.5f, 0.2f);
             assertTrue(mat.has(MaterialData.ALBEDO_COLOR));
             assertTrue(mat.has(MaterialData.ROUGHNESS));
-            assertFalse(mat.has(PropertyKey.of("nonExistent", String.class)));
+            assertFalse(mat.has(PropertyKey.<MaterialData, String>of("nonExistent", String.class)));
             assertTrue(mat.keys().size() >= 3);
         }
     }

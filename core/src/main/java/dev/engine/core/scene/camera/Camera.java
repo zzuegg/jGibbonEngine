@@ -8,8 +8,17 @@ public class Camera {
     private Mat4 projection = Mat4.IDENTITY;
     private Mat4 view = Mat4.IDENTITY;
     private Vec3 position = Vec3.ZERO;
-    private float nearPlane = 0.1f;
-    private float farPlane = 100f;
+    private float nearPlane;
+    private float farPlane;
+
+    public Camera() {
+        this(0.1f, 1000f);
+    }
+
+    public Camera(float nearPlane, float farPlane) {
+        this.nearPlane = nearPlane;
+        this.farPlane = farPlane;
+    }
 
     public void setPerspective(float fovY, float aspect, float near, float far) {
         this.projection = Mat4.perspective(fovY, aspect, near, far);

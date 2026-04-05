@@ -106,6 +106,19 @@ public interface WgpuBindings {
     /** Releases the device. */
     void deviceRelease(long device);
 
+    /** Device limits queried from the GPU. */
+    record DeviceLimits(
+            int maxTextureDimension2D,
+            int maxTextureDimension3D,
+            int maxUniformBufferBindingSize,
+            int maxStorageBufferBindingSize,
+            int maxColorAttachments,
+            float maxSamplerAnisotropy
+    ) {}
+
+    /** Queries device limits. Returns null if not supported. */
+    default DeviceLimits deviceGetLimits(long device) { return null; }
+
     // ===== Buffer =====
 
     /**

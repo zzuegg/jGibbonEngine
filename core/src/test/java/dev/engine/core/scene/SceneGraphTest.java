@@ -1,5 +1,6 @@
 package dev.engine.core.scene;
 
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.property.PropertyKey;
@@ -132,7 +133,7 @@ class SceneGraphTest {
 
     @Nested
     class MaterialProperties {
-        static final PropertyKey<Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
+        static final PropertyKey<MaterialData, Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
 
         @Test void setMaterialPropertyEmitsTransaction() {
             var entity = scene.createEntity();

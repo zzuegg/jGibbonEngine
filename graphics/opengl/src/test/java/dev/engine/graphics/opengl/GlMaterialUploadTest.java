@@ -3,6 +3,7 @@ package dev.engine.graphics.opengl;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 
 import dev.engine.core.handle.Handle;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.layout.StructLayout;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
@@ -57,8 +58,8 @@ class GlMaterialUploadTest {
             }
             """;
 
-    static final PropertyKey<Vec3> ALBEDO = PropertyKey.of("albedoColor", Vec3.class);
-    static final PropertyKey<Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
+    static final PropertyKey<MaterialData, Vec3> ALBEDO = PropertyKey.of("albedoColor", Vec3.class);
+    static final PropertyKey<MaterialData, Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
 
     record Vertex(float x, float y, float z) {}
 
@@ -142,7 +143,7 @@ class GlMaterialUploadTest {
         meshRenderer.processTransactions(dev.engine.core.scene.SceneAccess.drainTransactions(scene));
 
         // Set initial material via replace (full property map)
-        var props = dev.engine.core.property.PropertyMap.builder()
+        var props = dev.engine.core.property.PropertyMap.<MaterialData>builder()
                 .set(ALBEDO, new Vec3(0f, 0f, 1f))
                 .set(ROUGHNESS, 0.3f)
                 .build();
@@ -153,7 +154,7 @@ class GlMaterialUploadTest {
         assertTrue(bluePixel[2] > 200, "Blue should be high, got " + bluePixel[2]);
 
         // Replace with yellow
-        var yellowProps = dev.engine.core.property.PropertyMap.builder()
+        var yellowProps = dev.engine.core.property.PropertyMap.<MaterialData>builder()
                 .set(ALBEDO, new Vec3(1f, 1f, 0f))
                 .set(ROUGHNESS, 0.7f)
                 .build();

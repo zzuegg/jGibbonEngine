@@ -8,14 +8,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class PropertyMapTest {
 
-    static final PropertyKey<Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
-    static final PropertyKey<Vec3> ALBEDO = PropertyKey.of("albedo", Vec3.class);
-    static final PropertyKey<Boolean> TRANSPARENT = PropertyKey.of("transparent", Boolean.class);
+    static class TestOwner {}
+
+    static final PropertyKey<TestOwner, Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
+    static final PropertyKey<TestOwner, Vec3> ALBEDO = PropertyKey.of("albedo", Vec3.class);
+    static final PropertyKey<TestOwner, Boolean> TRANSPARENT = PropertyKey.of("transparent", Boolean.class);
 
     @Nested
     class ImmutableMap {
         @Test void getReturnsSetValue() {
-            var map = PropertyMap.builder()
+            var map = PropertyMap.<TestOwner>builder()
                     .set(ROUGHNESS, 0.5f)
                     .set(ALBEDO, new Vec3(1f, 0f, 0f))
                     .build();
@@ -24,18 +26,18 @@ class PropertyMapTest {
         }
 
         @Test void getMissingReturnsNull() {
-            var map = PropertyMap.builder().build();
+            var map = PropertyMap.<TestOwner>builder().build();
             assertNull(map.get(ROUGHNESS));
         }
 
         @Test void containsKey() {
-            var map = PropertyMap.builder().set(ROUGHNESS, 0.5f).build();
+            var map = PropertyMap.<TestOwner>builder().set(ROUGHNESS, 0.5f).build();
             assertTrue(map.contains(ROUGHNESS));
             assertFalse(map.contains(ALBEDO));
         }
 
         @Test void keys() {
-            var map = PropertyMap.builder()
+            var map = PropertyMap.<TestOwner>builder()
                     .set(ROUGHNESS, 0.5f)
                     .set(ALBEDO, Vec3.ONE)
                     .build();
@@ -46,8 +48,8 @@ class PropertyMapTest {
         }
 
         @Test void equalityByContent() {
-            var a = PropertyMap.builder().set(ROUGHNESS, 0.5f).build();
-            var b = PropertyMap.builder().set(ROUGHNESS, 0.5f).build();
+            var a = PropertyMap.<TestOwner>builder().set(ROUGHNESS, 0.5f).build();
+            var b = PropertyMap.<TestOwner>builder().set(ROUGHNESS, 0.5f).build();
             assertEquals(a, b);
         }
     }
@@ -55,13 +57,13 @@ class PropertyMapTest {
     @Nested
     class MutableMapTests {
         @Test void setAndGet() {
-            var map = new MutablePropertyMap();
+            var map = new MutablePropertyMap<TestOwner>();
             map.set(ROUGHNESS, 0.5f);
             assertEquals(0.5f, map.get(ROUGHNESS));
         }
 
         @Test void trackChanges() {
-            var map = new MutablePropertyMap();
+            var map = new MutablePropertyMap<TestOwner>();
             map.set(ROUGHNESS, 0.5f);
             map.clearChanges();
             map.set(ROUGHNESS, 0.8f);
@@ -71,7 +73,7 @@ class PropertyMapTest {
         }
 
         @Test void noChangeIfSameValue() {
-            var map = new MutablePropertyMap();
+            var map = new MutablePropertyMap<TestOwner>();
             map.set(ROUGHNESS, 0.5f);
             map.clearChanges();
             map.set(ROUGHNESS, 0.5f);
@@ -79,7 +81,7 @@ class PropertyMapTest {
         }
 
         @Test void snapshot() {
-            var map = new MutablePropertyMap();
+            var map = new MutablePropertyMap<TestOwner>();
             map.set(ROUGHNESS, 0.5f);
             map.set(ALBEDO, Vec3.ONE);
             var snapshot = map.snapshot();
@@ -88,7 +90,7 @@ class PropertyMapTest {
         }
 
         @Test void removeTracksChange() {
-            var map = new MutablePropertyMap();
+            var map = new MutablePropertyMap<TestOwner>();
             map.set(ROUGHNESS, 0.5f);
             map.clearChanges();
             map.remove(ROUGHNESS);

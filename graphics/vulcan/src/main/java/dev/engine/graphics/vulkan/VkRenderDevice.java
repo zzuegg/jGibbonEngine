@@ -57,6 +57,7 @@ public class VkRenderDevice implements RenderDevice {
     private final long[] pendingSsboSizes = new long[8];
 
     private final AtomicLong frameCounter = new AtomicLong(0);
+    private float[] clearColor = {0.05f, 0.05f, 0.08f, 1.0f};
 
     private record BufferAllocation(long buffer, long memory, long size) {}
     private record VkTextureAllocation(long image, long memory, long imageView, TextureDescriptor desc) {}
@@ -78,7 +79,7 @@ public class VkRenderDevice implements RenderDevice {
     private final ResourceRegistry<VertexInputResource, Void> vertexInputRegistry = new ResourceRegistry<>("vertex-input");
 
     // Pipeline variant cache: keyed by "pipelineIndex_blendModeName_wireframe" -> variant VkPipeline handle
-    private final Map<String, Long> pipelineVariants = new HashMap<>();
+    private final dev.engine.graphics.pipeline.PipelineVariantCache<String> pipelineVariants = new dev.engine.graphics.pipeline.PipelineVariantCache<>();
     private Handle<PipelineResource> currentBoundPipeline = null;
     private boolean currentWireframe = false;
     private BlendMode currentBlendMode = BlendMode.NONE;
@@ -106,6 +107,14 @@ public class VkRenderDevice implements RenderDevice {
     public VkRenderDevice(VkBindings vk, String[] requiredExtensions,
                            java.util.function.LongUnaryOperator surfaceFactory,
                            int initialWidth, int initialHeight) {
+        this(vk, requiredExtensions, surfaceFactory, initialWidth, initialHeight,
+                VkBindings.VK_FORMAT_B8G8R8A8_UNORM, VkBindings.VK_PRESENT_MODE_FIFO_KHR);
+    }
+
+    public VkRenderDevice(VkBindings vk, String[] requiredExtensions,
+                           java.util.function.LongUnaryOperator surfaceFactory,
+                           int initialWidth, int initialHeight,
+                           int preferredFormat, int preferredPresentMode) {
         this.vk = vk;
 
         // --- Create VkInstance ---
@@ -160,6 +169,7 @@ public class VkRenderDevice implements RenderDevice {
 
         // --- Create swapchain + render pass + framebuffers ---
         this.swapchain = new VkSwapchain(vk, device, physicalDevice, surface);
+        swapchain.setPreferences(preferredFormat, preferredPresentMode);
         swapchain.create(initialWidth, initialHeight);
 
         this.depthFormat = VkRenderPassFactory.findDepthFormat(vk, instance, physicalDevice);
@@ -569,14 +579,7 @@ public class VkRenderDevice implements RenderDevice {
         }
         // Clean up any pipeline variants for this pipeline
         var prefix = handle.index() + "_";
-        var it = pipelineVariants.entrySet().iterator();
-        while (it.hasNext()) {
-            var entry = it.next();
-            if (entry.getKey().startsWith(prefix)) {
-                vk.destroyPipeline(device, entry.getValue());
-                it.remove();
-            }
-        }
+        pipelineVariants.removeIf(k -> k.startsWith(prefix), p -> vk.destroyPipeline(device, p));
         pipelineSpecs.remove(handle.index());
     }
 
@@ -645,7 +648,7 @@ public class VkRenderDevice implements RenderDevice {
         vk.cmdBeginRenderPass(frame.commandBuffer, renderPass,
                 framebuffers.framebuffer(currentImageIndex),
                 0, 0, swapchain.width(), swapchain.height(),
-                new float[]{0.05f, 0.05f, 0.08f, 1.0f},
+                clearColor,
                 1.0f, 0);
     }
 
@@ -664,6 +667,9 @@ public class VkRenderDevice implements RenderDevice {
         }
 
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+
+        // Periodically evict unused pipeline variants
+        pipelineVariants.evict(frameCounter.get(), p -> vk.destroyPipeline(device, p));
     }
 
     /**
@@ -963,7 +969,8 @@ public class VkRenderDevice implements RenderDevice {
                     vk.cmdSetScissor(cmd, sc.x(), sc.y(), sc.width(), sc.height());
                 }
                 case dev.engine.graphics.command.RenderCommand.Clear c -> {
-                    // Clear is handled by render pass load op — ignore here
+                    // Store clear color for next render pass begin
+                    clearColor = new float[]{c.r(), c.g(), c.b(), c.a()};
                 }
                 case dev.engine.graphics.command.RenderCommand.BindUniformBuffer bub -> {
                     var alloc = bufferRegistry.get(bub.buffer());
@@ -1051,7 +1058,7 @@ public class VkRenderDevice implements RenderDevice {
                     vk.cmdBeginRenderPass(cmd, renderPass,
                             framebuffers.framebuffer(currentImageIndex),
                             0, 0, swapchain.width(), swapchain.height(),
-                            new float[]{0.05f, 0.05f, 0.08f, 1.0f},
+                            clearColor,
                             1.0f, 0);
                 }
                 case dev.engine.graphics.command.RenderCommand.SetRenderState state -> {
@@ -1175,7 +1182,7 @@ public class VkRenderDevice implements RenderDevice {
      */
     private void rebindPipelineVariant(long cmd, VkPipelineFactory.BlendConfig blendConfig, boolean wireframe) {
         var variantKey = currentBoundPipeline.index() + "_" + currentBlendMode.name() + "_" + wireframe;
-        long variantPipeline = pipelineVariants.computeIfAbsent(variantKey, k -> {
+        long variantPipeline = pipelineVariants.getOrCreate(variantKey, frameCounter.get(), k -> {
             var spec = pipelineSpecs.get(currentBoundPipeline.index());
             if (spec == null) return pipelineRegistry.get(currentBoundPipeline);
             return VkPipelineFactory.create(vk, device, renderPass,
@@ -1203,6 +1210,8 @@ public class VkRenderDevice implements RenderDevice {
             case "MAX_FRAMEBUFFER_HEIGHT" -> (T) Integer.valueOf(vk.getMaxFramebufferHeight(instance, physicalDevice));
             case "BACKEND_NAME" -> (T) "Vulkan";
             case "DEVICE_NAME" -> (T) vk.getDeviceName(instance, physicalDevice);
+            case "TEXTURE_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.TEXTURE_BINDING_OFFSET);
+            case "SSBO_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.SSBO_BINDING_OFFSET);
             default -> null;
         };
     }
@@ -1214,10 +1223,7 @@ public class VkRenderDevice implements RenderDevice {
         vk.deviceWaitIdle(device);
 
         // Destroy pipeline variants (blend + wireframe)
-        for (long variant : pipelineVariants.values()) {
-            vk.destroyPipeline(device, variant);
-        }
-        pipelineVariants.clear();
+        pipelineVariants.clear(p -> vk.destroyPipeline(device, p));
         pipelineSpecs.clear();
 
         // Report leaked resources
@@ -1328,9 +1334,35 @@ public class VkRenderDevice implements RenderDevice {
                 dstAccess = VkBindings.VK_ACCESS_SHADER_READ_BIT;
                 srcStage = VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT;
                 dstStage = VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-            } else {
+            } else if (oldLayout == VkBindings.VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VkBindings.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
                 srcAccess = 0;
-                dstAccess = 0;
+                dstAccess = VkBindings.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                srcStage = VkBindings.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                dstStage = VkBindings.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            } else if (oldLayout == VkBindings.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && newLayout == VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+                srcAccess = VkBindings.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                dstAccess = VkBindings.VK_ACCESS_SHADER_READ_BIT;
+                srcStage = VkBindings.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                dstStage = VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            } else if (oldLayout == VkBindings.VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VkBindings.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+                srcAccess = 0;
+                dstAccess = VkBindings.VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+                srcStage = VkBindings.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                dstStage = VkBindings.VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            } else if (oldLayout == VkBindings.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && newLayout == VkBindings.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+                srcAccess = VkBindings.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                dstAccess = VkBindings.VK_ACCESS_MEMORY_READ_BIT;
+                srcStage = VkBindings.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+                dstStage = VkBindings.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+            } else if (oldLayout == VkBindings.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && newLayout == VkBindings.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+                srcAccess = VkBindings.VK_ACCESS_SHADER_READ_BIT;
+                dstAccess = VkBindings.VK_ACCESS_TRANSFER_READ_BIT;
+                srcStage = VkBindings.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                dstStage = VkBindings.VK_PIPELINE_STAGE_TRANSFER_BIT;
+            } else {
+                // Fallback: overly conservative barrier for unhandled transitions
+                srcAccess = VkBindings.VK_ACCESS_MEMORY_WRITE_BIT;
+                dstAccess = VkBindings.VK_ACCESS_MEMORY_READ_BIT | VkBindings.VK_ACCESS_MEMORY_WRITE_BIT;
                 srcStage = VkBindings.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
                 dstStage = VkBindings.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
             }

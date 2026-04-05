@@ -1,6 +1,7 @@
 package dev.engine.graphics.renderer;
 
 import dev.engine.core.handle.Handle;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.core.transaction.Transaction;
@@ -12,8 +13,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class MaterialTransactionTest {
 
-    static final PropertyKey<Vec3> ALBEDO = PropertyKey.of("albedoColor", Vec3.class);
-    static final PropertyKey<Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
+    static final PropertyKey<MaterialData, Vec3> ALBEDO = PropertyKey.of("albedoColor", Vec3.class);
+    static final PropertyKey<MaterialData, Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
 
     private MeshRenderer renderer;
 
@@ -34,7 +35,7 @@ class MaterialTransactionTest {
         var entity = new Handle<>(0, 0);
         renderer.processTransaction(new Transaction.EntityAdded(entity));
 
-        var props = PropertyMap.builder()
+        var props = PropertyMap.<MaterialData>builder()
                 .set(ALBEDO, new Vec3(0, 1, 0))
                 .set(ROUGHNESS, 0.5f)
                 .build();

@@ -25,7 +25,7 @@ class GlScissorTest {
 
             // Draw red fullscreen with scissor enabled, clipped to right half
             harness.drawFullscreen(vertShader, fragShader, rec -> {
-                rec.setRenderState(PropertyMap.builder()
+                rec.setRenderState(PropertyMap.<RenderState>builder()
                     .set(RenderState.SCISSOR_TEST, true)
                     .build());
                 rec.scissor(32, 0, 32, 64); // right half only

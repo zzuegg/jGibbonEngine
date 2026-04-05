@@ -56,7 +56,7 @@ public final class SlangParamsBlock {
      * Creates a params block from PropertyKeys (for materials).
      * Generates interface + implementation + static global instance.
      */
-    public static SlangParamsBlock fromKeys(String name, Set<PropertyKey<?>> keys) {
+    public static SlangParamsBlock fromKeys(String name, Set<? extends PropertyKey<?, ?>> keys) {
         var fields = keys.stream()
                 .filter(k -> TYPE_MAP.containsKey(k.type()))
                 .sorted(Comparator.comparing(PropertyKey::name))

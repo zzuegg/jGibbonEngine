@@ -25,8 +25,6 @@ public class LwjglGlBindings implements GlBindings {
 
     @Override public void createCapabilities() { GL.createCapabilities(); }
 
-    @Override public void swapBuffers(long window) { glfwSwapBuffers(window); }
-
     // ===== Query =====
 
     @Override public String glGetString(int name) { return GL45.glGetString(name); }

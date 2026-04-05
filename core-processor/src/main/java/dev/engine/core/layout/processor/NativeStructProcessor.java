@@ -338,8 +338,11 @@ public class NativeStructProcessor extends AbstractProcessor {
                     w.write("        writeMat4(mem, " + offsetExpr + ", " + accessor + ");\n");
             case "dev.engine.core.math.Quat" ->
                     w.write("        writeQuat(mem, " + offsetExpr + ", " + accessor + ");\n");
-            default ->
-                    w.write("        // TODO: unsupported type " + typeName + "\n");
+            default -> {
+                    processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                            "Unsupported type in @NativeStruct field: " + typeName);
+                    w.write("        throw new UnsupportedOperationException(\"Unsupported type: " + typeName + "\");\n");
+            }
         }
     }
 

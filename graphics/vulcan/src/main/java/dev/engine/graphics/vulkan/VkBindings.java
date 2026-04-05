@@ -91,6 +91,16 @@ public interface VkBindings {
                                      int requestedWidth, int requestedHeight, long oldSwapchain);
 
     /**
+     * Creates a swapchain with preferred format and present mode.
+     * Falls back to available options if preferences aren't supported.
+     */
+    default SwapchainResult createSwapchain(long device, long physicalDevice, long surface,
+                                             int requestedWidth, int requestedHeight, long oldSwapchain,
+                                             int preferredFormat, int preferredPresentMode) {
+        return createSwapchain(device, physicalDevice, surface, requestedWidth, requestedHeight, oldSwapchain);
+    }
+
+    /**
      * Acquires the next swapchain image.
      * @return image index, or -1 if out of date
      */
@@ -480,6 +490,8 @@ public interface VkBindings {
     int VK_FORMAT_R8G8B8_UNORM            = 23;
     int VK_FORMAT_R8G8B8A8_UNORM          = 37;
     int VK_FORMAT_B8G8R8A8_UNORM          = 44;
+    int VK_FORMAT_R8G8B8A8_SRGB           = 43;
+    int VK_FORMAT_B8G8R8A8_SRGB           = 50;
     int VK_FORMAT_R16_SFLOAT              = 76;
     int VK_FORMAT_R16G16_SFLOAT           = 83;
     int VK_FORMAT_R16G16B16A16_SFLOAT     = 97;
@@ -651,6 +663,8 @@ public interface VkBindings {
     int VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR = 0x00000001;
 
     // Present mode
+    int VK_PRESENT_MODE_IMMEDIATE_KHR = 0;
+    int VK_PRESENT_MODE_MAILBOX_KHR = 1;
     int VK_PRESENT_MODE_FIFO_KHR = 2;
 
     // Color space

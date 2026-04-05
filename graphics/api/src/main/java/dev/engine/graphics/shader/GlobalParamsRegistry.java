@@ -17,9 +17,9 @@ import java.util.*;
  */
 public final class GlobalParamsRegistry {
 
-    private final List<Entry> entries = new ArrayList<>();
-    private final Map<String, Entry> byName = new LinkedHashMap<>();
-    private final Set<Integer> usedBindings = new HashSet<>();
+    private final List<Entry> entries = Collections.synchronizedList(new ArrayList<>());
+    private final Map<String, Entry> byName = Collections.synchronizedMap(new LinkedHashMap<>());
+    private final Set<Integer> usedBindings = Collections.synchronizedSet(new HashSet<>());
 
     /**
      * Registers a global param block.
@@ -28,7 +28,7 @@ public final class GlobalParamsRegistry {
      * @param recordType  the Java record defining the fields
      * @param binding     the fixed UBO binding index (register(bN))
      */
-    public void register(String name, Class<?> recordType, int binding) {
+    public synchronized void register(String name, Class<?> recordType, int binding) {
         if (byName.containsKey(name)) {
             throw new IllegalArgumentException("Global params already registered: " + name);
         }

@@ -1,6 +1,7 @@
 package dev.engine.core.transaction;
 
 import dev.engine.core.handle.Handle;
+import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.property.PropertyKey;
@@ -55,7 +56,7 @@ class TransactionBufferTest {
 
         @Test void recordMaterialPropertyChanged() {
             var entity = new Handle<>(3, 0);
-            var key = PropertyKey.of("roughness", Float.class);
+            var key = PropertyKey.<MaterialData, Float>of("roughness", Float.class);
             buffer.materialPropertyChanged(entity, key, 0.8f);
             var txns = buffer.drain();
             assertEquals(1, txns.size());

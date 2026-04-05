@@ -116,6 +116,6 @@ public class FileWatcher {
         if (p.isAbsolute()) {
             p = directory.relativize(p.toAbsolutePath().normalize());
         }
-        return p.getFileName().toString();
+        return p.normalize().toString();
     }
 }

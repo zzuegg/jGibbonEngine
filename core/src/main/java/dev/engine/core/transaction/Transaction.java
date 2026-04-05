@@ -29,8 +29,8 @@ public interface Transaction {
 
     // --- Legacy transactions (kept for compatibility during migration) ---
     record TransformChanged(Handle<?> entity, Mat4 transform) implements Transaction {}
-    record MaterialPropertyChanged(Handle<?> entity, PropertyKey<?> key, Object value) implements Transaction {}
-    record MaterialReplaced(Handle<?> entity, PropertyMap material) implements Transaction {}
+    record MaterialPropertyChanged(Handle<?> entity, PropertyKey<MaterialData, ?> key, Object value) implements Transaction {}
+    record MaterialReplaced(Handle<?> entity, PropertyMap<MaterialData> material) implements Transaction {}
     record MeshChanged(Handle<?> entity, MeshData meshData) implements Transaction {}
     record MaterialDataChanged(Handle<?> entity, MaterialData materialData) implements Transaction {}
     record MeshAssigned(Handle<?> entity, Handle<MeshTag> mesh) implements Transaction {}

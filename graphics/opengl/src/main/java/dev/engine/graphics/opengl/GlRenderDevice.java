@@ -81,14 +81,14 @@ public class GlRenderDevice implements RenderDevice {
     private final ResourceRegistry<PipelineResource, Integer> pipelines = new ResourceRegistry<>("pipeline");
     private final AtomicLong frameCounter = new AtomicLong(0);
     private final CapabilityRegistry capabilities = new CapabilityRegistry();
-    private final long glfwWindow;
+    private final dev.engine.graphics.window.WindowHandle window;
     private final int pushConstantUbo;
     private final GlBindings gl;
 
     public GlRenderDevice(dev.engine.graphics.window.WindowHandle window, GlBindings gl) {
         this.gl = gl;
-        this.glfwWindow = window.nativeHandle();
-        gl.makeContextCurrent(glfwWindow);
+        this.window = window;
+        gl.makeContextCurrent(window.nativeHandle());
         gl.createCapabilities();
         log.info("OpenGL context created: {}", gl.glGetString(GlBindings.GL_VERSION));
 
@@ -171,13 +171,7 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public Handle<TextureResource> createTexture(TextureDescriptor descriptor) {
-        int glTarget = switch (descriptor.type().name()) {
-            case "TEXTURE_3D"       -> GlBindings.GL_TEXTURE_3D;
-            case "TEXTURE_2D_ARRAY" -> GlBindings.GL_TEXTURE_2D_ARRAY;
-            case "TEXTURE_CUBE"     -> GlBindings.GL_TEXTURE_CUBE_MAP;
-            default                 -> GlBindings.GL_TEXTURE_2D;
-        };
-
+        int glTarget = glTextureTarget(descriptor);
         int glTex = gl.glCreateTextures(glTarget);
         int internalFormat = mapTextureFormat(descriptor.format());
         int levels = computeMipLevels(descriptor);
@@ -210,6 +204,11 @@ public class GlRenderDevice implements RenderDevice {
         } else if (desc.type() == TextureType.TEXTURE_2D_ARRAY) {
             gl.glTextureSubImage3D(glName, 0, 0, 0, 0,
                     desc.width(), desc.height(), desc.layers(),
+                    formatAndType[0], formatAndType[1], pixels);
+        } else if (desc.type() == TextureType.TEXTURE_CUBE) {
+            // DSA cube maps: upload all 6 faces via glTextureSubImage3D with depth=6
+            gl.glTextureSubImage3D(glName, 0, 0, 0, 0,
+                    desc.width(), desc.height(), 6,
                     formatAndType[0], formatAndType[1], pixels);
         } else {
             gl.glTextureSubImage2D(glName, 0, 0, 0, desc.width(), desc.height(),
@@ -512,7 +511,7 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public void endFrame() {
-        gl.swapBuffers(glfwWindow);
+        window.swapBuffers();
     }
 
     @Override
@@ -712,10 +711,10 @@ public class GlRenderDevice implements RenderDevice {
                 gl.glCopyNamedBufferSubData(srcBuf, dstBuf, srcOff, dstOff, size);
             }
             case RenderCommand.CopyTexture(var src, var dst, int sx, int sy, int dx, int dy, int w, int h, int srcMip, int dstMip) -> {
-                int srcTex = textures.get(src).glName();
-                int dstTex = textures.get(dst).glName();
-                gl.glCopyImageSubData(srcTex, GlBindings.GL_TEXTURE_2D, srcMip, sx, sy, 0,
-                                        dstTex, GlBindings.GL_TEXTURE_2D, dstMip, dx, dy, 0, w, h, 1);
+                var srcInfo = textures.get(src);
+                var dstInfo = textures.get(dst);
+                gl.glCopyImageSubData(srcInfo.glName(), glTextureTarget(srcInfo.desc()), srcMip, sx, sy, 0,
+                                        dstInfo.glName(), glTextureTarget(dstInfo.desc()), dstMip, dx, dy, 0, w, h, 1);
             }
             case RenderCommand.BlitTexture(var src, var dst,
                     int sx0, int sy0, int sx1, int sy1,
@@ -849,7 +848,18 @@ public class GlRenderDevice implements RenderDevice {
 
     private static boolean usesMipmaps(SamplerDescriptor desc) {
         return desc.minFilter() == FilterMode.NEAREST_MIPMAP_NEAREST
-                || desc.minFilter() == FilterMode.LINEAR_MIPMAP_LINEAR;
+                || desc.minFilter() == FilterMode.LINEAR_MIPMAP_LINEAR
+                || desc.minFilter() == FilterMode.NEAREST_MIPMAP_LINEAR
+                || desc.minFilter() == FilterMode.LINEAR_MIPMAP_NEAREST;
+    }
+
+    private static int glTextureTarget(TextureDescriptor desc) {
+        return switch (desc.type().name()) {
+            case "TEXTURE_3D"       -> GlBindings.GL_TEXTURE_3D;
+            case "TEXTURE_2D_ARRAY" -> GlBindings.GL_TEXTURE_2D_ARRAY;
+            case "TEXTURE_CUBE"     -> GlBindings.GL_TEXTURE_CUBE_MAP;
+            default                 -> GlBindings.GL_TEXTURE_2D;
+        };
     }
 
     private static int computeMipLevels(TextureDescriptor descriptor) {
@@ -897,6 +907,10 @@ public class GlRenderDevice implements RenderDevice {
         if (format == TextureFormat.RGBA8) return new int[]{GlBindings.GL_RGBA, GlBindings.GL_UNSIGNED_BYTE};
         if (format == TextureFormat.RGB8) return new int[]{GlBindings.GL_RGB, GlBindings.GL_UNSIGNED_BYTE};
         if (format == TextureFormat.R8) return new int[]{GlBindings.GL_RED, GlBindings.GL_UNSIGNED_BYTE};
+        if (format == TextureFormat.DEPTH24) return new int[]{GlBindings.GL_DEPTH_COMPONENT, GlBindings.GL_UNSIGNED_INT};
+        if (format == TextureFormat.DEPTH32F) return new int[]{GlBindings.GL_DEPTH_COMPONENT, GlBindings.GL_FLOAT};
+        if (format == TextureFormat.DEPTH24_STENCIL8) return new int[]{GlBindings.GL_DEPTH_STENCIL, GlBindings.GL_UNSIGNED_INT_24_8};
+        if (format == TextureFormat.DEPTH32F_STENCIL8) return new int[]{GlBindings.GL_DEPTH_STENCIL, GlBindings.GL_FLOAT_32_UNSIGNED_INT_24_8_REV};
         return new int[]{GlBindings.GL_RGBA, GlBindings.GL_UNSIGNED_BYTE};
     }
 

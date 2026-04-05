@@ -49,7 +49,7 @@ public class ScreenshotTestHarness {
 
         var windowDesc = new dev.engine.graphics.window.WindowDescriptor(
                 config.windowTitle(), config.windowSize().x(), config.windowSize().y());
-        var gfxConfig = new dev.engine.graphics.GraphicsConfig(config.headless());
+        var gfxConfig = new dev.engine.graphics.GraphicsConfigLegacy(config.headless());
         var graphicsBackend = config.graphicsBackend().create(windowDesc, gfxConfig);
         var engine = new Engine(config, config.platform(), graphicsBackend.device());
 

@@ -81,7 +81,7 @@ public final class ScreenshotTestSuite {
         var quad = scene.createEntity();
         quad.add(PrimitiveMeshes.quad());
         quad.add(MaterialData.unlit(new Vec3(0.9f, 0.9f, 0.1f))
-            .set(RenderState.CULL_MODE, CullMode.NONE));
+            .withRenderState(RenderState.CULL_MODE, CullMode.NONE));
         quad.add(Transform.IDENTITY);
     };
 
@@ -115,14 +115,14 @@ public final class ScreenshotTestSuite {
         var frontCull = scene.createEntity();
         frontCull.add(PrimitiveMeshes.cube());
         frontCull.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f))
-            .set(RenderState.CULL_MODE, CullMode.FRONT));
+            .withRenderState(RenderState.CULL_MODE, CullMode.FRONT));
         frontCull.add(Transform.at(2, 0, 0));
 
         // Cube with no culling (both faces visible)
         var noCull = scene.createEntity();
         noCull.add(PrimitiveMeshes.cube());
         noCull.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f))
-            .set(RenderState.CULL_MODE, CullMode.NONE));
+            .withRenderState(RenderState.CULL_MODE, CullMode.NONE));
         noCull.add(Transform.at(0, 0, -2));
     };
 
@@ -159,8 +159,8 @@ public final class ScreenshotTestSuite {
         var front = scene.createEntity();
         front.add(PrimitiveMeshes.cube());
         front.add(MaterialData.unlit(new Vec3(0.0f, 0.8f, 0.0f))
-            .set(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
-            .set(RenderState.DEPTH_WRITE, false));
+            .withRenderState(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
+            .withRenderState(RenderState.DEPTH_WRITE, false));
         front.add(Transform.at(0, 0, 1));
     };
 
@@ -183,7 +183,7 @@ public final class ScreenshotTestSuite {
         var front = scene.createEntity();
         front.add(PrimitiveMeshes.cube());
         front.add(MaterialData.unlit(new Vec3(0.9f, 0.1f, 0.1f))
-            .set(RenderState.DEPTH_WRITE, false));
+            .withRenderState(RenderState.DEPTH_WRITE, false));
         front.add(Transform.at(0, 0, 1));
     };
 
@@ -256,24 +256,24 @@ public final class ScreenshotTestSuite {
         var alpha = scene.createEntity();
         alpha.add(PrimitiveMeshes.cube());
         alpha.add(MaterialData.unlit(new Vec3(0.0f, 0.0f, 1.0f))
-            .set(RenderState.BLEND_MODE, BlendMode.ALPHA)
-            .set(RenderState.DEPTH_WRITE, false));
+            .withRenderState(RenderState.BLEND_MODE, BlendMode.ALPHA)
+            .withRenderState(RenderState.DEPTH_WRITE, false));
         alpha.add(Transform.at(-3, 0, 0));
 
         // Additive
         var additive = scene.createEntity();
         additive.add(PrimitiveMeshes.cube());
         additive.add(MaterialData.unlit(new Vec3(0.0f, 1.0f, 0.0f))
-            .set(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
-            .set(RenderState.DEPTH_WRITE, false));
+            .withRenderState(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
+            .withRenderState(RenderState.DEPTH_WRITE, false));
         additive.add(Transform.at(0, 0, 0));
 
         // Multiply
         var multiply = scene.createEntity();
         multiply.add(PrimitiveMeshes.cube());
         multiply.add(MaterialData.unlit(new Vec3(0.5f, 0.5f, 1.0f))
-            .set(RenderState.BLEND_MODE, BlendMode.MULTIPLY)
-            .set(RenderState.DEPTH_WRITE, false));
+            .withRenderState(RenderState.BLEND_MODE, BlendMode.MULTIPLY)
+            .withRenderState(RenderState.DEPTH_WRITE, false));
         multiply.add(Transform.at(3, 0, 0));
     };
 
@@ -313,7 +313,7 @@ public final class ScreenshotTestSuite {
         var cube = scene.createEntity();
         cube.add(PrimitiveMeshes.cube());
         cube.add(MaterialData.unlit(new Vec3(0.9f, 0.9f, 0.1f))
-            .set(RenderState.FRONT_FACE, FrontFace.CW));
+            .withRenderState(RenderState.FRONT_FACE, FrontFace.CW));
         cube.add(Transform.IDENTITY);
     };
 
@@ -470,26 +470,26 @@ public final class ScreenshotTestSuite {
         var stencilWriter = scene.createEntity();
         stencilWriter.add(PrimitiveMeshes.quad());
         stencilWriter.add(MaterialData.unlit(new Vec3(0.0f, 0.8f, 0.0f))
-            .set(RenderState.STENCIL_TEST, true)
-            .set(RenderState.STENCIL_FUNC, CompareFunc.ALWAYS)
-            .set(RenderState.STENCIL_REF, 1)
-            .set(RenderState.STENCIL_MASK, 0xFF)
-            .set(RenderState.STENCIL_PASS, StencilOp.REPLACE)
-            .set(RenderState.STENCIL_FAIL, StencilOp.KEEP)
-            .set(RenderState.STENCIL_DEPTH_FAIL, StencilOp.KEEP));
+            .withRenderState(RenderState.STENCIL_TEST, true)
+            .withRenderState(RenderState.STENCIL_FUNC, CompareFunc.ALWAYS)
+            .withRenderState(RenderState.STENCIL_REF, 1)
+            .withRenderState(RenderState.STENCIL_MASK, 0xFF)
+            .withRenderState(RenderState.STENCIL_PASS, StencilOp.REPLACE)
+            .withRenderState(RenderState.STENCIL_FAIL, StencilOp.KEEP)
+            .withRenderState(RenderState.STENCIL_DEPTH_FAIL, StencilOp.KEEP));
         stencilWriter.add(Transform.at(0, 0, 0).withScale(new Vec3(0.5f, 0.5f, 1)));
 
         // Second pass: large blue quad only renders where stencil == 1
         var stencilReader = scene.createEntity();
         stencilReader.add(PrimitiveMeshes.quad());
         stencilReader.add(MaterialData.unlit(new Vec3(0.0f, 0.0f, 0.9f))
-            .set(RenderState.STENCIL_TEST, true)
-            .set(RenderState.STENCIL_FUNC, CompareFunc.EQUAL)
-            .set(RenderState.STENCIL_REF, 1)
-            .set(RenderState.STENCIL_MASK, 0xFF)
-            .set(RenderState.STENCIL_PASS, StencilOp.KEEP)
-            .set(RenderState.STENCIL_FAIL, StencilOp.KEEP)
-            .set(RenderState.STENCIL_DEPTH_FAIL, StencilOp.KEEP));
+            .withRenderState(RenderState.STENCIL_TEST, true)
+            .withRenderState(RenderState.STENCIL_FUNC, CompareFunc.EQUAL)
+            .withRenderState(RenderState.STENCIL_REF, 1)
+            .withRenderState(RenderState.STENCIL_MASK, 0xFF)
+            .withRenderState(RenderState.STENCIL_PASS, StencilOp.KEEP)
+            .withRenderState(RenderState.STENCIL_FAIL, StencilOp.KEEP)
+            .withRenderState(RenderState.STENCIL_DEPTH_FAIL, StencilOp.KEEP));
         stencilReader.add(Transform.at(0, 0, 0.1f).withScale(new Vec3(2, 2, 1)));
     };
 }

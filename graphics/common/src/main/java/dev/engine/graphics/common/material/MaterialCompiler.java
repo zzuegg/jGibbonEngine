@@ -172,7 +172,7 @@ public final class MaterialCompiler {
         TYPE_SIZES.put(javaType, sizeInBytes);
     }
 
-    private static java.util.List<PropertyKey<?>> getScalarKeys(MaterialData mat) {
+    private static java.util.List<PropertyKey<MaterialData, ?>> getScalarKeys(MaterialData mat) {
         return mat.keys().stream()
                 .filter(k -> SLANG_TYPES.containsKey(k.type()))
                 .sorted(Comparator.comparing(PropertyKey::name))

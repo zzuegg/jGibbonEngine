@@ -10,7 +10,7 @@ class VkDescriptorManager implements AutoCloseable {
 
     private static final int MAX_UBO_BINDINGS = 16;
     private static final int MAX_TEXTURE_BINDINGS = 8;
-    private static final int TEXTURE_BINDING_OFFSET = MAX_UBO_BINDINGS; // bindings 16-23
+    static final int TEXTURE_BINDING_OFFSET = MAX_UBO_BINDINGS; // bindings 16-23
     private static final int MAX_SSBO_BINDINGS = 8;
     static final int SSBO_BINDING_OFFSET = TEXTURE_BINDING_OFFSET + MAX_TEXTURE_BINDINGS; // bindings 24-31
     private static final int TOTAL_BINDINGS = MAX_UBO_BINDINGS + MAX_TEXTURE_BINDINGS + MAX_SSBO_BINDINGS;

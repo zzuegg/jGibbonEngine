@@ -101,7 +101,7 @@ public class TeaVmSlangCompiler {
         var globalSession = slang.createGlobalSession();
         if (!globalSession) throw new Error('Failed to create Slang global session');
 
-        var SLANG_WGSL = 26;
+        var SLANG_WGSL = 26; // Slang WASM target ID for WGSL (may differ from native Slang's 28)
         var session = globalSession.createSession(SLANG_WGSL);
         var module = session.loadModuleFromSource(source, 'shader', 'shader.slang');
         if (!module) {

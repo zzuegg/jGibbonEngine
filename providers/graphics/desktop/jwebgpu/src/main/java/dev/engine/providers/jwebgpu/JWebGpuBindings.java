@@ -285,6 +285,26 @@ public class JWebGpuBindings implements WgpuBindings {
         }
     }
 
+    @Override
+    public DeviceLimits deviceGetLimits(long device) {
+        var dev = get(device, WGPUDevice.class);
+        if (dev == null) return null;
+        var limits = com.github.xpenatan.webgpu.WGPULimits.native_new();
+        try {
+            dev.getLimits(limits);
+            return new DeviceLimits(
+                    limits.getMaxTextureDimension2D(),
+                    limits.getMaxTextureDimension3D(),
+                    limits.getMaxUniformBufferBindingSize(),
+                    limits.getMaxStorageBufferBindingSize(),
+                    limits.getMaxColorAttachments(),
+                    16.0f // WebGPU spec max anisotropy
+            );
+        } finally {
+            limits.dispose();
+        }
+    }
+
     // ===== Buffer =====
 
     @Override

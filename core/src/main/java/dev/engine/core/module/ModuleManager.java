@@ -227,7 +227,8 @@ public class ModuleManager<T extends Time> {
                             module.getClass().getSimpleName(), e.getMessage(), e);
                 }
             } else {
-                // Run all modules — sequentially via executor
+                // Run all modules in parallel, wait for all to complete before next level
+                var latch = new java.util.concurrent.CountDownLatch(updatable.size());
                 for (int i = 0; i < updatable.size(); i++) {
                     Module<T> module = updatable.get(i);
                     log.trace("Updating module {} (parallel)", module.getClass().getSimpleName());
@@ -237,8 +238,17 @@ public class ModuleManager<T extends Time> {
                         } catch (Exception e) {
                             log.warn("Exception during update of module {}: {}",
                                     module.getClass().getSimpleName(), e.getMessage(), e);
+                        } finally {
+                            latch.countDown();
                         }
                     });
+                }
+                try {
+                    latch.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Module update interrupted");
+                    return;
                 }
             }
         }

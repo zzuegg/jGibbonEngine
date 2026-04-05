@@ -140,7 +140,7 @@ class SceneRenderVerificationTest {
         device.beginFrame();
         var rec = new CommandRecorder();
         rec.viewport(0, 0, 128, 128);
-        rec.setRenderState(PropertyMap.builder()
+        rec.setRenderState(PropertyMap.<RenderState>builder()
                 .set(RenderState.DEPTH_TEST, true)
                 .build());
         rec.clear(0f, 0f, 0f, 1f);

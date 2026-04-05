@@ -29,13 +29,13 @@ public class RenderStateScenes {
         var frontCull = scene.createEntity();
         frontCull.add(PrimitiveMeshes.cube());
         frontCull.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f))
-                .set(RenderState.CULL_MODE, CullMode.FRONT));
+                .withRenderState(RenderState.CULL_MODE, CullMode.FRONT));
         frontCull.add(Transform.IDENTITY);
 
         var noCull = scene.createEntity();
         noCull.add(PrimitiveMeshes.cube());
         noCull.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f))
-                .set(RenderState.CULL_MODE, CullMode.NONE));
+                .withRenderState(RenderState.CULL_MODE, CullMode.NONE));
         noCull.add(Transform.at(2, 0, 0));
     };
 
@@ -55,7 +55,7 @@ public class RenderStateScenes {
         var front = scene.createEntity();
         front.add(PrimitiveMeshes.cube());
         front.add(MaterialData.unlit(new Vec3(0.9f, 0.2f, 0.2f))
-                .set(RenderState.DEPTH_WRITE, false));
+                .withRenderState(RenderState.DEPTH_WRITE, false));
         front.add(Transform.at(0, 0, 1));
     };
 
@@ -75,7 +75,7 @@ public class RenderStateScenes {
         var front = scene.createEntity();
         front.add(PrimitiveMeshes.cube());
         front.add(MaterialData.unlit(new Vec3(0.0f, 0.5f, 0.0f))
-                .set(RenderState.BLEND_MODE, BlendMode.ADDITIVE));
+                .withRenderState(RenderState.BLEND_MODE, BlendMode.ADDITIVE));
         front.add(Transform.at(0.3f, 0, 1));
     };
 
@@ -90,7 +90,7 @@ public class RenderStateScenes {
         var cube = scene.createEntity();
         cube.add(PrimitiveMeshes.cube());
         cube.add(MaterialData.unlit(new Vec3(0.8f, 0.4f, 0.1f))
-                .set(RenderState.FRONT_FACE, FrontFace.CW));
+                .withRenderState(RenderState.FRONT_FACE, FrontFace.CW));
         cube.add(Transform.IDENTITY);
     };
 
@@ -110,19 +110,19 @@ public class RenderStateScenes {
         var alpha = scene.createEntity();
         alpha.add(PrimitiveMeshes.cube());
         alpha.add(MaterialData.unlit(new Vec3(1.0f, 0.0f, 0.0f))
-                .set(RenderState.BLEND_MODE, BlendMode.ALPHA));
+                .withRenderState(RenderState.BLEND_MODE, BlendMode.ALPHA));
         alpha.add(Transform.at(-3, 0, 0));
 
         var additive = scene.createEntity();
         additive.add(PrimitiveMeshes.cube());
         additive.add(MaterialData.unlit(new Vec3(0.0f, 1.0f, 0.0f))
-                .set(RenderState.BLEND_MODE, BlendMode.ADDITIVE));
+                .withRenderState(RenderState.BLEND_MODE, BlendMode.ADDITIVE));
         additive.add(Transform.IDENTITY);
 
         var multiply = scene.createEntity();
         multiply.add(PrimitiveMeshes.cube());
         multiply.add(MaterialData.unlit(new Vec3(0.5f, 0.5f, 1.0f))
-                .set(RenderState.BLEND_MODE, BlendMode.MULTIPLY));
+                .withRenderState(RenderState.BLEND_MODE, BlendMode.MULTIPLY));
         multiply.add(Transform.at(3, 0, 0));
     };
 

@@ -22,8 +22,8 @@ public class TransactionBuffer {
     public void removed(Handle<?> entity) { transactions.add(new Transaction.EntityRemoved(entity)); }
     public void componentChanged(Handle<?> entity, Component component) { transactions.add(new Transaction.ComponentChanged(entity, component)); }
     public void transformChanged(Handle<?> entity, Mat4 transform) { transactions.add(new Transaction.TransformChanged(entity, transform)); }
-    public <T> void materialPropertyChanged(Handle<?> entity, PropertyKey<T> key, T value) { transactions.add(new Transaction.MaterialPropertyChanged(entity, key, value)); }
-    public void materialReplaced(Handle<?> entity, PropertyMap material) { transactions.add(new Transaction.MaterialReplaced(entity, material)); }
+    public <T> void materialPropertyChanged(Handle<?> entity, PropertyKey<MaterialData, T> key, T value) { transactions.add(new Transaction.MaterialPropertyChanged(entity, key, value)); }
+    public void materialReplaced(Handle<?> entity, PropertyMap<MaterialData> material) { transactions.add(new Transaction.MaterialReplaced(entity, material)); }
     public void meshChanged(Handle<?> entity, MeshData meshData) { transactions.add(new Transaction.MeshChanged(entity, meshData)); }
     public void materialDataChanged(Handle<?> entity, MaterialData materialData) { transactions.add(new Transaction.MaterialDataChanged(entity, materialData)); }
     public void meshAssigned(Handle<?> entity, Handle<MeshTag> mesh) { transactions.add(new Transaction.MeshAssigned(entity, mesh)); }
