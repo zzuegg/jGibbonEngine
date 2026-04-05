@@ -1255,6 +1255,7 @@ public class NkContext {
         overlayCommands.clear();
         activeWindowCommands = null;
         tooltipActive = false;
+        treeDepth = 0;
     }
 
     /** Returns true if the UI wants the mouse (hovering over any window). */
