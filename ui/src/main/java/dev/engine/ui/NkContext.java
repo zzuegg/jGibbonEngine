@@ -662,17 +662,7 @@ public class NkContext {
             currentWindow.treeStates.put(title, state);
         }
 
-        // Arrow on the right — click to toggle expand
         String arrow = state ? "v" : ">";
-        float arrowW = font.textWidth(arrow) + 8;
-        var arrowRect = new NkRect(rect.x() + rect.w() - arrowW, rect.y(), arrowW, rect.h());
-
-        if (windowAcceptsInput() && input.isMousePressed(0, arrowRect)) {
-            state = !state;
-            currentWindow.treeStates.put(title, state);
-        }
-
-        // Indentation based on tree depth
         float indent = treeDepth * 16;
 
         // Draw hover highlight on full row
@@ -687,11 +677,17 @@ public class NkContext {
                 new NkRect(rect.x() + 4 + indent, textY, font.textWidth(title), font.height()),
                 title, font, style.treeNodeText));
 
-        // Draw arrow (right of title)
+        // Draw arrow (right of title text) and set click area there
         float arrowX = rect.x() + 4 + indent + font.textWidth(title) + 4;
         emit(new NkDrawCommand.Text(
                 new NkRect(arrowX, textY, font.textWidth(arrow), font.height()),
                 arrow, font, style.treeNodeText));
+
+        var arrowRect = new NkRect(arrowX - 4, rect.y(), font.textWidth(arrow) + 8, rect.h());
+        if (windowAcceptsInput() && input.isMousePressed(0, arrowRect)) {
+            state = !state;
+            currentWindow.treeStates.put(title, state);
+        }
 
         treeDepth++;
         return state;
