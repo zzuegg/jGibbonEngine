@@ -35,7 +35,7 @@ public class RenderStats {
     public ResourceStats resources() { return resourceStats; }
 
     public void reset() {
-        resourceStats.resetFrameCounters();
+        resourceStats.newFrame();
         drawCalls = 0;
         verticesSubmitted = 0;
         indicesSubmitted = 0;

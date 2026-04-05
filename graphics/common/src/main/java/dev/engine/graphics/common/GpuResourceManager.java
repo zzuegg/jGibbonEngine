@@ -80,10 +80,12 @@ public class GpuResourceManager {
     }
 
     public BufferWriter writeBuffer(Handle<BufferResource> buffer) {
+        resourceStats.recordUpdate(BUFFER);
         return device.writeBuffer(buffer);
     }
 
     public BufferWriter writeBuffer(Handle<BufferResource> buffer, long offset, long length) {
+        resourceStats.recordUpdate(BUFFER);
         return device.writeBuffer(buffer, offset, length);
     }
 
@@ -103,6 +105,7 @@ public class GpuResourceManager {
     }
 
     public void uploadTexture(Handle<TextureResource> texture, ByteBuffer pixels) {
+        resourceStats.recordUpdate(TEXTURE);
         device.uploadTexture(texture, pixels);
     }
 
@@ -122,6 +125,7 @@ public class GpuResourceManager {
     }
 
     public Handle<TextureResource> getRenderTargetColorTexture(Handle<RenderTargetResource> rt, int index) {
+        resourceStats.recordUse(RENDER_TARGET);
         return device.getRenderTargetColorTexture(rt, index);
     }
 
