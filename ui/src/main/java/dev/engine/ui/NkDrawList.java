@@ -95,37 +95,47 @@ public class NkDrawList {
             addIndex(base, base + 1, base + 2);
             addIndex(base, base + 2, base + 3);
         } else {
-            // Rounded rect as a fan from center
+            // Rounded rect: fan from center with arc corners and straight edges
             float cx = rect.x() + rect.w() / 2;
             float cy = rect.y() + rect.h() / 2;
             int centerIdx = vertexCount;
             addVertex(cx, cy, u, v, packed);
 
             float r = Math.min(rounding, Math.min(rect.w(), rect.h()) / 2);
-            int segments = 4 * 4; // 4 segments per corner
+            int arcSegments = 4; // segments per 90-degree corner arc
+
+            // Corner centers: top-right, top-left, bottom-left, bottom-right
+            float[][] corners = {
+                {rect.x() + rect.w() - r, rect.y() + r},           // TR
+                {rect.x() + r,            rect.y() + r},           // TL
+                {rect.x() + r,            rect.y() + rect.h() - r}, // BL
+                {rect.x() + rect.w() - r, rect.y() + rect.h() - r}  // BR
+            };
+            // Start angles for each corner arc (radians)
+            float[] startAngles = {
+                (float)(-Math.PI / 2), // TR: -90 to 0
+                (float)( Math.PI),     // TL: 180 to 270
+                (float)( Math.PI / 2), // BL: 90 to 180
+                0f                      // BR: 0 to 90
+            };
 
             int firstRim = vertexCount;
-            for (int i = 0; i <= segments; i++) {
-                float angle = (float) (i * 2 * Math.PI / segments);
-                float cos = (float) Math.cos(angle);
-                float sin = (float) Math.sin(angle);
-
-                // Map the unit circle to the rounded rect outline
-                float px, py;
-                float hw = rect.w() / 2 - r;
-                float hh = rect.h() / 2 - r;
-                px = cx + cos * (hw + r * Math.signum(cos)) + (cos > 0 ? 0 : 0);
-                py = cy + sin * (hh + r * Math.signum(sin));
-
-                // Clamp to rect bounds
-                px = Math.max(rect.x(), Math.min(rect.x() + rect.w(), cx + cos * (rect.w() / 2)));
-                py = Math.max(rect.y(), Math.min(rect.y() + rect.h(), cy + sin * (rect.h() / 2)));
-
-                addVertex(px, py, u, v, packed);
-                if (i > 0) {
-                    addIndex(centerIdx, firstRim + i - 1, firstRim + i);
+            for (int corner = 0; corner < 4; corner++) {
+                float ccx = corners[corner][0], ccy = corners[corner][1];
+                float startAngle = startAngles[corner];
+                for (int j = 0; j <= arcSegments; j++) {
+                    float angle = startAngle + (float)(j * Math.PI / 2 / arcSegments);
+                    float px = ccx + r * (float) Math.cos(angle);
+                    float py = ccy + r * (float) Math.sin(angle);
+                    addVertex(px, py, u, v, packed);
                 }
             }
+            int totalRimVerts = 4 * (arcSegments + 1);
+            for (int j = 1; j < totalRimVerts; j++) {
+                addIndex(centerIdx, firstRim + j - 1, firstRim + j);
+            }
+            // Close the fan
+            addIndex(centerIdx, firstRim + totalRimVerts - 1, firstRim);
         }
     }
 
