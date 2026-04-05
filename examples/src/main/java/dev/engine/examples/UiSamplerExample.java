@@ -37,6 +37,7 @@ public class UiSamplerExample extends BaseApplication {
     private NkColor pickedColor = NkColor.rgba(100, 150, 200, 255);
     private boolean treeOpen = true;
     private boolean subTreeOpen = false;
+    private int selectedTreeItem = -1;
 
     // Chart state — ring buffer for live FPS/frame time
     private final float[] fpsHistory = new float[120];
@@ -257,12 +258,12 @@ public class UiSamplerExample extends BaseApplication {
             treeOpen = ui.treePush("Scene Graph", treeOpen);
             if (treeOpen) {
                 ui.layoutRowDynamic(18, 1);
-                ui.label("  Root");
+                if (ui.selectableLabel("  Root", selectedTreeItem == 0)) selectedTreeItem = 0;
                 subTreeOpen = ui.treePush("Children", subTreeOpen);
                 if (subTreeOpen) {
                     ui.layoutRowDynamic(18, 1);
-                    ui.label("    Cube");
-                    ui.label("    Ground");
+                    if (ui.selectableLabel("    Cube", selectedTreeItem == 1)) selectedTreeItem = 1;
+                    if (ui.selectableLabel("    Ground", selectedTreeItem == 2)) selectedTreeItem = 2;
                     ui.treePop();
                 }
                 ui.treePop();
