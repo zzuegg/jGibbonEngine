@@ -781,28 +781,60 @@ public class NkContext {
         var rect = allocateWidget();
         if (rect == null) return value;
 
-        // Split rect: label on left, value on right
+        // Split rect: [-] [label] [value] [+]
+        float btnW = rect.h(); // square buttons
         float labelW = font.textWidth(name) + 8;
-        float valueW = rect.w() - labelW;
-        var labelRect = new NkRect(rect.x(), rect.y(), labelW, rect.h());
-        var valueRect = new NkRect(rect.x() + labelW, rect.y(), valueW, rect.h());
+        float valueW = rect.w() - labelW - btnW * 2;
+
+        var decRect = new NkRect(rect.x(), rect.y(), btnW, rect.h());
+        var labelRect = new NkRect(rect.x() + btnW, rect.y(), labelW, rect.h());
+        var valueRect = new NkRect(rect.x() + btnW + labelW, rect.y(), valueW, rect.h());
+        var incRect = new NkRect(rect.x() + rect.w() - btnW, rect.y(), btnW, rect.h());
+
+        // Draw decrement button
+        emit(new NkDrawCommand.FilledRect(decRect, 2, style.buttonNormal));
+        emit(new NkDrawCommand.StrokedRect(decRect, 2, 1, style.buttonBorder));
+        float symY = rect.y() + (rect.h() - font.height()) / 2;
+        emit(new NkDrawCommand.Text(
+                new NkRect(decRect.x() + (btnW - font.textWidth("-")) / 2, symY,
+                        font.textWidth("-"), font.height()),
+                "-", font, style.buttonText));
 
         // Draw label
         float textY = rect.y() + (rect.h() - font.height()) / 2;
         emit(new NkDrawCommand.Text(
-                new NkRect(rect.x(), textY, font.textWidth(name), font.height()),
+                new NkRect(labelRect.x() + 4, textY, font.textWidth(name), font.height()),
                 name, font, style.labelText));
 
         // Draw value background
-        boolean hovering = input.isMouseHovering(valueRect);
         emit(new NkDrawCommand.FilledRect(valueRect, 2, style.editBackground));
         emit(new NkDrawCommand.StrokedRect(valueRect, 2, 1, style.editBorder));
 
-        // Handle dragging
-        if (input.isMouseDragging(0, valueRect)) {
-            value += input.mouseDeltaX() * incPerPixel;
-            if (step > 0) value = Math.round(value / step) * step;
-            value = Math.max(min, Math.min(max, value));
+        // Draw increment button
+        emit(new NkDrawCommand.FilledRect(incRect, 2, style.buttonNormal));
+        emit(new NkDrawCommand.StrokedRect(incRect, 2, 1, style.buttonBorder));
+        emit(new NkDrawCommand.Text(
+                new NkRect(incRect.x() + (btnW - font.textWidth("+")) / 2, symY,
+                        font.textWidth("+"), font.height()),
+                "+", font, style.buttonText));
+
+        // Handle +/- button clicks
+        if (windowAcceptsInput()) {
+            if (input.isMousePressed(0, decRect)) {
+                value -= step > 0 ? step : 0.1f;
+                value = Math.max(min, value);
+            }
+            if (input.isMousePressed(0, incRect)) {
+                value += step > 0 ? step : 0.1f;
+                value = Math.min(max, value);
+            }
+
+            // Handle dragging on value area
+            if (input.isMouseDragging(0, valueRect)) {
+                value += input.mouseDeltaX() * incPerPixel;
+                if (step > 0) value = Math.round(value / step) * step;
+                value = Math.max(min, Math.min(max, value));
+            }
         }
 
         // Draw value text
@@ -915,45 +947,117 @@ public class NkContext {
     }
 
     /** Draws a simple color picker (HSV bar). Returns the new color. */
+    /**
+     * Draws an HSV color picker: saturation-value grid + hue bar + preview swatch.
+     * The widget height should be at least 60px for usability.
+     */
     public NkColor colorPicker(NkColor color) {
         var rect = allocateWidget();
         if (rect == null) return color;
 
-        // Layout: [hue gradient bar] [preview square]
-        float previewSize = rect.h();
-        float barW = rect.w() - previewSize - 4;
+        // Convert current color to HSV for editing
+        float[] hsv = rgbToHsv(color);
+        float hue = hsv[0], sat = hsv[1], val = hsv[2];
 
-        // Draw hue gradient as colored stripes
-        var barRect = new NkRect(rect.x(), rect.y(), barW, rect.h());
-        int stripes = 12;
-        float stripeW = barW / stripes;
-        for (int i = 0; i < stripes; i++) {
-            float hue = (float) i / stripes;
-            var stripeColor = hsvToRgb(hue, 1.0f, 1.0f);
-            emit(new NkDrawCommand.FilledRect(
-                    new NkRect(rect.x() + i * stripeW, rect.y(), stripeW + 1, rect.h() / 2),
-                    0, stripeColor));
-            // Bottom half: darker (lower value)
-            var darkColor = hsvToRgb(hue, 1.0f, 0.5f);
-            emit(new NkDrawCommand.FilledRect(
-                    new NkRect(rect.x() + i * stripeW, rect.y() + rect.h() / 2, stripeW + 1, rect.h() / 2),
-                    0, darkColor));
+        // Layout: [SV square] [hue bar] [preview]
+        float hueBarW = 16;
+        float previewW = 24;
+        float gap = 3;
+        float svSize = rect.h(); // square
+        float svW = Math.min(svSize, rect.w() - hueBarW - previewW - gap * 2);
+
+        // ── Saturation-Value square ──
+        // Draw as a grid of colored cells
+        var svRect = new NkRect(rect.x(), rect.y(), svW, rect.h());
+        int cells = 8;
+        float cellW = svW / cells;
+        float cellH = rect.h() / cells;
+        for (int cy = 0; cy < cells; cy++) {
+            for (int cx = 0; cx < cells; cx++) {
+                float s = (float)(cx + 0.5f) / cells;
+                float v = 1.0f - (float)(cy + 0.5f) / cells;
+                emit(new NkDrawCommand.FilledRect(
+                        new NkRect(svRect.x() + cx * cellW, svRect.y() + cy * cellH, cellW + 1, cellH + 1),
+                        0, hsvToRgb(hue, s, v)));
+            }
         }
-        emit(new NkDrawCommand.StrokedRect(barRect, 0, 1, style.editBorder));
+        emit(new NkDrawCommand.StrokedRect(svRect, 0, 1, style.editBorder));
 
-        // Handle clicks/drags on the gradient bar
-        if (windowAcceptsInput() && (input.isMouseDragging(0, barRect) || input.isMousePressed(0, barRect))) {
-            float hue = (input.mouseX() - rect.x()) / barW;
-            float val = 1.0f - (input.mouseY() - rect.y()) / rect.h();
-            hue = Math.max(0, Math.min(1, hue));
-            val = Math.max(0.1f, Math.min(1, val));
-            color = hsvToRgb(hue, 1.0f, val);
+        // SV cursor indicator
+        float cursorX = svRect.x() + sat * svW;
+        float cursorY = svRect.y() + (1 - val) * rect.h();
+        emit(new NkDrawCommand.StrokedRect(
+                new NkRect(cursorX - 3, cursorY - 3, 6, 6), 0, 1, NkColor.rgb(255, 255, 255)));
+
+        // Handle SV interaction
+        if (windowAcceptsInput() && (input.isMouseDragging(0, svRect) || input.isMousePressed(0, svRect))) {
+            sat = Math.max(0, Math.min(1, (input.mouseX() - svRect.x()) / svW));
+            val = Math.max(0, Math.min(1, 1.0f - (input.mouseY() - svRect.y()) / rect.h()));
+            color = hsvToRgb(hue, sat, val);
         }
 
-        // Draw preview of current color
-        var previewRect = new NkRect(rect.x() + barW + 4, rect.y(), previewSize, previewSize);
+        // ── Hue bar (vertical) ──
+        float hueX = svRect.x() + svW + gap;
+        var hueRect = new NkRect(hueX, rect.y(), hueBarW, rect.h());
+        int hueSteps = 12;
+        float hueStepH = rect.h() / hueSteps;
+        for (int i = 0; i < hueSteps; i++) {
+            float h = (float) i / hueSteps;
+            emit(new NkDrawCommand.FilledRect(
+                    new NkRect(hueX, rect.y() + i * hueStepH, hueBarW, hueStepH + 1),
+                    0, hsvToRgb(h, 1, 1)));
+        }
+        emit(new NkDrawCommand.StrokedRect(hueRect, 0, 1, style.editBorder));
+
+        // Hue indicator
+        float hueIndicatorY = rect.y() + hue * rect.h();
+        emit(new NkDrawCommand.FilledRect(
+                new NkRect(hueX - 1, hueIndicatorY - 1, hueBarW + 2, 3), 0, NkColor.rgb(255, 255, 255)));
+
+        // Handle hue interaction
+        if (windowAcceptsInput() && (input.isMouseDragging(0, hueRect) || input.isMousePressed(0, hueRect))) {
+            hue = Math.max(0, Math.min(0.999f, (input.mouseY() - rect.y()) / rect.h()));
+            color = hsvToRgb(hue, sat, val);
+        }
+
+        // ── Preview swatch ──
+        float previewX = hueX + hueBarW + gap;
+        var previewRect = new NkRect(previewX, rect.y(), previewW, rect.h());
         emit(new NkDrawCommand.FilledRect(previewRect, 2, color));
         emit(new NkDrawCommand.StrokedRect(previewRect, 2, 1, style.editBorder));
+
+        return color;
+    }
+
+    /**
+     * Draws a quick color palette — grid of preset colors. Click to select.
+     */
+    public NkColor colorPalette(NkColor color, NkColor[] palette) {
+        var rect = allocateWidget();
+        if (rect == null) return color;
+
+        int cols = Math.min(palette.length, (int)(rect.w() / 16));
+        if (cols <= 0) cols = 1;
+        int rows = (palette.length + cols - 1) / cols;
+        float cellW = rect.w() / cols;
+        float cellH = rect.h() / rows;
+
+        for (int i = 0; i < palette.length; i++) {
+            int col = i % cols;
+            int row = i / cols;
+            var cellRect = new NkRect(rect.x() + col * cellW, rect.y() + row * cellH, cellW, cellH);
+            emit(new NkDrawCommand.FilledRect(cellRect, 0, palette[i]));
+
+            // Highlight selected
+            if (palette[i].r() == color.r() && palette[i].g() == color.g() && palette[i].b() == color.b()) {
+                emit(new NkDrawCommand.StrokedRect(cellRect, 0, 2, NkColor.rgb(255, 255, 255)));
+            }
+
+            if (windowAcceptsInput() && input.isMousePressed(0, cellRect)) {
+                color = palette[i];
+            }
+        }
+        emit(new NkDrawCommand.StrokedRect(rect, 0, 1, style.editBorder));
 
         return color;
     }
@@ -1005,6 +1109,20 @@ public class NkContext {
     private static String formatFloat(float v) {
         if (v == (int) v) return Integer.toString((int) v);
         return String.format("%.2f", v);
+    }
+
+    private static float[] rgbToHsv(NkColor c) {
+        float r = c.r() / 255f, g = c.g() / 255f, b = c.b() / 255f;
+        float max = Math.max(r, Math.max(g, b));
+        float min = Math.min(r, Math.min(g, b));
+        float d = max - min;
+        float h = 0, s = max > 0 ? d / max : 0, v = max;
+        if (d > 0) {
+            if (max == r) h = ((g - b) / d + 6) % 6 / 6f;
+            else if (max == g) h = ((b - r) / d + 2) / 6f;
+            else h = ((r - g) / d + 4) / 6f;
+        }
+        return new float[]{h, s, v};
     }
 
     private static NkColor hsvToRgb(float h, float s, float v) {

@@ -174,7 +174,7 @@ public class UiSamplerExample extends BaseApplication {
         // ═══════════════════════════════════════════════════════════
         // Panel 3: Combo, Selectable, Color Picker
         // ═══════════════════════════════════════════════════════════
-        if (ui.begin("Selection & Color", 300, 340, 280, 300,
+        if (ui.begin("Selection & Color", 300, 340, 280, 400,
                 NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE | NkContext.WINDOW_MINIMIZABLE)) {
 
             // Combo box
@@ -195,13 +195,26 @@ public class UiSamplerExample extends BaseApplication {
             selectable2 = ui.selectableLabel("Item 2", selectable2);
             selectable3 = ui.selectableLabel("Item 3", selectable3);
 
-            // Color picker
+            // HSV Color picker
             ui.layoutRowDynamic(20, 1);
-            ui.label("Color Picker");
+            ui.label("Color Picker (HSV)");
             ui.separator();
 
             ui.layoutRowDynamic(80, 1);
             pickedColor = ui.colorPicker(pickedColor);
+
+            // Quick palette
+            ui.layoutRowDynamic(20, 1);
+            ui.label("Color Palette");
+            ui.separator();
+
+            ui.layoutRowDynamic(32, 1);
+            pickedColor = ui.colorPalette(pickedColor, new NkColor[]{
+                    NkColor.rgb(255, 0, 0), NkColor.rgb(255, 128, 0), NkColor.rgb(255, 255, 0),
+                    NkColor.rgb(0, 255, 0), NkColor.rgb(0, 255, 255), NkColor.rgb(0, 128, 255),
+                    NkColor.rgb(0, 0, 255), NkColor.rgb(128, 0, 255), NkColor.rgb(255, 0, 255),
+                    NkColor.rgb(255, 255, 255), NkColor.rgb(128, 128, 128), NkColor.rgb(0, 0, 0),
+            });
         }
         ui.end();
 
