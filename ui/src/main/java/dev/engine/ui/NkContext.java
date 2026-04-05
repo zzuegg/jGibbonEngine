@@ -721,15 +721,21 @@ public class NkContext {
             currentWindow.treeStates.put("§" + title, state);
         }
 
-        // Header background
+        // Header background — use the window header color to stand out from content
         emit(new NkDrawCommand.FilledRect(rect, 0,
-                hovering ? style.headerBackground : style.windowBackground.withAlpha(230)));
+                hovering ? style.headerBackground
+                        : NkColor.lerp(style.headerBackground, style.windowBackground, 0.5f)));
 
-        // Arrow + title
+        // Top border
+        emit(new NkDrawCommand.Line(
+                new NkVec2(rect.x(), rect.y()), new NkVec2(rect.x() + rect.w(), rect.y()),
+                1, style.windowBorder));
+
+        // Arrow + title (bold header text color)
         String arrow = state ? "v " : "> ";
         float textY = rect.y() + (rect.h() - font.height()) / 2;
         emit(new NkDrawCommand.Text(
-                new NkRect(rect.x() + 4, textY, font.textWidth(arrow + title), font.height()),
+                new NkRect(rect.x() + 6, textY, font.textWidth(arrow + title), font.height()),
                 arrow + title, font, style.headerText));
 
         // Bottom border
