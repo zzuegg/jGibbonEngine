@@ -1,6 +1,7 @@
 package dev.engine.graphics.common;
 
 import dev.engine.core.handle.Handle;
+import dev.engine.core.profiler.ResourceStats;
 import dev.engine.graphics.*;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
@@ -15,9 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Unified GPU resource lifecycle layer.
@@ -38,29 +36,42 @@ public class GpuResourceManager {
 
     private static final Logger log = LoggerFactory.getLogger(GpuResourceManager.class);
 
-    private final RenderDevice device;
+    /** Well-known resource type keys used by this manager. */
+    public static final String BUFFER        = "buffer";
+    public static final String TEXTURE       = "texture";
+    public static final String RENDER_TARGET = "render_target";
+    public static final String PIPELINE      = "pipeline";
+    public static final String SAMPLER       = "sampler";
+    public static final String VERTEX_INPUT  = "vertex_input";
 
-    // Live resource counts
-    private final AtomicInteger liveBuffers = new AtomicInteger();
-    private final AtomicInteger liveTextures = new AtomicInteger();
-    private final AtomicInteger liveRenderTargets = new AtomicInteger();
-    private final AtomicInteger livePipelines = new AtomicInteger();
-    private final AtomicInteger liveSamplers = new AtomicInteger();
-    private final AtomicInteger liveVertexInputs = new AtomicInteger();
+    private final RenderDevice device;
+    private final ResourceStats resourceStats;
 
     // Deferred deletion queues (thread-safe for concurrent destroy calls)
     private volatile java.util.Queue<Runnable> deletionQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
     private volatile java.util.Queue<Runnable> pendingQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
     public GpuResourceManager(RenderDevice device) {
+        this(device, new ResourceStats());
+    }
+
+    public GpuResourceManager(RenderDevice device, ResourceStats resourceStats) {
         this.device = device;
+        this.resourceStats = resourceStats;
+        // Pre-register well-known types
+        resourceStats.register(BUFFER);
+        resourceStats.register(TEXTURE);
+        resourceStats.register(RENDER_TARGET);
+        resourceStats.register(PIPELINE);
+        resourceStats.register(SAMPLER);
+        resourceStats.register(VERTEX_INPUT);
     }
 
     // --- Buffers ---
 
     public Handle<BufferResource> createBuffer(BufferDescriptor descriptor) {
         var handle = device.createBuffer(descriptor);
-        liveBuffers.incrementAndGet();
+        resourceStats.recordCreate(BUFFER);
         return handle;
     }
 
@@ -79,7 +90,7 @@ public class GpuResourceManager {
     public void destroyBuffer(Handle<BufferResource> buffer) {
         deletionQueue.add(() -> {
             device.destroyBuffer(buffer);
-            liveBuffers.decrementAndGet();
+            resourceStats.recordDestroy(BUFFER);
         });
     }
 
@@ -87,7 +98,7 @@ public class GpuResourceManager {
 
     public Handle<TextureResource> createTexture(TextureDescriptor descriptor) {
         var handle = device.createTexture(descriptor);
-        liveTextures.incrementAndGet();
+        resourceStats.recordCreate(TEXTURE);
         return handle;
     }
 
@@ -98,7 +109,7 @@ public class GpuResourceManager {
     public void destroyTexture(Handle<TextureResource> texture) {
         deletionQueue.add(() -> {
             device.destroyTexture(texture);
-            liveTextures.decrementAndGet();
+            resourceStats.recordDestroy(TEXTURE);
         });
     }
 
@@ -106,7 +117,7 @@ public class GpuResourceManager {
 
     public Handle<RenderTargetResource> createRenderTarget(RenderTargetDescriptor descriptor) {
         var handle = device.createRenderTarget(descriptor);
-        liveRenderTargets.incrementAndGet();
+        resourceStats.recordCreate(RENDER_TARGET);
         return handle;
     }
 
@@ -117,7 +128,7 @@ public class GpuResourceManager {
     public void destroyRenderTarget(Handle<RenderTargetResource> rt) {
         deletionQueue.add(() -> {
             device.destroyRenderTarget(rt);
-            liveRenderTargets.decrementAndGet();
+            resourceStats.recordDestroy(RENDER_TARGET);
         });
     }
 
@@ -125,14 +136,14 @@ public class GpuResourceManager {
 
     public Handle<PipelineResource> createPipeline(PipelineDescriptor descriptor) {
         var handle = device.createPipeline(descriptor);
-        livePipelines.incrementAndGet();
+        resourceStats.recordCreate(PIPELINE);
         return handle;
     }
 
     public void destroyPipeline(Handle<PipelineResource> pipeline) {
         deletionQueue.add(() -> {
             device.destroyPipeline(pipeline);
-            livePipelines.decrementAndGet();
+            resourceStats.recordDestroy(PIPELINE);
         });
     }
 
@@ -140,14 +151,14 @@ public class GpuResourceManager {
 
     public Handle<SamplerResource> createSampler(SamplerDescriptor descriptor) {
         var handle = device.createSampler(descriptor);
-        liveSamplers.incrementAndGet();
+        resourceStats.recordCreate(SAMPLER);
         return handle;
     }
 
     public void destroySampler(Handle<SamplerResource> sampler) {
         deletionQueue.add(() -> {
             device.destroySampler(sampler);
-            liveSamplers.decrementAndGet();
+            resourceStats.recordDestroy(SAMPLER);
         });
     }
 
@@ -155,14 +166,14 @@ public class GpuResourceManager {
 
     public Handle<VertexInputResource> createVertexInput(VertexFormat format) {
         var handle = device.createVertexInput(format);
-        liveVertexInputs.incrementAndGet();
+        resourceStats.recordCreate(VERTEX_INPUT);
         return handle;
     }
 
     public void destroyVertexInput(Handle<VertexInputResource> vertexInput) {
         deletionQueue.add(() -> {
             device.destroyVertexInput(vertexInput);
-            liveVertexInputs.decrementAndGet();
+            resourceStats.recordDestroy(VERTEX_INPUT);
         });
     }
 
@@ -186,17 +197,17 @@ public class GpuResourceManager {
 
     // --- Stats ---
 
-    public int liveBufferCount() { return liveBuffers.get(); }
-    public int liveTextureCount() { return liveTextures.get(); }
-    public int liveRenderTargetCount() { return liveRenderTargets.get(); }
-    public int livePipelineCount() { return livePipelines.get(); }
-    public int liveSamplerCount() { return liveSamplers.get(); }
-    public int liveVertexInputCount() { return liveVertexInputs.get(); }
+    /** Returns the ResourceStats instance tracking all resource lifecycle operations. */
+    public ResourceStats resourceStats() { return resourceStats; }
 
-    public int totalLiveResources() {
-        return liveBuffers.get() + liveTextures.get() + liveRenderTargets.get()
-             + livePipelines.get() + liveSamplers.get() + liveVertexInputs.get();
-    }
+    public int liveBufferCount() { return resourceStats.liveCount(BUFFER); }
+    public int liveTextureCount() { return resourceStats.liveCount(TEXTURE); }
+    public int liveRenderTargetCount() { return resourceStats.liveCount(RENDER_TARGET); }
+    public int livePipelineCount() { return resourceStats.liveCount(PIPELINE); }
+    public int liveSamplerCount() { return resourceStats.liveCount(SAMPLER); }
+    public int liveVertexInputCount() { return resourceStats.liveCount(VERTEX_INPUT); }
+
+    public int totalLiveResources() { return resourceStats.totalLiveCount(); }
 
     // --- Shutdown ---
 
@@ -213,9 +224,12 @@ public class GpuResourceManager {
 
         int leaks = totalLiveResources();
         if (leaks > 0) {
-            log.warn("GPU resource leaks detected at shutdown: {} buffers, {} textures, {} render targets, {} pipelines, {} samplers, {} vertex inputs",
-                    liveBuffers.get(), liveTextures.get(), liveRenderTargets.get(),
-                    livePipelines.get(), liveSamplers.get(), liveVertexInputs.get());
+            var sb = new StringBuilder("GPU resource leaks detected at shutdown:");
+            for (var type : resourceStats.resourceTypes()) {
+                int count = resourceStats.liveCount(type);
+                if (count > 0) sb.append(" ").append(count).append(" ").append(type).append(",");
+            }
+            log.warn(sb.toString());
         }
     }
 

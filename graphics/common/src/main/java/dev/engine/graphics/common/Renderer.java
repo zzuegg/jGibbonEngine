@@ -2,6 +2,7 @@ package dev.engine.graphics.common;
 
 import dev.engine.core.handle.Handle;
 import dev.engine.core.math.Vec2;
+import dev.engine.core.profiler.RenderStats;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.core.scene.MeshTag;
@@ -57,7 +58,8 @@ public class Renderer implements AutoCloseable {
     private float lastDeltaTime = 0f;
     private int frameCount = 0;
 
-
+    // Per-frame render statistics (reset at the start of each renderFrame call)
+    private final RenderStats renderStats = new RenderStats();
 
     // Viewport
     private Viewport viewport = Viewport.of(1, 1); // Placeholder until window sets actual size
@@ -67,7 +69,7 @@ public class Renderer implements AutoCloseable {
 
     public Renderer(RenderDevice device, ShaderCompiler compiler) {
         this.device = device;
-        this.gpu = new GpuResourceManager(device);
+        this.gpu = new GpuResourceManager(device, renderStats.resources());
         this.meshRenderer = new MeshRenderer();
         this.meshManager = new MeshManager(gpu);
         this.textureManager = new TextureManager(gpu);
@@ -182,6 +184,9 @@ public class Renderer implements AutoCloseable {
     // --- Render ---
 
     public void renderFrame(List<Transaction> transactions) {
+        // Reset per-frame stats (resource frame counters + draw/bind counters)
+        renderStats.reset();
+
         // Poll stale GPU resources from weak caches
         meshManager.pollStale();
         textureManager.pollStale();
@@ -327,6 +332,7 @@ public class Renderer implements AutoCloseable {
     public RenderTargetManager renderTargetManager() { return renderTargetManager; }
     public PipelineManager pipelineManager() { return pipelineManager; }
     public SamplerManager samplerManager() { return samplerManager; }
+    public RenderStats renderStats() { return renderStats; }
 
     @Override
     public void close() {
