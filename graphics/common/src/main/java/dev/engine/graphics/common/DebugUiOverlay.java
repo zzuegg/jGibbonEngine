@@ -238,7 +238,7 @@ public class DebugUiOverlay implements AutoCloseable {
         if (fontTexture != null) device.destroyTexture(fontTexture);
         if (fontSampler != null) device.destroySampler(fontSampler);
         if (vertexInput != null) device.destroyVertexInput(vertexInput);
-        // Pipeline is owned by ShaderManager — don't destroy it here
+        if (pipeline != null) device.destroyPipeline(pipeline);
         initialized = false;
     }
 }

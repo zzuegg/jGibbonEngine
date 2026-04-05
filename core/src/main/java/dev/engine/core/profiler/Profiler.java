@@ -26,11 +26,11 @@ public class Profiler {
     }
 
     public Map<String, ProfileResult> lastFrame() {
-        return currentFrame;
+        return lastFrame;
     }
 
-    public Map<String, ProfileResult> previousFrame() {
-        return lastFrame;
+    public Map<String, ProfileResult> currentFrame() {
+        return currentFrame;
     }
 
     private void endScope(ScopeEntry entry) {

@@ -233,6 +233,12 @@ public class LwjglGlBindings implements GlBindings {
     @Override public void glDisable(int cap) { GL45.glDisable(cap); }
 
     @Override public void glBlendFunc(int sfactor, int dfactor) { GL45.glBlendFunc(sfactor, dfactor); }
+    @Override public void glBlendFuncSeparate(int sfactorRGB, int dfactorRGB, int sfactorAlpha, int dfactorAlpha) { GL45.glBlendFuncSeparate(sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha); }
+    @Override public void glBlendEquationSeparate(int modeRGB, int modeAlpha) { GL45.glBlendEquationSeparate(modeRGB, modeAlpha); }
+    @Override public void glBlendFuncSeparatei(int buf, int sfactorRGB, int dfactorRGB, int sfactorAlpha, int dfactorAlpha) { GL45.glBlendFuncSeparatei(buf, sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha); }
+    @Override public void glBlendEquationSeparatei(int buf, int modeRGB, int modeAlpha) { GL45.glBlendEquationSeparatei(buf, modeRGB, modeAlpha); }
+    @Override public void glEnablei(int cap, int index) { GL45.glEnablei(cap, index); }
+    @Override public void glDisablei(int cap, int index) { GL45.glDisablei(cap, index); }
 
     @Override public void glCullFace(int mode) { GL45.glCullFace(mode); }
 

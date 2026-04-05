@@ -4,6 +4,7 @@ import dev.engine.core.math.Vec2i;
 import dev.engine.core.scene.AbstractScene;
 import dev.engine.graphics.GraphicsBackendFactory;
 import dev.engine.graphics.GraphicsConfig;
+import dev.engine.graphics.window.WindowConfig;
 
 /**
  * Configuration for the Engine. Determines threading mode, backend, window, scene type.
@@ -22,14 +23,21 @@ import dev.engine.graphics.GraphicsConfig;
 public record EngineConfig(
         boolean headless,
         boolean threaded,
-        String windowTitle,
-        Vec2i windowSize,
+        WindowConfig windowConfig,
         AbstractScene scene,
         int maxFrames,
         Platform platform,
         GraphicsConfig graphics,
         GraphicsBackendFactory graphicsBackend
 ) {
+    // Backward-compat accessors
+    public String windowTitle() { return windowConfig != null ? windowConfig.title() : "Engine"; }
+    public Vec2i windowSize() {
+        return windowConfig != null
+               ? new Vec2i(windowConfig.width(), windowConfig.height())
+               : new Vec2i(1280, 720);
+    }
+
     public static Builder builder() { return new Builder(); }
 
     public static class Builder {
@@ -37,8 +45,13 @@ public record EngineConfig(
         private boolean threaded = false;
         private String windowTitle = "Engine";
         private Vec2i windowSize = new Vec2i(1280, 720);
+        private boolean windowResizable = true;
+        private boolean windowDecorated = true;
+        private boolean windowVsync = false;
+        private boolean windowFullscreen = false;
+        private boolean windowAlwaysOnTop = false;
         private AbstractScene scene = null;
-        private int maxFrames = 0; // 0 = unlimited
+        private int maxFrames = 0;
         private Platform platform = null;
         private GraphicsConfig graphics = null;
         private GraphicsBackendFactory graphicsBackend = null;
@@ -48,6 +61,11 @@ public record EngineConfig(
         public Builder windowTitle(String title) { this.windowTitle = title; return this; }
         public Builder windowSize(Vec2i size) { this.windowSize = size; return this; }
         public Builder windowSize(int w, int h) { this.windowSize = new Vec2i(w, h); return this; }
+        public Builder windowResizable(boolean v) { this.windowResizable = v; return this; }
+        public Builder windowDecorated(boolean v) { this.windowDecorated = v; return this; }
+        public Builder windowVsync(boolean v) { this.windowVsync = v; return this; }
+        public Builder windowFullscreen(boolean v) { this.windowFullscreen = v; return this; }
+        public Builder windowAlwaysOnTop(boolean v) { this.windowAlwaysOnTop = v; return this; }
         public Builder scene(AbstractScene scene) { this.scene = scene; return this; }
         public Builder maxFrames(int maxFrames) { this.maxFrames = maxFrames; return this; }
         public Builder platform(Platform platform) { this.platform = platform; return this; }
@@ -61,7 +79,10 @@ public record EngineConfig(
             if (headless) {
                 if (platform == null) platform = HeadlessPlatform.INSTANCE;
             }
-            return new EngineConfig(headless, threaded, windowTitle, windowSize, scene, maxFrames, platform, graphics, graphicsBackend);
+            var wc = new WindowConfig(windowTitle, windowSize.x(), windowSize.y(),
+                    windowResizable, windowDecorated, windowVsync, windowFullscreen, windowAlwaysOnTop);
+            return new EngineConfig(headless, threaded, wc, scene, maxFrames, platform, graphics, graphicsBackend);
         }
     }
 }
+

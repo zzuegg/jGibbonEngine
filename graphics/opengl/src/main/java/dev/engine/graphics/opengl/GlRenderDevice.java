@@ -626,12 +626,7 @@ public class GlRenderDevice implements RenderDevice {
                 else gl.glDisable(GlBindings.GL_DEPTH_TEST);
             }
             case RenderCommand.SetBlending cmd -> {
-                if (cmd.enabled()) {
-                    gl.glEnable(GlBindings.GL_BLEND);
-                    gl.glBlendFunc(GlBindings.GL_SRC_ALPHA, GlBindings.GL_ONE_MINUS_SRC_ALPHA);
-                } else {
-                    gl.glDisable(GlBindings.GL_BLEND);
-                }
+                applyBlendMode(cmd.enabled() ? BlendMode.ALPHA : BlendMode.NONE);
             }
             case RenderCommand.SetCullFace cmd -> {
                 if (cmd.enabled()) {
@@ -668,6 +663,9 @@ public class GlRenderDevice implements RenderDevice {
                 }
                 if (props.contains(RenderState.BLEND_MODE)) {
                     applyBlendMode(props.get(RenderState.BLEND_MODE));
+                }
+                if (props.contains(RenderState.BLEND_MODES)) {
+                    applyBlendModes(props.get(RenderState.BLEND_MODES));
                 }
                 if (props.contains(RenderState.CULL_MODE)) {
                     applyCullMode(props.get(RenderState.CULL_MODE));
@@ -954,20 +952,62 @@ public class GlRenderDevice implements RenderDevice {
     }
 
     private void applyBlendMode(BlendMode mode) {
-        if (mode == BlendMode.NONE) {
+        if (!mode.enabled()) {
             gl.glDisable(GlBindings.GL_BLEND);
         } else {
             gl.glEnable(GlBindings.GL_BLEND);
-            if (mode == BlendMode.ALPHA) {
-                gl.glBlendFunc(GlBindings.GL_SRC_ALPHA, GlBindings.GL_ONE_MINUS_SRC_ALPHA);
-            } else if (mode == BlendMode.ADDITIVE) {
-                gl.glBlendFunc(GlBindings.GL_SRC_ALPHA, GlBindings.GL_ONE);
-            } else if (mode == BlendMode.MULTIPLY) {
-                gl.glBlendFunc(GlBindings.GL_DST_COLOR, GlBindings.GL_ZERO);
-            } else if (mode == BlendMode.PREMULTIPLIED) {
-                gl.glBlendFunc(GlBindings.GL_ONE, GlBindings.GL_ONE_MINUS_SRC_ALPHA);
+            gl.glBlendFuncSeparate(
+                    mapBlendFactor(mode.srcColorFactor()), mapBlendFactor(mode.dstColorFactor()),
+                    mapBlendFactor(mode.srcAlphaFactor()), mapBlendFactor(mode.dstAlphaFactor()));
+            gl.glBlendEquationSeparate(
+                    mapBlendEquation(mode.colorEquation()),
+                    mapBlendEquation(mode.alphaEquation()));
+        }
+    }
+
+    /**
+     * Applies per-draw-buffer blend modes for MRT (GL 4.0+ indexed blend).
+     * Index {@code i} of {@code modes} maps to draw buffer {@code i}; the last entry
+     * is repeated for any extra buffers.
+     */
+    private void applyBlendModes(BlendMode[] modes) {
+        if (modes == null || modes.length == 0) return;
+        for (int i = 0; i < modes.length; i++) {
+            BlendMode mode = modes[i];
+            if (!mode.enabled()) {
+                gl.glDisablei(GlBindings.GL_BLEND, i);
+            } else {
+                gl.glEnablei(GlBindings.GL_BLEND, i);
+                gl.glBlendFuncSeparatei(i,
+                        mapBlendFactor(mode.srcColorFactor()), mapBlendFactor(mode.dstColorFactor()),
+                        mapBlendFactor(mode.srcAlphaFactor()), mapBlendFactor(mode.dstAlphaFactor()));
+                gl.glBlendEquationSeparatei(i,
+                        mapBlendEquation(mode.colorEquation()),
+                        mapBlendEquation(mode.alphaEquation()));
             }
         }
+    }
+
+    private int mapBlendFactor(BlendFactor factor) {
+        if (factor == BlendFactor.ZERO)                return GlBindings.GL_ZERO;
+        if (factor == BlendFactor.ONE)                 return GlBindings.GL_ONE;
+        if (factor == BlendFactor.SRC_COLOR)           return GlBindings.GL_SRC_COLOR;
+        if (factor == BlendFactor.ONE_MINUS_SRC_COLOR) return GlBindings.GL_ONE_MINUS_SRC_COLOR;
+        if (factor == BlendFactor.DST_COLOR)           return GlBindings.GL_DST_COLOR;
+        if (factor == BlendFactor.ONE_MINUS_DST_COLOR) return GlBindings.GL_ONE_MINUS_DST_COLOR;
+        if (factor == BlendFactor.SRC_ALPHA)           return GlBindings.GL_SRC_ALPHA;
+        if (factor == BlendFactor.ONE_MINUS_SRC_ALPHA) return GlBindings.GL_ONE_MINUS_SRC_ALPHA;
+        if (factor == BlendFactor.DST_ALPHA)           return GlBindings.GL_DST_ALPHA;
+        if (factor == BlendFactor.ONE_MINUS_DST_ALPHA) return GlBindings.GL_ONE_MINUS_DST_ALPHA;
+        return GlBindings.GL_ZERO;
+    }
+
+    private int mapBlendEquation(BlendEquation eq) {
+        if (eq == BlendEquation.SUBTRACT)         return GlBindings.GL_FUNC_SUBTRACT;
+        if (eq == BlendEquation.REVERSE_SUBTRACT) return GlBindings.GL_FUNC_REVERSE_SUBTRACT;
+        if (eq == BlendEquation.MIN)              return GlBindings.GL_MIN;
+        if (eq == BlendEquation.MAX)              return GlBindings.GL_MAX;
+        return GlBindings.GL_FUNC_ADD;
     }
 
     private void applyCullMode(CullMode mode) {

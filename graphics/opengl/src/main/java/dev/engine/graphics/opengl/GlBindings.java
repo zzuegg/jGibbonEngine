@@ -31,9 +31,21 @@ public interface GlBindings {
     // --- Blend factors ---
     int GL_ZERO                = 0;
     int GL_ONE                 = 1;
+    int GL_SRC_COLOR           = 0x0300;
+    int GL_ONE_MINUS_SRC_COLOR = 0x0301;
     int GL_SRC_ALPHA           = 0x0302;
     int GL_ONE_MINUS_SRC_ALPHA = 0x0303;
+    int GL_DST_ALPHA           = 0x0304;
+    int GL_ONE_MINUS_DST_ALPHA = 0x0305;
     int GL_DST_COLOR           = 0x0306;
+    int GL_ONE_MINUS_DST_COLOR = 0x0307;
+
+    // --- Blend equations ---
+    int GL_FUNC_ADD              = 0x8006;
+    int GL_MIN                   = 0x8007;
+    int GL_MAX                   = 0x8008;
+    int GL_FUNC_SUBTRACT         = 0x800A;
+    int GL_FUNC_REVERSE_SUBTRACT = 0x800B;
 
     // --- Capabilities ---
     int GL_DEPTH_TEST    = 0x0B71;
@@ -371,6 +383,16 @@ public interface GlBindings {
     void glDisable(int cap);
 
     void glBlendFunc(int sfactor, int dfactor);
+    void glBlendFuncSeparate(int sfactorRGB, int dfactorRGB, int sfactorAlpha, int dfactorAlpha);
+    void glBlendEquationSeparate(int modeRGB, int modeAlpha);
+    /** Per-draw-buffer blend function (GL 4.0+, required for MRT independent blending). */
+    void glBlendFuncSeparatei(int buf, int sfactorRGB, int dfactorRGB, int sfactorAlpha, int dfactorAlpha);
+    /** Per-draw-buffer blend equation (GL 4.0+, required for MRT independent blending). */
+    void glBlendEquationSeparatei(int buf, int modeRGB, int modeAlpha);
+    /** Per-draw-buffer enable (GL 3.0+). */
+    void glEnablei(int cap, int index);
+    /** Per-draw-buffer disable (GL 3.0+). */
+    void glDisablei(int cap, int index);
 
     void glCullFace(int mode);
 

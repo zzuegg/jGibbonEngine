@@ -8,7 +8,7 @@ public final class ResourceCleaner {
 
     private ResourceCleaner() {}
 
-    static Cleaner.Cleanable register(Object resource, Runnable cleanupAction) {
+    public static Cleaner.Cleanable register(Object resource, Runnable cleanupAction) {
         return CLEANER.register(resource, cleanupAction);
     }
 }

@@ -10,4 +10,5 @@ public interface WindowProperty {
     PropertyKey<WindowHandle, Boolean> DECORATED      = PropertyKey.of("window.decorated", Boolean.class);
     PropertyKey<WindowHandle, Boolean> VISIBLE        = PropertyKey.of("window.visible", Boolean.class);
     PropertyKey<WindowHandle, Integer> SWAP_INTERVAL  = PropertyKey.of("window.swapInterval", Integer.class);
+    PropertyKey<WindowHandle, Boolean> ALWAYS_ON_TOP  = PropertyKey.of("window.alwaysOnTop", Boolean.class);
 }

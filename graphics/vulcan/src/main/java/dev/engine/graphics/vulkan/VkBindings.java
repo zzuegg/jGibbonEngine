@@ -201,26 +201,29 @@ public interface VkBindings {
     /**
      * Creates a graphics pipeline.
      *
-     * @param shaderModules shader module handles
-     * @param shaderStages  corresponding VK_SHADER_STAGE_xxx flags
-     * @param vertexAttribLocations  attribute locations
-     * @param vertexAttribFormats    VK format per attribute
-     * @param vertexAttribOffsets    byte offset per attribute
-     * @param vertexStride           total vertex stride in bytes
-     * @param blendEnabled           whether color blending is enabled
-     * @param srcColorFactor         blend src color factor
-     * @param dstColorFactor         blend dst color factor
-     * @param srcAlphaFactor         blend src alpha factor
-     * @param dstAlphaFactor         blend dst alpha factor
-     * @param wireframe              if true, polygon mode = LINE
-     * @param dynamicStates          VK_DYNAMIC_STATE_xxx values
+     * @param shaderModules            shader module handles
+     * @param shaderStages             corresponding VK_SHADER_STAGE_xxx flags
+     * @param vertexAttribLocations    attribute locations
+     * @param vertexAttribFormats      VK format per attribute
+     * @param vertexAttribOffsets      byte offset per attribute
+     * @param vertexStride             total vertex stride in bytes
+     * @param blendEnabled             per-attachment blend enable flags (length = number of color attachments)
+     * @param srcColorFactors          per-attachment src color blend factors
+     * @param dstColorFactors          per-attachment dst color blend factors
+     * @param srcAlphaFactors          per-attachment src alpha blend factors
+     * @param dstAlphaFactors          per-attachment dst alpha blend factors
+     * @param colorBlendOps            per-attachment color blend operations (VK_BLEND_OP_xxx)
+     * @param alphaBlendOps            per-attachment alpha blend operations (VK_BLEND_OP_xxx)
+     * @param wireframe                if true, polygon mode = LINE
+     * @param dynamicStates            VK_DYNAMIC_STATE_xxx values
      */
     long createGraphicsPipeline(long device, long renderPass, long pipelineLayout,
                                 long[] shaderModules, int[] shaderStages,
                                 int[] vertexAttribLocations, int[] vertexAttribFormats,
                                 int[] vertexAttribOffsets, int vertexStride,
-                                boolean blendEnabled, int srcColorFactor, int dstColorFactor,
-                                int srcAlphaFactor, int dstAlphaFactor,
+                                boolean[] blendEnabled, int[] srcColorFactors, int[] dstColorFactors,
+                                int[] srcAlphaFactors, int[] dstAlphaFactors,
+                                int[] colorBlendOps, int[] alphaBlendOps,
                                 boolean wireframe, int[] dynamicStates);
 
     long createComputePipeline(long device, long pipelineLayout, long shaderModule);
@@ -557,13 +560,16 @@ public interface VkBindings {
     int VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT     = 0x00000001;
 
     // Blend factors
-    int VK_BLEND_FACTOR_ZERO                     = 0;
-    int VK_BLEND_FACTOR_ONE                      = 1;
-    int VK_BLEND_FACTOR_SRC_ALPHA                = 6;
-    int VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA      = 7;
-    int VK_BLEND_FACTOR_DST_COLOR                = 8;
-    int VK_BLEND_FACTOR_DST_ALPHA                = 10;
-    int VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA      = 11; // not used currently but useful
+    int VK_BLEND_FACTOR_ZERO                = 0;
+    int VK_BLEND_FACTOR_ONE                 = 1;
+    int VK_BLEND_FACTOR_SRC_COLOR           = 2;
+    int VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR = 3;
+    int VK_BLEND_FACTOR_DST_COLOR           = 4;
+    int VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR = 5;
+    int VK_BLEND_FACTOR_SRC_ALPHA           = 6;
+    int VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA = 7;
+    int VK_BLEND_FACTOR_DST_ALPHA           = 8;
+    int VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA = 9;
 
     // Compare ops
     int VK_COMPARE_OP_NEVER          = 0;
@@ -682,7 +688,11 @@ public interface VkBindings {
     int VK_BORDER_COLOR_INT_OPAQUE_WHITE        = 5;
 
     // Blend ops
-    int VK_BLEND_OP_ADD = 0;
+    int VK_BLEND_OP_ADD              = 0;
+    int VK_BLEND_OP_SUBTRACT         = 1;
+    int VK_BLEND_OP_REVERSE_SUBTRACT = 2;
+    int VK_BLEND_OP_MIN              = 3;
+    int VK_BLEND_OP_MAX              = 4;
 
     // Color component bits
     int VK_COLOR_COMPONENT_R_BIT = 0x00000001;

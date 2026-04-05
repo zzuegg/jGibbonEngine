@@ -47,7 +47,6 @@ public class Engine {
     private final Renderer renderer;
     private final AbstractScene scene;
     private final Profiler profiler;
-    private final RenderStats renderStats;
 
     // Debug UI
     private final NkContext debugUi;
@@ -72,7 +71,6 @@ public class Engine {
 
         // Profiler + stats
         this.profiler = new Profiler();
-        this.renderStats = new RenderStats();
 
         // Asset manager — synchronous by default, works on all platforms
         this.assets = new AssetManager(Runnable::run);
@@ -108,7 +106,7 @@ public class Engine {
     public Renderer renderer() { return renderer; }
     public AbstractScene scene() { return scene; }
     public Profiler profiler() { return profiler; }
-    public RenderStats renderStats() { return renderStats; }
+    public RenderStats renderStats() { return renderer.renderStats(); }
     public EngineConfig config() { return config; }
     public NkContext debugUi() { return debugUi; }
     public DebugUiOverlay debugUiOverlay() { return debugUiOverlay; }
@@ -141,7 +139,6 @@ public class Engine {
      */
     public void tick(double deltaSeconds) {
         profiler.newFrame();
-        renderStats.reset();
         totalTime += deltaSeconds;
 
         try (var scope = profiler.scope("logic")) {
@@ -210,6 +207,7 @@ public class Engine {
     public void shutdown() {
         stop();
         modules.shutdown();
+        assets.shutdown();
         debugUiOverlay.close();
         renderer.close();
         log.info("Engine shut down");
