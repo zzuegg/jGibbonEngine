@@ -248,10 +248,7 @@ public class WgpuRenderDevice implements RenderDevice {
             gpu.instanceProcessEvents(wgpuInstance);
 
             wgpuQueue = gpu.deviceGetQueue(wgpuDevice);
-            // Skip deviceGetLimits — jwebgpu 0.1.15 passes WGPULimits instead of
-            // WGPUSupportedLimits, causing a native SIGABRT in wgpu-native.
-            // queryCapability() already handles null deviceLimits with safe defaults.
-            deviceLimits = null;
+            deviceLimits = gpu.deviceGetLimits(wgpuDevice);
 
             // Configure presentation surface if requested
             if (presentToSurface) {
