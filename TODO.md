@@ -13,7 +13,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [x] **MeshRenderer leaks entity maps on EntityRemoved** — `MeshRenderer.java`. `meshDataAssignments`, `meshAssignments`, and `materialAssignments` were not cleared on `EntityRemoved`.
 - [x] **Vec2 alignment missing from material UBO write loop** — `UniformManager.java`. Size calculation aligned Vec2 to 8 bytes, but the write offset loop did not. Produced a layout mismatch (GPU reads wrong bytes for any material with Vec2 properties after an unaligned predecessor). Fixed by adding `offset = align(offset, 8)` before writing Vec2.
 - [x] **Remaining hardcoded `"Object"` string in `bindGlobals()`** — `UniformManager.java`. The `bindGlobals()` method still used the raw literal `"Object"` instead of `GlobalParamNames.OBJECT`. Now consistent with the rest of the class.
-- [ ] **Material UBO silently wrong-sized on property change** — `UniformManager.uploadAndBindMaterial()`. The `materialUbos` map uses `computeIfAbsent` keyed by entity handle, allocating a buffer sized for the *first* set of material properties. If properties are subsequently changed to include new scalar keys (or different types), the existing buffer keeps its original size. The oversized-write silently goes into unallocated GPU memory. The fix requires either reallocating when the required size grows, or (better) deriving the UBO size from the shader reflection, not from the property count at runtime.
+- [x] **Material UBO silently wrong-sized on property change** — `UniformManager.uploadAndBindMaterial()`. Added `materialUboSizes` tracking map. When the required UBO size exceeds the allocated size (e.g., after a material gains new scalar properties), the old buffer is destroyed and a correctly-sized buffer is reallocated.
 
 ## Hardcoded Values (should be configurable/dynamic)
 
@@ -73,9 +73,9 @@ Full code review performed 2026-04-05 across all 467 source files.
 
 ## Code Quality / API
 
-- [ ] **BaseApplication Javadoc example uses deprecated API** — The `launch()` method Javadoc still shows `.graphicsBackend(OpenGlBackend.factory(glBindings))` which is the deprecated path. Should show the new `.graphics(new OpenGlConfig(...))` API.
-- [ ] **`BaseApplication` sets viewport twice per frame** — `BaseApplication.java:124+129`. `WindowEvent.Resized` handler calls `setViewport(r.width, r.height)`. Then line 129 unconditionally calls `setViewport(window.width(), window.height())` every frame regardless. The second unconditional call makes the resize handler redundant. Either remove the event handler or remove the unconditional per-frame call.
-- [ ] **`DrawCommand.materialData` raw unchecked generic** — `DrawCommand.java`. `PropertyMap materialData` is raw type (no `<MaterialData>` parameter). Should be `PropertyMap<MaterialData>` for type safety.
+- [x] **BaseApplication Javadoc example uses deprecated API** — Updated to show the new `.graphics(new OpenGlConfig(...))` API.
+- [x] **`BaseApplication` sets viewport twice per frame** — Removed unconditional per-frame `setViewport` call. Viewport is now set once before the loop and updated only on `WindowEvent.Resized`.
+- [x] **`DrawCommand.materialData` raw unchecked generic** — Changed to `PropertyMap<MaterialData>` for type safety.
 
 ## Architectural Cleanup
 
@@ -93,22 +93,6 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [ ] **Async buffer mapping for TeaVM WebGPU** — Browser can't do synchronous mapping. Needs promise wrapper or skip readback on web.
 - [ ] **Slang generic specialization parsing robustness** — `SlangCompilerNative.java:245-276`. Current regex works. Revisit when it breaks.
 - [ ] **WGSL binding extraction regex** — `WgpuRenderDevice.java:623-625`. Works for current shaders. Revisit on Slang output changes.
-
-
-## Hardcoded Values (should be configurable/dynamic)
-
-- [ ] **Primitive topology hardcoded to TRIANGLES** — All draw commands in Gl/Vk/Wgpu RenderDevice. Topology should be part of PipelineDescriptor or DrawCommand. Prevents drawing lines, points, triangle strips.
-- [ ] **Clear color hardcoded (0.05, 0.05, 0.08)** — `Renderer.java:65`, `VkRenderDevice.java:60`. Duplicated magic constant. Default should come from config.
-- [ ] **Push constant UBO size hardcoded to 128 bytes** — `GlRenderDevice.java:96`, `VkDescriptorManager.java:101`. Should be configurable via GraphicsConfig or DeviceCapability.
-- [ ] **Texture/sampler array sizes: magic numbers** — GL: boundTextures[32], boundSamplers[32]. Vk: currentTextures[8], pendingUboBuffers[16], pendingSsboBuffers[8]. Should be queried from DeviceCapability or configurable.
-- [ ] **MAX_FRAMES_IN_FLIGHT=2 hardcoded** — `VkRenderDevice.java:47`. Should be configurable through VulkanConfig.
-- [ ] **MAX_SETS_PER_FRAME=256 hardcoded** — `VkDescriptorManager.java:17`. Could be insufficient for complex scenes. Should auto-grow or be configurable.
-- [x] **Global param bindings hardcoded** — `Renderer.java:79-81`. Extracted to `GlobalParamNames` constants class (`ENGINE`, `CAMERA`, `OBJECT`). Used in `Renderer` and `UniformManager`.
-- [ ] **Blend function hardcoded to SRC_ALPHA/ONE_MINUS_SRC_ALPHA** — `GlRenderDevice.java:623`. BlendMode exists but only supports NONE vs one hardcoded alpha blend. Need configurable src/dst factors, blend equation.
-- [ ] **All shaders forced to STANDARD_FORMAT vertex layout** — `ShaderManager.java:255`. Uses PrimitiveMeshes.STANDARD_FORMAT for ALL pipelines. Custom vertex formats (tangents, colors, bone weights) won't work.
-- [ ] **Shader entry points hardcoded ("vertexMain"/"fragmentMain")** — `ShaderManager.java:227`. Should be configurable per shader for custom entry points.
-- [ ] **Camera defaults (near=0.1, far=1000) not in config** — `Camera.java:15`. Should be configurable through EngineConfig or named constants.
-- [ ] **Deprecated cull face/front face in legacy commands** — `GlRenderDevice.java:631`. Legacy SetCullFace hardcodes GL_BACK/GL_CCW. Remove deprecated path since SetRenderState replacement exists.
 
 ## Missing Configuration
 

@@ -30,6 +30,7 @@ public class UniformManager {
     private final Map<String, Handle<BufferResource>> globalUbos = new HashMap<>();
     private final Map<String, StructLayout> globalLayouts = new HashMap<>();
     private final Map<Handle<?>, Handle<BufferResource>> materialUbos = new HashMap<>();
+    private final Map<Handle<?>, Integer> materialUboSizes = new HashMap<>();
     private final Map<Handle<?>, Handle<BufferResource>> objectUbos = new HashMap<>();
 
     public UniformManager(GpuResourceManager gpu, GlobalParamsRegistry globalParams) {
@@ -136,9 +137,19 @@ public class UniformManager {
         totalSize = align(totalSize, maxAlign);
 
         final int uboSize = Math.max(totalSize, 16);
-        var ubo = materialUbos.computeIfAbsent(entity, k ->
-                gpu.createBuffer(
-                        uboSize, BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
+        var existingUbo = materialUbos.get(entity);
+        Integer existingSize = materialUboSizes.get(entity);
+        if (existingUbo == null || existingSize == null || existingSize < uboSize) {
+            // First allocation or material gained new properties — (re)allocate.
+            // Remove from maps first so they are never in a partially-updated state.
+            materialUbos.remove(entity);
+            materialUboSizes.remove(entity);
+            if (existingUbo != null) gpu.destroyBuffer(existingUbo);
+            existingUbo = gpu.createBuffer(uboSize, BufferUsage.UNIFORM, AccessPattern.DYNAMIC);
+            materialUbos.put(entity, existingUbo);
+            materialUboSizes.put(entity, uboSize);
+        }
+        var ubo = existingUbo;
 
         try (var w = gpu.writeBuffer(ubo)) {
             int offset = 0;
@@ -173,6 +184,7 @@ public class UniformManager {
         globalUbos.clear();
         for (var ubo : materialUbos.values()) gpu.destroyBuffer(ubo);
         materialUbos.clear();
+        materialUboSizes.clear();
         for (var ubo : objectUbos.values()) gpu.destroyBuffer(ubo);
         objectUbos.clear();
     }
@@ -186,6 +198,7 @@ public class UniformManager {
         if (objUbo != null) gpu.destroyBuffer(objUbo);
         var matUbo = materialUbos.remove(entity);
         if (matUbo != null) gpu.destroyBuffer(matUbo);
+        materialUboSizes.remove(entity);
     }
 
     private static int align(int offset, int alignment) {

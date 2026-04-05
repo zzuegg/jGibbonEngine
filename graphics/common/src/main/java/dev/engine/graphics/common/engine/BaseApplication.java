@@ -44,7 +44,7 @@ import java.util.List;
  * // Launch:
  * var config = EngineConfig.builder()
  *     .platform(DesktopPlatform.builder().build())
- *     .graphicsBackend(OpenGlBackend.factory(glBindings))
+ *     .graphics(new OpenGlConfig(toolkit, glBindings))
  *     .build();
  * new MyGame().launch(config);
  * </pre>
@@ -98,6 +98,9 @@ public abstract class BaseApplication {
         // Default camera
         defaultCamera = engine.renderer().createCamera();
 
+        // Set initial viewport from actual window dimensions
+        engine.renderer().setViewport(window.width(), window.height());
+
         window.show();
 
         try {
@@ -126,7 +129,6 @@ public abstract class BaseApplication {
                     }
                 }
 
-                engine.renderer().setViewport(window.width(), window.height());
                 engine.setInputEvents(inputEvents);
                 update((float) delta, inputEvents);
                 engine.tick(delta);
