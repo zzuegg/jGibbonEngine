@@ -179,6 +179,7 @@ public class GlfwWindowToolkit implements WindowToolkit {
             properties.set(WindowProperty.RESIZABLE, true);
             properties.set(WindowProperty.DECORATED, true);
             properties.set(WindowProperty.FULLSCREEN, false);
+            properties.set(WindowProperty.ALWAYS_ON_TOP, false);
         }
 
         @Override
@@ -265,6 +266,8 @@ public class GlfwWindowToolkit implements WindowToolkit {
                 }
             } else if (key == WindowProperty.SWAP_INTERVAL) {
                 GLFW.glfwSwapInterval((Integer) value);
+            } else if (key == WindowProperty.ALWAYS_ON_TOP) {
+                GLFW.glfwSetWindowAttrib(handle, GLFW.GLFW_FLOATING, (Boolean) value ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
             }
         }
 

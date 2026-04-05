@@ -12,6 +12,7 @@ import dev.engine.graphics.GraphicsBackend;
 import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowHandle;
+import dev.engine.graphics.window.WindowProperty;
 import dev.engine.graphics.window.WindowToolkit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,8 +66,7 @@ public abstract class BaseApplication {
      */
     public void launch(EngineConfig config) {
         try {
-            var windowDesc = new WindowDescriptor(
-                    config.windowTitle(), config.windowSize().x(), config.windowSize().y());
+            var windowDesc = config.windowConfig().toDescriptor();
             dev.engine.graphics.GraphicsBackend backend;
             if (config.graphics() != null) {
                 backend = config.graphics().create(windowDesc);
@@ -102,6 +102,14 @@ public abstract class BaseApplication {
         engine.renderer().setViewport(window.width(), window.height());
 
         window.show();
+
+        // Apply window configuration properties
+        var wc = config.windowConfig();
+        window.set(WindowProperty.RESIZABLE, wc.resizable());
+        window.set(WindowProperty.DECORATED, wc.decorated());
+        if (wc.vsync()) window.set(WindowProperty.VSYNC, true);
+        if (wc.fullscreen()) window.set(WindowProperty.FULLSCREEN, true);
+        if (wc.alwaysOnTop()) window.set(WindowProperty.ALWAYS_ON_TOP, true);
 
         try {
             init();

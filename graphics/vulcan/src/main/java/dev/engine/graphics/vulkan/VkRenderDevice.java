@@ -1192,11 +1192,7 @@ public class VkRenderDevice implements RenderDevice {
     }
 
     private VkPipelineFactory.BlendConfig mapBlendMode(BlendMode mode) {
-        if (mode == BlendMode.ALPHA) return VkPipelineFactory.BlendConfig.ALPHA;
-        if (mode == BlendMode.ADDITIVE) return VkPipelineFactory.BlendConfig.ADDITIVE;
-        if (mode == BlendMode.MULTIPLY) return VkPipelineFactory.BlendConfig.MULTIPLY;
-        if (mode == BlendMode.PREMULTIPLIED) return VkPipelineFactory.BlendConfig.PREMULTIPLIED;
-        return VkPipelineFactory.BlendConfig.NONE;
+        return VkPipelineFactory.BlendConfig.fromBlendMode(mode);
     }
 
     // --- Capabilities ---

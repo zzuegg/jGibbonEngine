@@ -557,13 +557,16 @@ public interface VkBindings {
     int VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT     = 0x00000001;
 
     // Blend factors
-    int VK_BLEND_FACTOR_ZERO                     = 0;
-    int VK_BLEND_FACTOR_ONE                      = 1;
-    int VK_BLEND_FACTOR_SRC_ALPHA                = 6;
-    int VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA      = 7;
-    int VK_BLEND_FACTOR_DST_COLOR                = 8;
-    int VK_BLEND_FACTOR_DST_ALPHA                = 10;
-    int VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA      = 11; // not used currently but useful
+    int VK_BLEND_FACTOR_ZERO                = 0;
+    int VK_BLEND_FACTOR_ONE                 = 1;
+    int VK_BLEND_FACTOR_SRC_COLOR           = 2;
+    int VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR = 3;
+    int VK_BLEND_FACTOR_DST_COLOR           = 4;
+    int VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR = 5;
+    int VK_BLEND_FACTOR_SRC_ALPHA           = 6;
+    int VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA = 7;
+    int VK_BLEND_FACTOR_DST_ALPHA           = 8;
+    int VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA = 9;
 
     // Compare ops
     int VK_COMPARE_OP_NEVER          = 0;
@@ -682,7 +685,11 @@ public interface VkBindings {
     int VK_BORDER_COLOR_INT_OPAQUE_WHITE        = 5;
 
     // Blend ops
-    int VK_BLEND_OP_ADD = 0;
+    int VK_BLEND_OP_ADD              = 0;
+    int VK_BLEND_OP_SUBTRACT         = 1;
+    int VK_BLEND_OP_REVERSE_SUBTRACT = 2;
+    int VK_BLEND_OP_MIN              = 3;
+    int VK_BLEND_OP_MAX              = 4;
 
     // Color component bits
     int VK_COLOR_COMPONENT_R_BIT = 0x00000001;

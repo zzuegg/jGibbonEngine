@@ -705,8 +705,8 @@ public class WgpuRenderDevice implements RenderDevice {
                 stencilFront,
                 stencilBack,
                 currentColorTargetFormat(),
-                blend[0], blend[1], WgpuBindings.BLEND_OP_ADD,
-                blend[2], blend[3], WgpuBindings.BLEND_OP_ADD
+                blend[0], blend[1], mapBlendEquation(currentBlendMode.colorEquation()),
+                blend[2], blend[3], mapBlendEquation(currentBlendMode.alphaEquation())
         );
 
         return gpu.deviceCreateRenderPipeline(wgpuDevice, desc);
@@ -743,28 +743,34 @@ public class WgpuRenderDevice implements RenderDevice {
 
     /** Returns [colorSrc, colorDst, alphaSrc, alphaDst]. */
     private static int[] getBlendFactors(BlendMode mode) {
-        if (mode == BlendMode.ALPHA) {
-            return new int[]{
-                    WgpuBindings.BLEND_FACTOR_SRC_ALPHA, WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA};
-        } else if (mode == BlendMode.ADDITIVE) {
-            return new int[]{
-                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE,
-                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE};
-        } else if (mode == BlendMode.MULTIPLY) {
-            return new int[]{
-                    WgpuBindings.BLEND_FACTOR_DST, WgpuBindings.BLEND_FACTOR_ZERO,
-                    WgpuBindings.BLEND_FACTOR_DST_ALPHA, WgpuBindings.BLEND_FACTOR_ZERO};
-        } else if (mode == BlendMode.PREMULTIPLIED) {
-            return new int[]{
-                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA};
-        } else {
-            // NONE
-            return new int[]{
-                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ZERO,
-                    WgpuBindings.BLEND_FACTOR_ONE, WgpuBindings.BLEND_FACTOR_ZERO};
-        }
+        return new int[]{
+                mapBlendFactor(mode.srcColorFactor()),
+                mapBlendFactor(mode.dstColorFactor()),
+                mapBlendFactor(mode.srcAlphaFactor()),
+                mapBlendFactor(mode.dstAlphaFactor())
+        };
+    }
+
+    private static int mapBlendFactor(dev.engine.graphics.renderstate.BlendFactor factor) {
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.ZERO)                return WgpuBindings.BLEND_FACTOR_ZERO;
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE)                 return WgpuBindings.BLEND_FACTOR_ONE;
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.SRC_COLOR)           return WgpuBindings.BLEND_FACTOR_SRC;
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE_MINUS_SRC_COLOR) return WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC;
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.DST_COLOR)           return WgpuBindings.BLEND_FACTOR_DST;
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE_MINUS_DST_COLOR) return WgpuBindings.BLEND_FACTOR_ONE_MINUS_DST;
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.SRC_ALPHA)           return WgpuBindings.BLEND_FACTOR_SRC_ALPHA;
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE_MINUS_SRC_ALPHA) return WgpuBindings.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.DST_ALPHA)           return WgpuBindings.BLEND_FACTOR_DST_ALPHA;
+        if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE_MINUS_DST_ALPHA) return WgpuBindings.BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+        return WgpuBindings.BLEND_FACTOR_ZERO;
+    }
+
+    private static int mapBlendEquation(dev.engine.graphics.renderstate.BlendEquation eq) {
+        if (eq == dev.engine.graphics.renderstate.BlendEquation.SUBTRACT)         return WgpuBindings.BLEND_OP_SUBTRACT;
+        if (eq == dev.engine.graphics.renderstate.BlendEquation.REVERSE_SUBTRACT) return WgpuBindings.BLEND_OP_REVERSE_SUBTRACT;
+        if (eq == dev.engine.graphics.renderstate.BlendEquation.MIN)              return WgpuBindings.BLEND_OP_MIN;
+        if (eq == dev.engine.graphics.renderstate.BlendEquation.MAX)              return WgpuBindings.BLEND_OP_MAX;
+        return WgpuBindings.BLEND_OP_ADD;
     }
 
     /**

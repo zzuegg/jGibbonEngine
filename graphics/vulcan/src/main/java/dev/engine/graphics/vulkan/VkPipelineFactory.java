@@ -4,6 +4,7 @@ import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.pipeline.ShaderBinary;
 import dev.engine.graphics.pipeline.ShaderStage;
+import dev.engine.graphics.renderstate.BlendMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,6 +37,27 @@ final class VkPipelineFactory {
         static final BlendConfig PREMULTIPLIED = new BlendConfig(true,
                 VkBindings.VK_BLEND_FACTOR_ONE, VkBindings.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
                 VkBindings.VK_BLEND_FACTOR_ONE, VkBindings.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA);
+
+        static BlendConfig fromBlendMode(BlendMode mode) {
+            if (!mode.enabled()) return NONE;
+            return new BlendConfig(true,
+                    mapFactor(mode.srcColorFactor()), mapFactor(mode.dstColorFactor()),
+                    mapFactor(mode.srcAlphaFactor()), mapFactor(mode.dstAlphaFactor()));
+        }
+
+        private static int mapFactor(dev.engine.graphics.renderstate.BlendFactor factor) {
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.ZERO)                return VkBindings.VK_BLEND_FACTOR_ZERO;
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE)                 return VkBindings.VK_BLEND_FACTOR_ONE;
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.SRC_COLOR)           return VkBindings.VK_BLEND_FACTOR_SRC_COLOR;
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE_MINUS_SRC_COLOR) return VkBindings.VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.DST_COLOR)           return VkBindings.VK_BLEND_FACTOR_DST_COLOR;
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE_MINUS_DST_COLOR) return VkBindings.VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.SRC_ALPHA)           return VkBindings.VK_BLEND_FACTOR_SRC_ALPHA;
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE_MINUS_SRC_ALPHA) return VkBindings.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.DST_ALPHA)           return VkBindings.VK_BLEND_FACTOR_DST_ALPHA;
+            if (factor == dev.engine.graphics.renderstate.BlendFactor.ONE_MINUS_DST_ALPHA) return VkBindings.VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+            return VkBindings.VK_BLEND_FACTOR_ZERO;
+        }
     }
 
     static long create(VkBindings vk, long device, long renderPass, long pipelineLayout,
