@@ -104,3 +104,13 @@ description: "Engine module overview — architecture at a glance."
   </a>
 </div>
 
+## UI
+
+<div class="index-grid">
+  <a class="index-card" href="{{ site.baseurl }}/modules/debug-ui">
+    <span class="feature-icon">🖥️</span>
+    <h3>Debug UI</h3>
+    <p>Immediate-mode debug UI overlay — windows, widgets, inspectors, and charts. Renders on all backends.</p>
+  </a>
+</div>
+

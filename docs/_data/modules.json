@@ -119,6 +119,14 @@
       "icon": "🔌",
       "slug": "jwebgpu-provider",
       "features": ["Native WebGPU", "Dawn/wgpu"]
+    },
+    {
+      "name": "Debug UI",
+      "description": "Immediate-mode debug UI overlay — windows, widgets, inspectors, and charts. Renders on all backends.",
+      "category": "UI",
+      "icon": "🖥️",
+      "slug": "debug-ui",
+      "features": ["Windows", "Buttons & Checkboxes", "Sliders & Progress", "Tree View", "Color Picker", "Live Charts", "Inspector Panels"]
     }
   ],
   "features": [
@@ -176,6 +184,21 @@
       "name": "Slang Shaders",
       "description": "Write shaders once in Slang. The engine compiles them to GLSL, SPIR-V, or WGSL depending on the active backend — including in the browser via WASM.",
       "icon": "🔮"
+    },
+    {
+      "name": "Debug UI Overlay",
+      "description": "Built-in Nuklear-inspired immediate-mode UI with draggable windows, z-ordering, and input focus. Works on OpenGL, Vulkan, and WebGPU.",
+      "icon": "🖥️"
+    },
+    {
+      "name": "Inspector Panels",
+      "description": "Accordion-style collapsible sections with property grids — label-value pairs, drag-to-edit floats, color pickers, and combo boxes.",
+      "icon": "🔍"
+    },
+    {
+      "name": "Live Charts",
+      "description": "Ring-buffer line graphs for real-time data — FPS counters, frame time, or any streaming values with auto-range.",
+      "icon": "📊"
     }
   ]
 }
