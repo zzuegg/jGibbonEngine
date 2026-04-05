@@ -124,6 +124,7 @@ metallicSphere.update(Transform.class, tr ->
                 .windowSize(1280, 720)
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(OpenGlBackend.factory(
+                        new dev.engine.windowing.glfw.GlfwWindowToolkit(dev.engine.windowing.glfw.GlfwWindowToolkit.OPENGL_HINTS),
                         new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()))
                 .build();
 
