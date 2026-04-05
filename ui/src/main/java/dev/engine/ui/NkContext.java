@@ -374,9 +374,9 @@ public class NkContext {
         float barY = rect.y() + (rect.h() - barH) / 2;
         float usableW = rect.w() - cursorSize;
 
-        // Draw bar background
+        // Draw bar background (no rounding — thin bars distort with corner arcs)
         var barRect = new NkRect(rect.x() + cursorSize / 2, barY, usableW, barH);
-        drawCommands.add(new NkDrawCommand.FilledRect(barRect, 2, style.sliderBar));
+        drawCommands.add(new NkDrawCommand.FilledRect(barRect, 0, style.sliderBar));
 
         // Handle interaction
         float ratio = (max > min) ? (value - min) / (max - min) : 0;
@@ -397,7 +397,7 @@ public class NkContext {
         if (filledW > 0) {
             drawCommands.add(new NkDrawCommand.FilledRect(
                     new NkRect(barRect.x(), barY, filledW, barH),
-                    2, style.sliderBarFilled));
+                    0, style.sliderBarFilled));
         }
 
         // Draw cursor
