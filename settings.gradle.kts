@@ -4,6 +4,9 @@ rootProject.name = "jGibbonEngine"
 include("core")
 include("core-processor")
 
+// ── UI ──────────────────────────────────────────────────────────────
+include("ui")
+
 // ── Graphics API & backends ──────────────────────────────────────────
 include("graphics:api")
 include("graphics:common")

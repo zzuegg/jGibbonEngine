@@ -13,6 +13,8 @@ import dev.engine.graphics.common.Renderer;
 import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
+import dev.engine.ui.NkContext;
+import dev.engine.ui.NkInputBridge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,6 +130,10 @@ public abstract class BaseApplication {
 
                 engine.renderer().setViewport(window.width(), window.height());
                 engine.setInputEvents(inputEvents);
+
+                // Feed input to debug UI
+                NkInputBridge.feedEvents(engine.debugUi().input(), inputEvents);
+
                 update((float) delta, inputEvents);
                 engine.tick(delta);
             }
@@ -168,6 +174,7 @@ public abstract class BaseApplication {
     protected RenderStats renderStats() { return engine.renderStats(); }
     protected InputSystem inputSystem() { return inputSystem; }
     protected Camera camera() { return defaultCamera; }
+    protected NkContext debugUi() { return engine.debugUi(); }
     protected WindowHandle window() { return window; }
     protected double time() { return engine.totalTime(); }
     protected long frameNumber() { return engine.frameNumber(); }
