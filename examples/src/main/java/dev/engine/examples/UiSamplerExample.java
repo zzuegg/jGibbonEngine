@@ -70,7 +70,7 @@ public class UiSamplerExample extends BaseApplication {
         // Panel 1: Basic Widgets
         // ═══════════════════════════════════════════════════════════
         if (ui.begin("Basic Widgets", 10, 10, 280, 420,
-                NkContext.WINDOW_BORDER | NkContext.WINDOW_TITLE | NkContext.WINDOW_MINIMIZABLE)) {
+                NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE | NkContext.WINDOW_MINIMIZABLE)) {
 
             // Labels
             ui.layoutRowDynamic(20, 1);
@@ -119,7 +119,7 @@ public class UiSamplerExample extends BaseApplication {
         // Panel 2: Sliders, Progress, Properties
         // ═══════════════════════════════════════════════════════════
         if (ui.begin("Numeric Widgets", 300, 10, 280, 320,
-                NkContext.WINDOW_BORDER | NkContext.WINDOW_TITLE | NkContext.WINDOW_MINIMIZABLE)) {
+                NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE | NkContext.WINDOW_MINIMIZABLE)) {
 
             // Sliders
             ui.layoutRowDynamic(20, 1);
@@ -158,7 +158,7 @@ public class UiSamplerExample extends BaseApplication {
         // Panel 3: Combo, Selectable, Color Picker
         // ═══════════════════════════════════════════════════════════
         if (ui.begin("Selection & Color", 300, 340, 280, 300,
-                NkContext.WINDOW_BORDER | NkContext.WINDOW_TITLE | NkContext.WINDOW_MINIMIZABLE)) {
+                NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE | NkContext.WINDOW_MINIMIZABLE)) {
 
             // Combo box
             ui.layoutRowDynamic(20, 1);
@@ -192,7 +192,7 @@ public class UiSamplerExample extends BaseApplication {
         // Panel 4: Tree, Groups, Tooltips
         // ═══════════════════════════════════════════════════════════
         if (ui.begin("Tree & Groups", 590, 10, 260, 350,
-                NkContext.WINDOW_BORDER | NkContext.WINDOW_TITLE | NkContext.WINDOW_CLOSABLE)) {
+                NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE | NkContext.WINDOW_CLOSABLE)) {
 
             // Tree
             ui.layoutRowDynamic(20, 1);
@@ -233,7 +233,7 @@ public class UiSamplerExample extends BaseApplication {
         // Panel 5: Layout showcase
         // ═══════════════════════════════════════════════════════════
         if (ui.begin("Layout Examples", 590, 370, 260, 270,
-                NkContext.WINDOW_BORDER | NkContext.WINDOW_TITLE)) {
+                NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE)) {
 
             // Dynamic row — items share width equally
             ui.layoutRowDynamic(20, 1);

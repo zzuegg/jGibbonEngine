@@ -148,12 +148,15 @@ public class NkContext {
             }
         }
 
-        // Draw window background
-        drawCommands.add(new NkDrawCommand.FilledRect(bounds, style.windowRounding, style.windowBackground));
+        // Draw window background (header-only when collapsed)
+        var drawBounds = win.collapsed && (flags & WINDOW_TITLE) != 0
+                ? new NkRect(bounds.x(), bounds.y(), bounds.w(), style.headerHeight)
+                : bounds;
+        drawCommands.add(new NkDrawCommand.FilledRect(drawBounds, style.windowRounding, style.windowBackground));
 
         // Draw border
         if ((flags & WINDOW_BORDER) != 0) {
-            drawCommands.add(new NkDrawCommand.StrokedRect(bounds, style.windowRounding,
+            drawCommands.add(new NkDrawCommand.StrokedRect(drawBounds, style.windowRounding,
                     style.windowBorderWidth, style.windowBorder));
         }
 
