@@ -125,7 +125,6 @@ public class GpuResourceManager {
     }
 
     public Handle<TextureResource> getRenderTargetColorTexture(Handle<RenderTargetResource> rt, int index) {
-        resourceStats.recordUse(RENDER_TARGET);
         return device.getRenderTargetColorTexture(rt, index);
     }
 

@@ -73,10 +73,13 @@ public class MeshManager {
 
     /** Polls for garbage-collected MeshData and destroys associated GPU resources. */
     public void pollStale() {
-        meshDataCache.pollStale(mesh -> {
-            gpu.destroyBuffer(mesh.vertexBuffer());
-            if (mesh.indexBuffer() != null) gpu.destroyBuffer(mesh.indexBuffer());
-        });
+        meshDataCache.pollStale(this::destroyMeshResources);
+    }
+
+    private void destroyMeshResources(MeshHandle mesh) {
+        gpu.destroyBuffer(mesh.vertexBuffer());
+        if (mesh.indexBuffer() != null) gpu.destroyBuffer(mesh.indexBuffer());
+        gpu.destroyVertexInput(mesh.vertexInput());
     }
 
     private MeshHandle uploadMeshData(MeshData data) {
