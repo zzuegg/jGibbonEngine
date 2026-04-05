@@ -79,6 +79,9 @@ public class UiSamplerExample extends BaseApplication {
 
         camera().lookAt(new Vec3(0, 3, 8), new Vec3(0, 0, 0), Vec3.UNIT_Y);
         camera().setPerspective((float) Math.toRadians(60), 16f / 9f, 0.1f, 100f);
+
+        // Disable vsync for uncapped FPS (shows real performance in chart)
+        window().set(dev.engine.graphics.window.WindowProperty.VSYNC, false);
     }
 
     @Override
