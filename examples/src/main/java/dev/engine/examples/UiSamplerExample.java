@@ -175,7 +175,7 @@ public class UiSamplerExample extends BaseApplication {
             ui.label("Cube Position");
             ui.separator();
 
-            ui.layoutRowDynamic(25, 1);
+            ui.layoutRowDynamic(25, 3);
             cubeX = ui.propertyFloat("X", -10, cubeX, 10, 0.1f, 0.02f);
             cubeY = ui.propertyFloat("Y", -10, cubeY, 10, 0.1f, 0.02f);
             cubeZ = ui.propertyFloat("Z", -10, cubeZ, 10, 0.1f, 0.02f);
