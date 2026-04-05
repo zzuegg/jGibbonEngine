@@ -145,6 +145,7 @@ public class WgpuRenderDevice implements RenderDevice {
     private final Handle<BufferResource>[] boundSsbos = new Handle[16];
     private Handle<PipelineResource> currentPipeline;
     private boolean bindingsDirty;
+    private boolean bindGroupValid;
     private long currentBindGroup;
 
     // ── Render state tracking (for pipeline-baked state in WebGPU) ────
@@ -242,6 +243,9 @@ public class WgpuRenderDevice implements RenderDevice {
             if (wgpuDevice == 0) {
                 throw new RuntimeException("Failed to get WebGPU device");
             }
+
+            // Process events to ensure device callbacks have completed before querying state
+            gpu.instanceProcessEvents(wgpuInstance);
 
             wgpuQueue = gpu.deviceGetQueue(wgpuDevice);
             // deviceGetLimits is broken in jwebgpu 0.1.15 (struct layout mismatch
@@ -1074,21 +1078,21 @@ public class WgpuRenderDevice implements RenderDevice {
                 if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), 1, cmd.firstVertex(), 0);
+                    if (bindGroupValid) gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), 1, cmd.firstVertex(), 0);
                 }
             }
             case RenderCommand.DrawIndexed cmd -> {
                 if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), 1, cmd.firstIndex(), 0, 0);
+                    if (bindGroupValid) gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), 1, cmd.firstIndex(), 0, 0);
                 }
             }
             case RenderCommand.DrawInstanced cmd -> {
                 if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), cmd.instanceCount(),
+                    if (bindGroupValid) gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), cmd.instanceCount(),
                             cmd.firstVertex(), cmd.firstInstance());
                 }
             }
@@ -1096,7 +1100,7 @@ public class WgpuRenderDevice implements RenderDevice {
                 if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), cmd.instanceCount(),
+                    if (bindGroupValid) gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), cmd.instanceCount(),
                             cmd.firstIndex(), 0, cmd.firstInstance());
                 }
             }
@@ -1346,16 +1350,18 @@ public class WgpuRenderDevice implements RenderDevice {
                 }
             }
 
-            // Fill null entries with a placeholder
+            // Skip if resource not bound — wgpu-native panics on null handles
             if (entries[i] == null) {
-                entries[i] = new WgpuBindings.BindGroupEntry(binding,
-                        WgpuBindings.BindingResourceType.BUFFER, 0, 0, 0);
+                log.warn("Bind group entry {} ({}) has no bound resource — skipping draw", binding, type);
+                bindGroupValid = false;
+                return;
             }
             i++;
         }
 
         currentBindGroup = gpu.deviceCreateBindGroup(wgpuDevice, pipelineInfo.bindGroupLayout(), entries);
         gpu.renderPassSetBindGroup(renderPassEncoder, 0, currentBindGroup);
+        bindGroupValid = true;
 
         // Set stencil reference if needed
         if (stencilTestEnabled) {

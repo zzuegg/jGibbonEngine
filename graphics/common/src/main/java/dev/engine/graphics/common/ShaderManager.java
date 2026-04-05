@@ -4,6 +4,7 @@ import dev.engine.core.asset.AssetManager;
 import dev.engine.core.asset.SlangShaderSource;
 import dev.engine.graphics.DeviceCapability;
 import dev.engine.core.handle.Handle;
+import dev.engine.core.mesh.VertexFormat;
 import dev.engine.core.property.PropertyKey;
 import dev.engine.graphics.shader.GlobalParamsRegistry;
 import dev.engine.graphics.shader.SlangParamsBlock;
@@ -44,18 +45,17 @@ public class ShaderManager {
     private final ShaderCompiler compiler;
     private final int textureBindingOffset;
 
+    /** Returns the texture binding offset for the current backend (e.g. 16 for Vulkan, 0 for OpenGL). */
+    public int textureBindingOffset() { return textureBindingOffset; }
+
     public ShaderManager(RenderDevice device, GlobalParamsRegistry globalParams, ShaderCompiler compiler) {
         this.device = device;
         this.globalParams = globalParams;
         this.compiler = compiler;
 
-        // Detect target format from backend
-        var backend = device.queryCapability(DeviceCapability.BACKEND_NAME);
-        this.slangTarget = switch (backend) {
-            case "Vulkan" -> ShaderCompiler.TARGET_SPIRV;
-            case "WebGPU" -> ShaderCompiler.TARGET_WGSL;
-            default -> ShaderCompiler.TARGET_GLSL;
-        };
+        // Query shader target from backend
+        var target = device.queryCapability(DeviceCapability.SHADER_TARGET);
+        this.slangTarget = target != null ? target : ShaderCompiler.TARGET_GLSL;
 
         // Query texture binding offset from backend (Vulkan uses 16, others 0)
         var texOffset = device.queryCapability(DeviceCapability.TEXTURE_BINDING_OFFSET);
@@ -90,7 +90,12 @@ public class ShaderManager {
     }
 
     public CompiledShader compileSlangSource(String source, String name) {
-        return compileFromSource(source, name);
+        return compileFromSource(source, name, null);
+    }
+
+    /** Compiles a Slang source with a custom vertex format (null = standard format). */
+    public CompiledShader compileSlangSource(String source, String name, VertexFormat vertexFormat) {
+        return compileFromSource(source, name, vertexFormat);
     }
 
     public Handle<PipelineResource> compileSlangFile(String path) {
@@ -100,7 +105,7 @@ public class ShaderManager {
         String source = loadShaderFile(path);
         if (source == null) throw new RuntimeException("Failed to read shader: " + path);
 
-        var compiled = compileFromSource(source, path);
+        var compiled = compileFromSource(source, path, null);
         shaderCache.put(path, compiled);
         return compiled.pipeline();
     }
@@ -203,11 +208,11 @@ public class ShaderManager {
     private CompiledShader compileShader(String shaderName) {
         String source = loadShaderSource(shaderName);
         if (source == null) throw new RuntimeException("No shader source for: " + shaderName);
-        return compileFromSource(source, shaderName);
+        return compileFromSource(source, shaderName, null);
     }
 
-    private CompiledShader compileFromSource(String source, String name) {
-        return compileNative(source, name);
+    private CompiledShader compileFromSource(String source, String name, VertexFormat vertexFormat) {
+        return compileNative(source, name, vertexFormat);
     }
 
     /**
@@ -228,14 +233,14 @@ public class ShaderManager {
                 new ShaderCompiler.EntryPointDesc("fragmentMain", ShaderCompiler.STAGE_FRAGMENT));
 
         try (var result = compiler.compileWithTypeMap(source, entryPoints, slangTarget, typeMap)) {
-            var pipeline = createPipelineFromResult(result);
+            var pipeline = createPipelineFromResult(result, null);
             var bindings = extractBindings(result);
             log.debug("Slang compiled: {} ({} bindings)", name, bindings.size());
             return new CompiledShader(pipeline, bindings);
         }
     }
 
-    private CompiledShader compileNative(String source, String name) {
+    private CompiledShader compileNative(String source, String name, VertexFormat vertexFormat) {
         log.info("Compiling Slang shader: {}", name);
 
         var entryPoints = List.of(
@@ -243,21 +248,20 @@ public class ShaderManager {
                 new ShaderCompiler.EntryPointDesc("fragmentMain", ShaderCompiler.STAGE_FRAGMENT));
 
         try (var result = compiler.compile(source, entryPoints, slangTarget)) {
-            var pipeline = createPipelineFromResult(result);
+            var pipeline = createPipelineFromResult(result, vertexFormat);
             var bindings = extractBindings(result);
             log.debug("Slang compiled: {} ({} bindings)", name, bindings.size());
             return new CompiledShader(pipeline, bindings);
         }
     }
 
-    private Handle<PipelineResource> createPipelineFromResult(ShaderCompiler.CompileResult result) {
-        // Use standard vertex format (pos + normal + uv) for all shaders
-        var standardFormat = dev.engine.graphics.common.mesh.PrimitiveMeshes.STANDARD_FORMAT;
+    private Handle<PipelineResource> createPipelineFromResult(ShaderCompiler.CompileResult result, VertexFormat vertexFormat) {
+        var format = vertexFormat != null ? vertexFormat : dev.engine.graphics.common.mesh.PrimitiveMeshes.STANDARD_FORMAT;
         if (slangTarget == ShaderCompiler.TARGET_SPIRV) {
             return device.createPipeline(PipelineDescriptor.ofSpirv(
                     new ShaderBinary(ShaderStage.VERTEX, result.codeBytes(0)),
                     new ShaderBinary(ShaderStage.FRAGMENT, result.codeBytes(1)))
-                    .withVertexFormat(standardFormat));
+                    .withVertexFormat(format));
         } else {
             // For WGSL targets, Slang preserves original entry point names (vertexMain/fragmentMain).
             // For GLSL, Slang always renames to "main". Pass the correct names so backends can use them.
@@ -266,7 +270,7 @@ public class ShaderManager {
             return device.createPipeline(PipelineDescriptor.of(
                     new ShaderSource(ShaderStage.VERTEX, result.code(0), vsEntry),
                     new ShaderSource(ShaderStage.FRAGMENT, result.code(1), fsEntry))
-                    .withVertexFormat(standardFormat));
+                    .withVertexFormat(format));
         }
     }
 

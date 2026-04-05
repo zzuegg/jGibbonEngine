@@ -28,6 +28,14 @@ public interface DeviceCapability<T> {
     DeviceCapability<Integer> TEXTURE_BINDING_OFFSET = intCap("TEXTURE_BINDING_OFFSET");
     DeviceCapability<Integer> SSBO_BINDING_OFFSET = intCap("SSBO_BINDING_OFFSET");
 
+    // --- Shader compilation ---
+    /**
+     * The Slang compilation target for this backend.
+     * Value is one of {@code ShaderCompiler.TARGET_GLSL},
+     * {@code ShaderCompiler.TARGET_SPIRV}, or {@code ShaderCompiler.TARGET_WGSL}.
+     */
+    DeviceCapability<Integer> SHADER_TARGET = intCap("SHADER_TARGET");
+
     // --- Device info ---
     DeviceCapability<String> DEVICE_NAME = stringCap("DEVICE_NAME");
     DeviceCapability<String> API_VERSION = stringCap("API_VERSION");

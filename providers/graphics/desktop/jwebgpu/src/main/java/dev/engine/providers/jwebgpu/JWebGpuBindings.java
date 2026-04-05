@@ -289,19 +289,62 @@ public class JWebGpuBindings implements WgpuBindings {
     public DeviceLimits deviceGetLimits(long device) {
         var dev = get(device, WGPUDevice.class);
         if (dev == null) return null;
-        var limits = com.github.xpenatan.webgpu.WGPULimits.native_new();
-        try {
-            dev.getLimits(limits);
+
+        // jwebgpu 0.1.15's WGPULimits doesn't include the nextInChain pointer that
+        // newer wgpu-native expects as the first field. Call wgpuDeviceGetLimits
+        // directly via FFM with a correctly-laid-out buffer.
+        //
+        // New WGPULimits layout: { nextInChain(ptr), maxTextureDimension1D(u32), ... }
+        // jwebgpu's WGPULimits was built against the old layout WITHOUT nextInChain.
+        try (var arena = java.lang.foreign.Arena.ofConfined()) {
+            // Allocate WGPULimits struct: sizeof(WGPULimits) = 152 bytes
+            var limitsStruct = arena.allocate(152);
+            limitsStruct.set(java.lang.foreign.ValueLayout.JAVA_LONG, 0, 0L); // nextInChain = NULL
+
+            // Look up wgpuDeviceGetLimits in the already-loaded native library
+            var lookup = java.lang.foreign.SymbolLookup.loaderLookup();
+            var symbol = lookup.find("wgpuDeviceGetLimits");
+            if (symbol.isEmpty()) {
+                log.warn("wgpuDeviceGetLimits symbol not found in loaded libraries");
+                return null;
+            }
+
+            // WGPUStatus wgpuDeviceGetLimits(WGPUDevice device, WGPULimits* limits)
+            // WGPUDevice is an opaque pointer, WGPULimits* is a pointer
+            var linker = java.lang.foreign.Linker.nativeLinker();
+            var getLimits = linker.downcallHandle(symbol.get(),
+                    java.lang.foreign.FunctionDescriptor.of(
+                            java.lang.foreign.ValueLayout.JAVA_INT,     // WGPUStatus return
+                            java.lang.foreign.ValueLayout.ADDRESS,      // WGPUDevice
+                            java.lang.foreign.ValueLayout.ADDRESS));    // WGPULimits*
+
+            // Call: pass the device's native pointer and our struct
+            var devicePtr = java.lang.foreign.MemorySegment.ofAddress(dev.native_getAddressLong());
+            int status = (int) getLimits.invokeExact(devicePtr, limitsStruct);
+
+            if (status != 0) {
+                log.warn("wgpuDeviceGetLimits returned status {}", status);
+                return null;
+            }
+
+            // Read fields at verified offsets (from C offsetof checks)
+            int maxTex2D = limitsStruct.get(java.lang.foreign.ValueLayout.JAVA_INT, 12);
+            int maxTex3D = limitsStruct.get(java.lang.foreign.ValueLayout.JAVA_INT, 16);
+            long maxUniformBufSize = limitsStruct.get(java.lang.foreign.ValueLayout.JAVA_LONG, 64);
+            long maxStorageBufSize = limitsStruct.get(java.lang.foreign.ValueLayout.JAVA_LONG, 72);
+            int maxColorAttach = limitsStruct.get(java.lang.foreign.ValueLayout.JAVA_INT, 116);
+
             return new DeviceLimits(
-                    limits.getMaxTextureDimension2D(),
-                    limits.getMaxTextureDimension3D(),
-                    limits.getMaxUniformBufferBindingSize(),
-                    limits.getMaxStorageBufferBindingSize(),
-                    limits.getMaxColorAttachments(),
-                    16.0f // WebGPU spec max anisotropy
+                    maxTex2D,
+                    maxTex3D,
+                    (int) maxUniformBufSize,
+                    (int) maxStorageBufSize,
+                    maxColorAttach,
+                    16.0f
             );
-        } finally {
-            limits.dispose();
+        } catch (Throwable t) {
+            log.warn("Failed to query WebGPU device limits via FFM: {}", t.getMessage());
+            return null;
         }
     }
 

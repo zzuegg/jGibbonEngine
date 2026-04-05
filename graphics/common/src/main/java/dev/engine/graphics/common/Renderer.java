@@ -47,6 +47,7 @@ public class Renderer implements AutoCloseable {
     private final SamplerManager samplerManager;
     private final ShaderManager shaderManager;
 
+    private final List<Runnable> postSceneCallbacks = new ArrayList<>();
     private final List<Camera> cameras = new ArrayList<>();
     private Camera activeCamera;
     private Handle<PipelineResource> defaultPipeline;
@@ -148,6 +149,8 @@ public class Renderer implements AutoCloseable {
     public void setViewport(int width, int height) {
         this.viewport = Viewport.of(width, height);
     }
+
+    public Viewport viewport() { return viewport; }
 
     public void setClearColor(float r, float g, float b, float a) {
         this.clearR = r;
@@ -279,8 +282,23 @@ public class Renderer implements AutoCloseable {
             }
         }
 
+        // Run post-scene callbacks (e.g., debug UI overlay)
+        for (var callback : postSceneCallbacks) {
+            callback.run();
+        }
+
         device.endFrame();
         gpu.processDeferred();
+    }
+
+    /** Registers a callback to run after scene rendering but before endFrame. */
+    public void addPostSceneCallback(Runnable callback) {
+        postSceneCallbacks.add(callback);
+    }
+
+    /** Removes a previously registered post-scene callback. */
+    public void removePostSceneCallback(Runnable callback) {
+        postSceneCallbacks.remove(callback);
     }
 
     // --- Capabilities ---

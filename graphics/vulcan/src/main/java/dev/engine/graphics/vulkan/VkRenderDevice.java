@@ -1209,6 +1209,7 @@ public class VkRenderDevice implements RenderDevice {
             case "MAX_FRAMEBUFFER_WIDTH" -> (T) Integer.valueOf(vk.getMaxFramebufferWidth(instance, physicalDevice));
             case "MAX_FRAMEBUFFER_HEIGHT" -> (T) Integer.valueOf(vk.getMaxFramebufferHeight(instance, physicalDevice));
             case "BACKEND_NAME" -> (T) "Vulkan";
+            case "SHADER_TARGET" -> (T) Integer.valueOf(6); // ShaderCompiler.TARGET_SPIRV
             case "DEVICE_NAME" -> (T) vk.getDeviceName(instance, physicalDevice);
             case "TEXTURE_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.TEXTURE_BINDING_OFFSET);
             case "SSBO_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.SSBO_BINDING_OFFSET);
