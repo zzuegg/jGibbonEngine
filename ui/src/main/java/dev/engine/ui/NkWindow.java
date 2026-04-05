@@ -26,6 +26,9 @@ public class NkWindow {
     boolean comboOpen;
     String comboId;
 
+    // Per-group scroll state (keyed by group title)
+    final Map<String, Float> groupScrollY = new HashMap<>();
+
     NkWindow(String title, NkRect bounds) {
         this.title = title;
         this.bounds = bounds;

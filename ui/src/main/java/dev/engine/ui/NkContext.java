@@ -769,6 +769,18 @@ public class NkContext {
             emit(new NkDrawCommand.StrokedRect(rect, 0, 1, style.windowBorder));
         }
 
+        // Retrieve persisted scroll state for this group
+        float scroll = 0;
+        if (currentWindow != null) {
+            scroll = currentWindow.groupScrollY.getOrDefault(title, 0f);
+            // Handle scroll wheel when hovering the group
+            if (input.isMouseHovering(rect)) {
+                scroll -= input.scrollY() * 20;
+                scroll = Math.max(0, scroll);
+                currentWindow.groupScrollY.put(title, scroll);
+            }
+        }
+
         // Push a new panel for the group
         var panel = new NkPanel();
         float pad = style.groupPadding;
@@ -778,7 +790,7 @@ public class NkContext {
         panel.contentH = rect.h() - pad * 2;
         panel.cursorX = panel.contentX;
         panel.cursorY = panel.contentY;
-        panel.scrollY = 0;
+        panel.scrollY = scroll;
         panel.maxY = panel.contentY;
         panel.clip = rect;
 
