@@ -851,8 +851,9 @@ public class LwjglVkBindings implements VkBindings {
                                        long[] shaderModules, int[] shaderStages,
                                        int[] vertexAttribLocations, int[] vertexAttribFormats,
                                        int[] vertexAttribOffsets, int vertexStride,
-                                       boolean blendEnabled, int srcColorFactor, int dstColorFactor,
-                                       int srcAlphaFactor, int dstAlphaFactor,
+                                       boolean[] blendEnabled, int[] srcColorFactors, int[] dstColorFactors,
+                                       int[] srcAlphaFactors, int[] dstAlphaFactors,
+                                       int[] colorBlendOps, int[] alphaBlendOps,
                                        boolean wireframe, int[] dynamicStates) {
         var device = deviceCache.get(deviceHandle);
         try (var stack = stackPush()) {
@@ -927,21 +928,26 @@ public class LwjglVkBindings implements VkBindings {
                     .depthBoundsTestEnable(false)
                     .stencilTestEnable(false);
 
-            var colorBlendAttachment = VkPipelineColorBlendAttachmentState.calloc(1, stack)
-                    .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
-                            | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
-                    .blendEnable(blendEnabled)
-                    .srcColorBlendFactor(srcColorFactor)
-                    .dstColorBlendFactor(dstColorFactor)
-                    .colorBlendOp(VK_BLEND_OP_ADD)
-                    .srcAlphaBlendFactor(srcAlphaFactor)
-                    .dstAlphaBlendFactor(dstAlphaFactor)
-                    .alphaBlendOp(VK_BLEND_OP_ADD);
+            // One VkPipelineColorBlendAttachmentState per color attachment (MRT support)
+            int numAttachments = blendEnabled.length;
+            var colorBlendAttachments = VkPipelineColorBlendAttachmentState.calloc(numAttachments, stack);
+            for (int i = 0; i < numAttachments; i++) {
+                colorBlendAttachments.get(i)
+                        .colorWriteMask(VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
+                                | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT)
+                        .blendEnable(blendEnabled[i])
+                        .srcColorBlendFactor(srcColorFactors[i])
+                        .dstColorBlendFactor(dstColorFactors[i])
+                        .colorBlendOp(colorBlendOps[i])
+                        .srcAlphaBlendFactor(srcAlphaFactors[i])
+                        .dstAlphaBlendFactor(dstAlphaFactors[i])
+                        .alphaBlendOp(alphaBlendOps[i]);
+            }
 
             var colorBlending = VkPipelineColorBlendStateCreateInfo.calloc(stack)
                     .sType$Default()
                     .logicOpEnable(false)
-                    .pAttachments(colorBlendAttachment);
+                    .pAttachments(colorBlendAttachments);
 
             var pipelineInfo = VkGraphicsPipelineCreateInfo.calloc(1, stack)
                     .sType$Default()

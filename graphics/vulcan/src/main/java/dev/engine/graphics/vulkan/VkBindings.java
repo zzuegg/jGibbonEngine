@@ -201,26 +201,29 @@ public interface VkBindings {
     /**
      * Creates a graphics pipeline.
      *
-     * @param shaderModules shader module handles
-     * @param shaderStages  corresponding VK_SHADER_STAGE_xxx flags
-     * @param vertexAttribLocations  attribute locations
-     * @param vertexAttribFormats    VK format per attribute
-     * @param vertexAttribOffsets    byte offset per attribute
-     * @param vertexStride           total vertex stride in bytes
-     * @param blendEnabled           whether color blending is enabled
-     * @param srcColorFactor         blend src color factor
-     * @param dstColorFactor         blend dst color factor
-     * @param srcAlphaFactor         blend src alpha factor
-     * @param dstAlphaFactor         blend dst alpha factor
-     * @param wireframe              if true, polygon mode = LINE
-     * @param dynamicStates          VK_DYNAMIC_STATE_xxx values
+     * @param shaderModules            shader module handles
+     * @param shaderStages             corresponding VK_SHADER_STAGE_xxx flags
+     * @param vertexAttribLocations    attribute locations
+     * @param vertexAttribFormats      VK format per attribute
+     * @param vertexAttribOffsets      byte offset per attribute
+     * @param vertexStride             total vertex stride in bytes
+     * @param blendEnabled             per-attachment blend enable flags (length = number of color attachments)
+     * @param srcColorFactors          per-attachment src color blend factors
+     * @param dstColorFactors          per-attachment dst color blend factors
+     * @param srcAlphaFactors          per-attachment src alpha blend factors
+     * @param dstAlphaFactors          per-attachment dst alpha blend factors
+     * @param colorBlendOps            per-attachment color blend operations (VK_BLEND_OP_xxx)
+     * @param alphaBlendOps            per-attachment alpha blend operations (VK_BLEND_OP_xxx)
+     * @param wireframe                if true, polygon mode = LINE
+     * @param dynamicStates            VK_DYNAMIC_STATE_xxx values
      */
     long createGraphicsPipeline(long device, long renderPass, long pipelineLayout,
                                 long[] shaderModules, int[] shaderStages,
                                 int[] vertexAttribLocations, int[] vertexAttribFormats,
                                 int[] vertexAttribOffsets, int vertexStride,
-                                boolean blendEnabled, int srcColorFactor, int dstColorFactor,
-                                int srcAlphaFactor, int dstAlphaFactor,
+                                boolean[] blendEnabled, int[] srcColorFactors, int[] dstColorFactors,
+                                int[] srcAlphaFactors, int[] dstAlphaFactors,
+                                int[] colorBlendOps, int[] alphaBlendOps,
                                 boolean wireframe, int[] dynamicStates);
 
     long createComputePipeline(long device, long pipelineLayout, long shaderModule);

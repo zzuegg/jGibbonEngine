@@ -656,6 +656,9 @@ public class GlRenderDevice implements RenderDevice {
                 if (props.contains(RenderState.BLEND_MODE)) {
                     applyBlendMode(props.get(RenderState.BLEND_MODE));
                 }
+                if (props.contains(RenderState.BLEND_MODES)) {
+                    applyBlendModes(props.get(RenderState.BLEND_MODES));
+                }
                 if (props.contains(RenderState.CULL_MODE)) {
                     applyCullMode(props.get(RenderState.CULL_MODE));
                 }
@@ -951,6 +954,29 @@ public class GlRenderDevice implements RenderDevice {
             gl.glBlendEquationSeparate(
                     mapBlendEquation(mode.colorEquation()),
                     mapBlendEquation(mode.alphaEquation()));
+        }
+    }
+
+    /**
+     * Applies per-draw-buffer blend modes for MRT (GL 4.0+ indexed blend).
+     * Index {@code i} of {@code modes} maps to draw buffer {@code i}; the last entry
+     * is repeated for any extra buffers.
+     */
+    private void applyBlendModes(BlendMode[] modes) {
+        if (modes == null || modes.length == 0) return;
+        for (int i = 0; i < modes.length; i++) {
+            BlendMode mode = modes[i];
+            if (!mode.enabled()) {
+                gl.glDisablei(GlBindings.GL_BLEND, i);
+            } else {
+                gl.glEnablei(GlBindings.GL_BLEND, i);
+                gl.glBlendFuncSeparatei(i,
+                        mapBlendFactor(mode.srcColorFactor()), mapBlendFactor(mode.dstColorFactor()),
+                        mapBlendFactor(mode.srcAlphaFactor()), mapBlendFactor(mode.dstAlphaFactor()));
+                gl.glBlendEquationSeparatei(i,
+                        mapBlendEquation(mode.colorEquation()),
+                        mapBlendEquation(mode.alphaEquation()));
+            }
         }
     }
 

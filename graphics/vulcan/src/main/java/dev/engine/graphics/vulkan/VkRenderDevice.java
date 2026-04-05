@@ -83,6 +83,8 @@ public class VkRenderDevice implements RenderDevice {
     private Handle<PipelineResource> currentBoundPipeline = null;
     private boolean currentWireframe = false;
     private BlendMode currentBlendMode = BlendMode.NONE;
+    /** Per-attachment blend modes for MRT; null means use {@code currentBlendMode} for all. */
+    private BlendMode[] currentBlendModes = null;
     private record PipelineSpec(List<dev.engine.graphics.pipeline.ShaderBinary> binaries, VertexFormat vertexFormat) {}
     private final Map<Integer, PipelineSpec> pipelineSpecs = new HashMap<>();
 
@@ -914,6 +916,7 @@ public class VkRenderDevice implements RenderDevice {
                         currentBoundPipeline = bp.pipeline();
                         currentWireframe = false;
                         currentBlendMode = BlendMode.NONE;
+                        currentBlendModes = null;
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindVertexBuffer bvb -> {
@@ -1019,11 +1022,9 @@ public class VkRenderDevice implements RenderDevice {
                 }
                 case dev.engine.graphics.command.RenderCommand.SetBlending sb -> {
                     if (currentBoundPipeline != null) {
-                        var blendConfig = sb.enabled()
-                                ? VkPipelineFactory.BlendConfig.ALPHA
-                                : VkPipelineFactory.BlendConfig.NONE;
                         currentBlendMode = sb.enabled() ? BlendMode.ALPHA : BlendMode.NONE;
-                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
+                        currentBlendModes = null;
+                        rebindPipelineVariant(cmd, buildBlendConfigs(), currentWireframe);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.SetCullFace scf -> {
@@ -1032,8 +1033,7 @@ public class VkRenderDevice implements RenderDevice {
                 case dev.engine.graphics.command.RenderCommand.SetWireframe sw -> {
                     currentWireframe = sw.enabled();
                     if (currentBoundPipeline != null) {
-                        var blendConfig = mapBlendMode(currentBlendMode);
-                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
+                        rebindPipelineVariant(cmd, buildBlendConfigs(), currentWireframe);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindRenderTarget brt -> {
@@ -1106,13 +1106,16 @@ public class VkRenderDevice implements RenderDevice {
                     }
                     if (props.contains(RenderState.BLEND_MODE) && currentBoundPipeline != null) {
                         currentBlendMode = props.get(RenderState.BLEND_MODE);
-                        var blendConfig = mapBlendMode(currentBlendMode);
-                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
+                        currentBlendModes = null; // clear per-attachment overrides
+                        rebindPipelineVariant(cmd, buildBlendConfigs(), currentWireframe);
+                    }
+                    if (props.contains(RenderState.BLEND_MODES) && currentBoundPipeline != null) {
+                        currentBlendModes = props.get(RenderState.BLEND_MODES);
+                        rebindPipelineVariant(cmd, buildBlendConfigs(), currentWireframe);
                     }
                     if (props.contains(RenderState.WIREFRAME) && currentBoundPipeline != null) {
                         currentWireframe = props.get(RenderState.WIREFRAME);
-                        var blendConfig = mapBlendMode(currentBlendMode);
-                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
+                        rebindPipelineVariant(cmd, buildBlendConfigs(), currentWireframe);
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.PushConstants(var data) -> {
@@ -1177,22 +1180,43 @@ public class VkRenderDevice implements RenderDevice {
     }
 
     /**
-     * Rebinds the current pipeline with the given blend config and wireframe state,
+     * Builds the per-attachment {@link VkPipelineFactory.BlendConfig} array from the current blend state.
+     * If {@code currentBlendModes} is set, each entry maps to one attachment; otherwise
+     * {@code currentBlendMode} is used for all attachments (single-element array).
+     */
+    private VkPipelineFactory.BlendConfig[] buildBlendConfigs() {
+        if (currentBlendModes != null && currentBlendModes.length > 0) {
+            VkPipelineFactory.BlendConfig[] configs = new VkPipelineFactory.BlendConfig[currentBlendModes.length];
+            for (int i = 0; i < currentBlendModes.length; i++) {
+                configs[i] = VkPipelineFactory.BlendConfig.fromBlendMode(currentBlendModes[i]);
+            }
+            return configs;
+        }
+        return new VkPipelineFactory.BlendConfig[]{VkPipelineFactory.BlendConfig.fromBlendMode(currentBlendMode)};
+    }
+
+    /**
+     * Rebinds the current pipeline with the given per-attachment blend configs and wireframe state,
      * creating a new pipeline variant if needed.
      */
-    private void rebindPipelineVariant(long cmd, VkPipelineFactory.BlendConfig blendConfig, boolean wireframe) {
-        var variantKey = currentBoundPipeline.index() + "_" + currentBlendMode.name() + "_" + wireframe;
+    private void rebindPipelineVariant(long cmd, VkPipelineFactory.BlendConfig[] blendConfigs, boolean wireframe) {
+        // Build a stable variant key from the blend config names + wireframe
+        var keyBuilder = new StringBuilder();
+        keyBuilder.append(currentBoundPipeline.index()).append('_');
+        if (currentBlendModes != null) {
+            for (var m : currentBlendModes) keyBuilder.append(m.name()).append(',');
+        } else {
+            keyBuilder.append(currentBlendMode.name());
+        }
+        keyBuilder.append('_').append(wireframe);
+        var variantKey = keyBuilder.toString();
         long variantPipeline = pipelineVariants.getOrCreate(variantKey, frameCounter.get(), k -> {
             var spec = pipelineSpecs.get(currentBoundPipeline.index());
             if (spec == null) return pipelineRegistry.get(currentBoundPipeline);
             return VkPipelineFactory.create(vk, device, renderPass,
-                    descriptorManager.pipelineLayout(), spec.binaries(), spec.vertexFormat(), blendConfig, wireframe);
+                    descriptorManager.pipelineLayout(), spec.binaries(), spec.vertexFormat(), blendConfigs, wireframe);
         });
         vk.cmdBindPipeline(cmd, VkBindings.VK_PIPELINE_BIND_POINT_GRAPHICS, variantPipeline);
-    }
-
-    private VkPipelineFactory.BlendConfig mapBlendMode(BlendMode mode) {
-        return VkPipelineFactory.BlendConfig.fromBlendMode(mode);
     }
 
     // --- Capabilities ---

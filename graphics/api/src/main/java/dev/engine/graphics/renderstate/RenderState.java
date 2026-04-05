@@ -7,7 +7,22 @@ public interface RenderState {
     PropertyKey<RenderState, Boolean>     DEPTH_TEST  = PropertyKey.of("depthTest", Boolean.class);
     PropertyKey<RenderState, Boolean>     DEPTH_WRITE = PropertyKey.of("depthWrite", Boolean.class);
     PropertyKey<RenderState, CompareFunc> DEPTH_FUNC  = PropertyKey.of("depthFunc", CompareFunc.class);
-    PropertyKey<RenderState, BlendMode>   BLEND_MODE  = PropertyKey.of("blendMode", BlendMode.class);
+    PropertyKey<RenderState, BlendMode>    BLEND_MODE  = PropertyKey.of("blendMode", BlendMode.class);
+    /**
+     * Per-attachment blend modes for Multiple Render Target (MRT) rendering.
+     *
+     * <p>When set, index {@code i} of the array is used for color attachment {@code i}.
+     * If the array is shorter than the number of active attachments, the last entry is
+     * repeated for the remaining attachments. {@link #BLEND_MODE} is used as the
+     * fallback when this key is absent.
+     *
+     * <p>OpenGL 4.0+ ({@code glBlendFuncSeparatei} / {@code glBlendEquationSeparatei})
+     * and Vulkan ({@code VkPipelineColorBlendAttachmentState} per attachment) both
+     * support independent attachment blending. WebGPU exposes the same capability
+     * in the pipeline descriptor but the current binding only surfaces a single
+     * color target — per-attachment overrides are silently ignored on WebGPU.
+     */
+    PropertyKey<RenderState, BlendMode[]>  BLEND_MODES = PropertyKey.of("blendModes", BlendMode[].class);
     PropertyKey<RenderState, CullMode>    CULL_MODE   = PropertyKey.of("cullMode", CullMode.class);
     PropertyKey<RenderState, FrontFace>   FRONT_FACE  = PropertyKey.of("frontFace", FrontFace.class);
     PropertyKey<RenderState, Boolean>     WIREFRAME     = PropertyKey.of("wireframe", Boolean.class);

@@ -385,6 +385,14 @@ public interface GlBindings {
     void glBlendFunc(int sfactor, int dfactor);
     void glBlendFuncSeparate(int sfactorRGB, int dfactorRGB, int sfactorAlpha, int dfactorAlpha);
     void glBlendEquationSeparate(int modeRGB, int modeAlpha);
+    /** Per-draw-buffer blend function (GL 4.0+, required for MRT independent blending). */
+    void glBlendFuncSeparatei(int buf, int sfactorRGB, int dfactorRGB, int sfactorAlpha, int dfactorAlpha);
+    /** Per-draw-buffer blend equation (GL 4.0+, required for MRT independent blending). */
+    void glBlendEquationSeparatei(int buf, int modeRGB, int modeAlpha);
+    /** Per-draw-buffer enable (GL 3.0+). */
+    void glEnablei(int cap, int index);
+    /** Per-draw-buffer disable (GL 3.0+). */
+    void glDisablei(int cap, int index);
 
     void glCullFace(int mode);
 
