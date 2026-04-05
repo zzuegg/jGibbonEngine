@@ -48,6 +48,7 @@ public class UiSamplerExample extends BaseApplication {
     private dev.engine.core.scene.Entity cube;
     private float cubeRotation = 0;
     private float cubeScale = 1.0f;
+    private float cubeX = 2, cubeY = 0, cubeZ = 0;
 
     @Override
     protected void init() {
@@ -135,7 +136,7 @@ public class UiSamplerExample extends BaseApplication {
         // ═══════════════════════════════════════════════════════════
         // Panel 2: Sliders, Progress, Properties
         // ═══════════════════════════════════════════════════════════
-        if (ui.begin("Numeric Widgets", 300, 10, 280, 320,
+        if (ui.begin("Numeric Widgets", 300, 10, 280, 460,
                 NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE | NkContext.WINDOW_MINIMIZABLE)) {
 
             // Sliders
@@ -168,6 +169,16 @@ public class UiSamplerExample extends BaseApplication {
 
             ui.layoutRowDynamic(25, 1);
             cubeScale = ui.propertyFloat("Scale", 0.1f, cubeScale, 5.0f, 0.1f, 0.01f);
+
+            // Cube position
+            ui.layoutRowDynamic(20, 1);
+            ui.label("Cube Position");
+            ui.separator();
+
+            ui.layoutRowDynamic(25, 1);
+            cubeX = ui.propertyFloat("X", -10, cubeX, 10, 0.1f, 0.02f);
+            cubeY = ui.propertyFloat("Y", -10, cubeY, 10, 0.1f, 0.02f);
+            cubeZ = ui.propertyFloat("Z", -10, cubeZ, 10, 0.1f, 0.02f);
         }
         ui.end();
 
@@ -330,7 +341,7 @@ public class UiSamplerExample extends BaseApplication {
         }
 
         // Apply cube scale and rotation from UI controls
-        cube.add(Transform.at(2, 0, 0).withScale(cubeScale).rotatedY(cubeRotation));
+        cube.add(Transform.at(cubeX, cubeY, cubeZ).withScale(cubeScale).rotatedY(cubeRotation));
     }
 
     // ═══════════════════════════════════════════════════════════════
