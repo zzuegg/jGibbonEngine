@@ -10,15 +10,10 @@ import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.command.CommandRecorder;
-import dev.engine.graphics.pipeline.PipelineDescriptor;
-import dev.engine.graphics.pipeline.ShaderBinary;
-import dev.engine.graphics.pipeline.ShaderSource;
-import dev.engine.graphics.pipeline.ShaderStage;
 import dev.engine.graphics.renderstate.BlendMode;
 import dev.engine.graphics.renderstate.CullMode;
 import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.graphics.sampler.SamplerDescriptor;
-import dev.engine.graphics.shader.ShaderCompiler;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.ui.NkContext;
 import dev.engine.ui.NkDrawList;
@@ -31,12 +26,11 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 
 /**
  * Renders the debug UI overlay using the engine's graphics API.
  *
- * <p>Compiles the UI shader via Slang (cross-platform: GLSL, SPIRV, WGSL),
+ * <p>Compiles the UI shader via {@link ShaderManager} (Slang → GLSL/SPIRV/WGSL),
  * manages the font atlas texture, and converts {@link NkDrawList} output
  * into GPU draw calls each frame.
  */
@@ -74,22 +68,13 @@ public class DebugUiOverlay implements AutoCloseable {
      * Initializes GPU resources. Must be called after the device is ready.
      *
      * @param font the font to use for text rendering
-     * @param compiler the shader compiler (Slang → GLSL/SPIRV/WGSL)
+     * @param shaderManager compiles the Slang shader to the correct backend target
      */
-    public void init(NkFont font, ShaderCompiler compiler) {
-        // Query shader target from backend
-        var target = device.queryCapability(DeviceCapability.SHADER_TARGET);
-        int slangTarget = target != null ? target : ShaderCompiler.TARGET_GLSL;
-
-        // Load and compile the Slang shader
+    public void init(NkFont font, ShaderManager shaderManager) {
+        // Load and compile the Slang shader via ShaderManager
         String slangSource = loadShaderResource("shaders/debug_ui.slang");
-        pipeline = compileUiShader(slangSource, compiler, slangTarget);
-        String targetName = switch (slangTarget) {
-            case ShaderCompiler.TARGET_SPIRV -> "SPIRV";
-            case ShaderCompiler.TARGET_WGSL -> "WGSL";
-            default -> "GLSL";
-        };
-        log.info("Debug UI shader compiled (target: {})", targetName);
+        var compiled = shaderManager.compileSlangSource(slangSource, "debug_ui", VERTEX_FORMAT);
+        pipeline = compiled.pipeline();
 
         // Create font atlas texture
         var texDesc = TextureDescriptor.rgba(font.atlasWidth(), font.atlasHeight());
@@ -109,29 +94,6 @@ public class DebugUiOverlay implements AutoCloseable {
         indexBuffer = device.createBuffer(new BufferDescriptor(currentIbSize, BufferUsage.INDEX, AccessPattern.STREAM));
 
         initialized = true;
-    }
-
-    private Handle<PipelineResource> compileUiShader(String source, ShaderCompiler compiler, int target) {
-        var entryPoints = List.of(
-                new ShaderCompiler.EntryPointDesc("vertexMain", ShaderCompiler.STAGE_VERTEX),
-                new ShaderCompiler.EntryPointDesc("fragmentMain", ShaderCompiler.STAGE_FRAGMENT));
-
-        try (var result = compiler.compile(source, entryPoints, target)) {
-            if (target == ShaderCompiler.TARGET_SPIRV) {
-                return device.createPipeline(PipelineDescriptor.ofSpirv(
-                        new ShaderBinary(ShaderStage.VERTEX, result.codeBytes(0)),
-                        new ShaderBinary(ShaderStage.FRAGMENT, result.codeBytes(1)))
-                        .withVertexFormat(VERTEX_FORMAT));
-            } else {
-                // For WGSL, Slang preserves entry point names. For GLSL, Slang renames to "main".
-                String vsEntry = (target == ShaderCompiler.TARGET_WGSL) ? "vertexMain" : "main";
-                String fsEntry = (target == ShaderCompiler.TARGET_WGSL) ? "fragmentMain" : "main";
-                return device.createPipeline(PipelineDescriptor.of(
-                        new ShaderSource(ShaderStage.VERTEX, result.code(0), vsEntry),
-                        new ShaderSource(ShaderStage.FRAGMENT, result.code(1), fsEntry))
-                        .withVertexFormat(VERTEX_FORMAT));
-            }
-        }
     }
 
     private static String loadShaderResource(String path) {
@@ -242,7 +204,7 @@ public class DebugUiOverlay implements AutoCloseable {
         if (fontTexture != null) device.destroyTexture(fontTexture);
         if (fontSampler != null) device.destroySampler(fontSampler);
         if (vertexInput != null) device.destroyVertexInput(vertexInput);
-        if (pipeline != null) device.destroyPipeline(pipeline);
+        // Pipeline is owned by ShaderManager — don't destroy it here
         initialized = false;
     }
 }
