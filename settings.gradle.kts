@@ -24,6 +24,9 @@ project(":providers:lwjgl-vk").projectDir = file("providers/graphics/desktop/lwj
 include("providers:jwebgpu")
 project(":providers:jwebgpu").projectDir = file("providers/graphics/desktop/jwebgpu")
 
+include("providers:wgpu-ffm")
+project(":providers:wgpu-ffm").projectDir = file("providers/graphics/desktop/wgpu-ffm")
+
 include("providers:teavm-webgpu")
 project(":providers:teavm-webgpu").projectDir = file("providers/graphics/web/teavm-webgpu")
 
