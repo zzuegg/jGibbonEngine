@@ -50,19 +50,26 @@ public class GlfwWindowToolkit implements WindowToolkit {
         GLFW.glfwWindowHint(GLFW.GLFW_CLIENT_API, GLFW.GLFW_NO_API);
     };
 
+    // GLFW must only be initialized/terminated once per process.
+    // Reference counting allows multiple toolkits in the same JVM (e.g. screenshot tests).
+    private static int refCount = 0;
+    private static GLFWErrorCallback sharedErrorCallback;
+
     private final Consumer<Void> windowHints;
     private final List<GlfwWindowHandle> windows = new ArrayList<>();
-    private GLFWErrorCallback errorCallback;
     private boolean initialized = false;
 
     public GlfwWindowToolkit(Consumer<Void> windowHints) {
         this.windowHints = windowHints;
-        errorCallback = GLFWErrorCallback.createPrint(System.err).set();
-        if (!GLFW.glfwInit()) {
-            throw new RuntimeException("Failed to initialize GLFW");
+        if (refCount == 0) {
+            sharedErrorCallback = GLFWErrorCallback.createPrint(System.err).set();
+            if (!GLFW.glfwInit()) {
+                throw new RuntimeException("Failed to initialize GLFW");
+            }
+            log.info("GLFW initialized");
         }
+        refCount++;
         initialized = true;
-        log.info("GLFW initialized");
     }
 
     /** Creates a toolkit with OpenGL 4.5 hints (default). */
@@ -109,13 +116,13 @@ public class GlfwWindowToolkit implements WindowToolkit {
         }
         windows.clear();
         if (initialized) {
-            GLFW.glfwTerminate();
-            if (errorCallback != null) {
-                errorCallback.free();
-                errorCallback = null;
-            }
             initialized = false;
-            log.info("GLFW terminated");
+            refCount--;
+            // Note: we intentionally never call glfwTerminate(). LWJGL's callback
+            // registry is invalidated by glfwTerminate, making it impossible to
+            // re-initialize GLFW in the same JVM. Since JVM process exit cleans up
+            // all native resources anyway, skipping termination is safe and allows
+            // multiple toolkit instances across the application lifetime.
         }
     }
 

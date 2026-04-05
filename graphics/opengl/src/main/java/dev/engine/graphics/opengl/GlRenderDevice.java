@@ -400,6 +400,7 @@ public class GlRenderDevice implements RenderDevice {
     private static int mapComponentType(ComponentType type) {
         if (type == ComponentType.FLOAT) return GlBindings.GL_FLOAT;
         if (type == ComponentType.BYTE) return GlBindings.GL_BYTE;
+        if (type == ComponentType.UNSIGNED_BYTE) return GlBindings.GL_UNSIGNED_BYTE;
         if (type == ComponentType.INT) return GlBindings.GL_INT;
         return GlBindings.GL_FLOAT;
     }

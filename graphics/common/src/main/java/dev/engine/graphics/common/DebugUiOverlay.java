@@ -42,16 +42,20 @@ public class DebugUiOverlay implements AutoCloseable {
     private static final VertexFormat VERTEX_FORMAT = VertexFormat.of(
             new VertexAttribute(0, 2, ComponentType.FLOAT, false, 0),   // position
             new VertexAttribute(1, 2, ComponentType.FLOAT, false, 8),   // texcoord
-            new VertexAttribute(2, 4, ComponentType.BYTE, true, 16)     // color (normalized)
+            new VertexAttribute(2, 4, ComponentType.UNSIGNED_BYTE, true, 16)  // color (normalized)
     );
 
     private final RenderDevice device;
+    private boolean flipScissorY; // OpenGL uses bottom-left scissor origin
     private Handle<PipelineResource> pipeline;
     private Handle<TextureResource> fontTexture;
     private Handle<SamplerResource> fontSampler;
     private Handle<VertexInputResource> vertexInput;
     private Handle<BufferResource> vertexBuffer;
     private Handle<BufferResource> indexBuffer;
+    private Handle<BufferResource> uniformBuffer;
+    private int uboBinding;
+    private int textureBinding;
 
     private final NkDrawList drawList = new NkDrawList();
 
@@ -71,15 +75,32 @@ public class DebugUiOverlay implements AutoCloseable {
      * @param shaderManager compiles the Slang shader to the correct backend target
      */
     public void init(NkFont font, ShaderManager shaderManager) {
-        // Load and compile the Slang shader via ShaderManager
-        String slangSource = loadShaderResource("shaders/debug_ui.slang");
+        // Load and compile the Slang shader via ShaderManager.
+        // Inject the correct texture binding offset so SPIRV bindings match the descriptor layout.
+        int texOffset = shaderManager.textureBindingOffset();
+        String slangSource = loadShaderResource("shaders/debug_ui.slang")
+                .replace("TEXTURE_BINDING", String.valueOf(texOffset));
         var compiled = shaderManager.compileSlangSource(slangSource, "debug_ui", VERTEX_FORMAT);
         pipeline = compiled.pipeline();
 
-        // Create font atlas texture
-        var texDesc = TextureDescriptor.rgba(font.atlasWidth(), font.atlasHeight());
+        // Get binding indices from shader reflection
+        uboBinding = compiled.bindingIndex("ScreenData");
+        textureBinding = compiled.bindingIndex("fontAtlas");
+        flipScissorY = "OpenGL".equals(device.queryCapability(dev.engine.graphics.DeviceCapability.BACKEND_NAME));
+        log.debug("DebugUI shader bindings: UBO={}, texture={}, texOffset={}, flipScissorY={}", uboBinding, textureBinding, texOffset, flipScissorY);
+
+        // Create font atlas texture (no mipmaps — sampled with nearest filtering)
+        var texDesc = new TextureDescriptor(
+                dev.engine.graphics.texture.TextureType.TEXTURE_2D,
+                font.atlasWidth(), font.atlasHeight(), 1, 1,
+                dev.engine.graphics.texture.TextureFormat.RGBA8,
+                dev.engine.graphics.texture.MipMode.NONE);
         fontTexture = device.createTexture(texDesc);
-        device.uploadTexture(fontTexture, ByteBuffer.wrap(font.atlasData()));
+        // Use a direct buffer for the upload — some GL drivers require it for DSA functions
+        byte[] atlasBytes = font.atlasData();
+        ByteBuffer directAtlas = ByteBuffer.allocateDirect(atlasBytes.length).order(java.nio.ByteOrder.nativeOrder());
+        directAtlas.put(atlasBytes).flip();
+        device.uploadTexture(fontTexture, directAtlas);
 
         // Create sampler (nearest for pixel-perfect font rendering)
         fontSampler = device.createSampler(SamplerDescriptor.nearest());
@@ -92,6 +113,7 @@ public class DebugUiOverlay implements AutoCloseable {
         currentIbSize = 32 * 1024;
         vertexBuffer = device.createBuffer(new BufferDescriptor(currentVbSize, BufferUsage.VERTEX, AccessPattern.STREAM));
         indexBuffer = device.createBuffer(new BufferDescriptor(currentIbSize, BufferUsage.INDEX, AccessPattern.STREAM));
+        uniformBuffer = device.createBuffer(new BufferDescriptor(8, BufferUsage.UNIFORM, AccessPattern.STREAM));
 
         initialized = true;
     }
@@ -151,18 +173,20 @@ public class DebugUiOverlay implements AutoCloseable {
             }
         }
 
-        // Push constants for screen size
-        ByteBuffer pushConstants = ByteBuffer.allocateDirect(8)
-                .order(ByteOrder.nativeOrder())
-                .putFloat(viewportWidth)
-                .putFloat(viewportHeight)
-                .flip();
+        // Upload screen size to uniform buffer
+        try (var writer = device.writeBuffer(uniformBuffer, 0, 8)) {
+            var mem = writer.memory();
+            mem.putFloat(0, viewportWidth);
+            mem.putFloat(4, viewportHeight);
+        }
 
         // Render batches
         for (var batch : drawList.batches()) {
             var rec = new CommandRecorder();
 
-            // Set UI render state: alpha blending, no depth, no cull
+            // Bind pipeline first — Vulkan needs it before setRenderState for blend mode
+            rec.bindPipeline(pipeline);
+
             rec.setRenderState(PropertyMap.<RenderState>builder()
                     .set(RenderState.DEPTH_TEST, false)
                     .set(RenderState.DEPTH_WRITE, false)
@@ -171,14 +195,16 @@ public class DebugUiOverlay implements AutoCloseable {
                     .set(RenderState.SCISSOR_TEST, true)
                     .build());
 
-            rec.scissor(batch.scissorX(), batch.scissorY(),
+            int sy = flipScissorY
+                    ? viewportHeight - batch.scissorY() - batch.scissorH()
+                    : batch.scissorY();
+            rec.scissor(batch.scissorX(), sy,
                     batch.scissorW(), batch.scissorH());
 
-            rec.bindPipeline(pipeline);
-            rec.pushConstants(pushConstants.duplicate());
+            rec.bindUniformBuffer(uboBinding, uniformBuffer);
 
-            rec.bindTexture(0, fontTexture);
-            rec.bindSampler(0, fontSampler);
+            rec.bindTexture(textureBinding, fontTexture);
+            rec.bindSampler(textureBinding, fontSampler);
 
             rec.bindVertexBuffer(vertexBuffer, vertexInput);
             rec.bindIndexBuffer(indexBuffer);
@@ -201,6 +227,7 @@ public class DebugUiOverlay implements AutoCloseable {
         if (!initialized) return;
         if (vertexBuffer != null) device.destroyBuffer(vertexBuffer);
         if (indexBuffer != null) device.destroyBuffer(indexBuffer);
+        if (uniformBuffer != null) device.destroyBuffer(uniformBuffer);
         if (fontTexture != null) device.destroyTexture(fontTexture);
         if (fontSampler != null) device.destroySampler(fontSampler);
         if (vertexInput != null) device.destroyVertexInput(vertexInput);

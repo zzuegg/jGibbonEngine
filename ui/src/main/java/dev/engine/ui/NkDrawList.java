@@ -243,10 +243,10 @@ public class NkDrawList {
     }
 
     private void addIndex(int a, int b, int c) {
-        ensureIndexCapacity(6); // 3 shorts = 6 bytes
-        indexBuffer.putShort((short) a);
-        indexBuffer.putShort((short) b);
-        indexBuffer.putShort((short) c);
+        ensureIndexCapacity(12); // 3 ints = 12 bytes
+        indexBuffer.putInt(a);
+        indexBuffer.putInt(b);
+        indexBuffer.putInt(c);
         indexCount += 3;
     }
 

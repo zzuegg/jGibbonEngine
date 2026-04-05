@@ -45,6 +45,9 @@ public class ShaderManager {
     private final ShaderCompiler compiler;
     private final int textureBindingOffset;
 
+    /** Returns the texture binding offset for the current backend (e.g. 16 for Vulkan, 0 for OpenGL). */
+    public int textureBindingOffset() { return textureBindingOffset; }
+
     public ShaderManager(RenderDevice device, GlobalParamsRegistry globalParams, ShaderCompiler compiler) {
         this.device = device;
         this.globalParams = globalParams;
@@ -102,7 +105,7 @@ public class ShaderManager {
         String source = loadShaderFile(path);
         if (source == null) throw new RuntimeException("Failed to read shader: " + path);
 
-        var compiled = compileFromSource(source, path);
+        var compiled = compileFromSource(source, path, null);
         shaderCache.put(path, compiled);
         return compiled.pipeline();
     }

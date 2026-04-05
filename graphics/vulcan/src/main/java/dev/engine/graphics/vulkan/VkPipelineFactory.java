@@ -120,6 +120,14 @@ final class VkPipelineFactory {
                 case 4 -> VkBindings.VK_FORMAT_R32G32B32A32_SFLOAT;
                 default -> throw new IllegalArgumentException("Unsupported float component count: " + attr.componentCount());
             };
+        } else if ("BYTE".equals(attr.componentType().name()) || "UNSIGNED_BYTE".equals(attr.componentType().name())) {
+            // Normalized byte format (unorm8)
+            return switch (attr.componentCount()) {
+                case 1 -> VkBindings.VK_FORMAT_R8_UNORM;
+                case 3 -> VkBindings.VK_FORMAT_R8G8B8_UNORM;
+                case 4 -> VkBindings.VK_FORMAT_R8G8B8A8_UNORM;
+                default -> throw new IllegalArgumentException("Unsupported byte component count: " + attr.componentCount());
+            };
         } else if ("INT".equals(attr.componentType().name())) {
             return switch (attr.componentCount()) {
                 case 1 -> VkBindings.VK_FORMAT_R32_SINT;
