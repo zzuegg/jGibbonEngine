@@ -77,18 +77,19 @@ public class DebugUiOverlay implements AutoCloseable {
      * @param compiler the shader compiler (Slang → GLSL/SPIRV/WGSL)
      */
     public void init(NkFont font, ShaderCompiler compiler) {
-        // Detect target format from backend
-        var backend = device.queryCapability(DeviceCapability.BACKEND_NAME);
-        int slangTarget = switch (backend) {
-            case "Vulkan" -> ShaderCompiler.TARGET_SPIRV;
-            case "WebGPU" -> ShaderCompiler.TARGET_WGSL;
-            default -> ShaderCompiler.TARGET_GLSL;
-        };
+        // Query shader target from backend
+        var target = device.queryCapability(DeviceCapability.SHADER_TARGET);
+        int slangTarget = target != null ? target : ShaderCompiler.TARGET_GLSL;
 
         // Load and compile the Slang shader
         String slangSource = loadShaderResource("shaders/debug_ui.slang");
         pipeline = compileUiShader(slangSource, compiler, slangTarget);
-        log.info("Debug UI shader compiled for target: {}", backend);
+        String targetName = switch (slangTarget) {
+            case ShaderCompiler.TARGET_SPIRV -> "SPIRV";
+            case ShaderCompiler.TARGET_WGSL -> "WGSL";
+            default -> "GLSL";
+        };
+        log.info("Debug UI shader compiled (target: {})", targetName);
 
         // Create font atlas texture
         var texDesc = TextureDescriptor.rgba(font.atlasWidth(), font.atlasHeight());

@@ -49,13 +49,9 @@ public class ShaderManager {
         this.globalParams = globalParams;
         this.compiler = compiler;
 
-        // Detect target format from backend
-        var backend = device.queryCapability(DeviceCapability.BACKEND_NAME);
-        this.slangTarget = switch (backend) {
-            case "Vulkan" -> ShaderCompiler.TARGET_SPIRV;
-            case "WebGPU" -> ShaderCompiler.TARGET_WGSL;
-            default -> ShaderCompiler.TARGET_GLSL;
-        };
+        // Query shader target from backend
+        var target = device.queryCapability(DeviceCapability.SHADER_TARGET);
+        this.slangTarget = target != null ? target : ShaderCompiler.TARGET_GLSL;
 
         // Query texture binding offset from backend (Vulkan uses 16, others 0)
         var texOffset = device.queryCapability(DeviceCapability.TEXTURE_BINDING_OFFSET);

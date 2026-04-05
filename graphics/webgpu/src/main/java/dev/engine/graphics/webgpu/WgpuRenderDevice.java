@@ -1427,6 +1427,7 @@ public class WgpuRenderDevice implements RenderDevice {
         if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) return (T) Integer.valueOf(texSize);
         if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) return (T) Integer.valueOf(texSize);
         if (capability == DeviceCapability.BACKEND_NAME) return (T) "WebGPU";
+        if (capability == DeviceCapability.SHADER_TARGET) return (T) Integer.valueOf(28); // ShaderCompiler.TARGET_WGSL
         if (capability == DeviceCapability.DEVICE_NAME) return (T) "WebGPU";
         if (capability == DeviceCapability.API_VERSION) return (T) "WebGPU";
         if (capability == DeviceCapability.COMPUTE_SHADERS) return (T) Boolean.TRUE;

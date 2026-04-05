@@ -119,6 +119,7 @@ public class GlRenderDevice implements RenderDevice {
 
         // Device info
         capabilities.registerStatic(DeviceCapability.BACKEND_NAME, "OpenGL");
+        capabilities.registerStatic(DeviceCapability.SHADER_TARGET, 2); // ShaderCompiler.TARGET_GLSL
         capabilities.register(DeviceCapability.DEVICE_NAME, () -> gl.glGetString(GlBindings.GL_RENDERER));
         capabilities.register(DeviceCapability.API_VERSION, () -> gl.glGetString(GlBindings.GL_VERSION));
     }
