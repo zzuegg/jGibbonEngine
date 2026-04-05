@@ -87,6 +87,11 @@ public class NkInput {
         return btn >= 0 && btn < 3 && mouseClicked[btn];
     }
 
+    /** Consumes all pending mouse clicks so subsequent widgets don't see them. */
+    public void consumeClick() {
+        for (int i = 0; i < 3; i++) mouseClicked[i] = false;
+    }
+
     public float mouseClickX(int btn) {
         return btn >= 0 && btn < 3 ? mouseClickX[btn] : 0;
     }

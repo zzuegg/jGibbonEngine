@@ -54,14 +54,23 @@ public class NkContext {
     private NkWindow currentWindow;
     private final Deque<NkPanel> panelStack = new ArrayDeque<>();
 
-    // Draw commands for current frame
-    private final List<NkDrawCommand> drawCommands = new ArrayList<>();
+    // Draw commands: per-window deferred rendering for z-order.
+    // Each window's commands are collected separately, then merged in focus order.
+    private final Map<String, List<NkDrawCommand>> windowDrawCommands = new LinkedHashMap<>();
+    private List<NkDrawCommand> activeWindowCommands;
 
     // Tooltip state
     private boolean tooltipActive;
 
     public NkContext(NkFont font) {
         this.font = font;
+    }
+
+    /** Routes draw commands to the active window's list for z-order sorting. */
+    private void emit(NkDrawCommand cmd) {
+        if (activeWindowCommands != null) {
+            activeWindowCommands.add(cmd);
+        }
     }
 
     public NkInput input() { return input; }
@@ -87,6 +96,15 @@ public class NkContext {
             windowOrder.add(title);
         }
         currentWindow = win;
+
+        // Bring to front when clicked
+        if (input.isMousePressed(0, win.bounds) && windowOrder.indexOf(title) != windowOrder.size() - 1) {
+            windowOrder.remove(title);
+            windowOrder.add(title);
+        }
+
+        // Start collecting draw commands for this window
+        activeWindowCommands = windowDrawCommands.computeIfAbsent(title, k -> new ArrayList<>());
 
         if (win.closed) {
             // Still need to call end()
@@ -152,11 +170,11 @@ public class NkContext {
         var drawBounds = win.collapsed && (flags & WINDOW_TITLE) != 0
                 ? new NkRect(bounds.x(), bounds.y(), bounds.w(), style.headerHeight)
                 : bounds;
-        drawCommands.add(new NkDrawCommand.FilledRect(drawBounds, style.windowRounding, style.windowBackground));
+        emit(new NkDrawCommand.FilledRect(drawBounds, style.windowRounding, style.windowBackground));
 
         // Draw border
         if ((flags & WINDOW_BORDER) != 0) {
-            drawCommands.add(new NkDrawCommand.StrokedRect(drawBounds, style.windowRounding,
+            emit(new NkDrawCommand.StrokedRect(drawBounds, style.windowRounding,
                     style.windowBorderWidth, style.windowBorder));
         }
 
@@ -164,11 +182,11 @@ public class NkContext {
         float contentStartY = bounds.y();
         if ((flags & WINDOW_TITLE) != 0) {
             var headerRect = new NkRect(bounds.x(), bounds.y(), bounds.w(), style.headerHeight);
-            drawCommands.add(new NkDrawCommand.FilledRect(headerRect, style.windowRounding, style.headerBackground));
+            emit(new NkDrawCommand.FilledRect(headerRect, style.windowRounding, style.headerBackground));
             // Title text
             float textX = bounds.x() + style.headerPadX;
             float textY = bounds.y() + (style.headerHeight - font.height()) / 2;
-            drawCommands.add(new NkDrawCommand.Text(
+            emit(new NkDrawCommand.Text(
                     new NkRect(textX, textY, bounds.w() - style.headerPadX * 2, font.height()),
                     title, font, style.headerText));
 
@@ -178,12 +196,12 @@ public class NkContext {
                 float btnX = bounds.x() + bounds.w() - btnSize - 4;
                 float btnY2 = bounds.y() + 2;
                 var btnRect = new NkRect(btnX, btnY2, btnSize, btnSize);
-                drawCommands.add(new NkDrawCommand.FilledRect(btnRect, 2, style.buttonNormal));
+                emit(new NkDrawCommand.FilledRect(btnRect, 2, style.buttonNormal));
                 // Draw - or + symbol
                 String sym = win.collapsed ? "+" : "-";
                 float symX = btnX + (btnSize - font.textWidth(sym)) / 2;
                 float symY = btnY2 + (btnSize - font.height()) / 2;
-                drawCommands.add(new NkDrawCommand.Text(
+                emit(new NkDrawCommand.Text(
                         new NkRect(symX, symY, font.textWidth(sym), font.height()),
                         sym, font, style.buttonText));
             }
@@ -195,10 +213,10 @@ public class NkContext {
                 float btnX = bounds.x() + bounds.w() - offset;
                 float btnY2 = bounds.y() + 2;
                 var btnRect = new NkRect(btnX, btnY2, btnSize, btnSize);
-                drawCommands.add(new NkDrawCommand.FilledRect(btnRect, 2, style.buttonNormal));
+                emit(new NkDrawCommand.FilledRect(btnRect, 2, style.buttonNormal));
                 float xX = btnX + (btnSize - font.textWidth("x")) / 2;
                 float xY = btnY2 + (btnSize - font.height()) / 2;
-                drawCommands.add(new NkDrawCommand.Text(
+                emit(new NkDrawCommand.Text(
                         new NkRect(xX, xY, font.textWidth("x"), font.height()),
                         "x", font, style.buttonText));
             }
@@ -224,7 +242,7 @@ public class NkContext {
         // Clip to window content area
         panel.clip = new NkRect(bounds.x(), contentStartY, bounds.w(),
                 bounds.h() - (contentStartY - bounds.y()));
-        drawCommands.add(new NkDrawCommand.Scissor(
+        emit(new NkDrawCommand.Scissor(
                 (int) panel.clip.x(), (int) panel.clip.y(),
                 (int) panel.clip.w(), (int) panel.clip.h()));
 
@@ -245,7 +263,7 @@ public class NkContext {
                 currentWindow.contentHeight = panel.maxY - panel.contentY + panel.scrollY;
             }
             // Reset scissor
-            drawCommands.add(new NkDrawCommand.Scissor(0, 0, 8192, 8192));
+            emit(new NkDrawCommand.Scissor(0, 0, 8192, 8192));
         }
         currentWindow = null;
     }
@@ -293,7 +311,7 @@ public class NkContext {
         }
         float textY = rect.y() + (rect.h() - font.height()) / 2;
 
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(textX, textY, textW, font.height()),
                 text, font, style.labelText));
     }
@@ -304,7 +322,7 @@ public class NkContext {
         if (rect == null) return;
 
         float textY = rect.y() + (rect.h() - font.height()) / 2;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(rect.x(), textY, font.textWidth(text), font.height()),
                 text, font, color));
     }
@@ -320,14 +338,14 @@ public class NkContext {
 
         NkColor bg = pressed ? style.buttonActive : hovering ? style.buttonHover : style.buttonNormal;
 
-        drawCommands.add(new NkDrawCommand.FilledRect(rect, style.buttonRounding, bg));
-        drawCommands.add(new NkDrawCommand.StrokedRect(rect, style.buttonRounding,
+        emit(new NkDrawCommand.FilledRect(rect, style.buttonRounding, bg));
+        emit(new NkDrawCommand.StrokedRect(rect, style.buttonRounding,
                 style.buttonBorderWidth, style.buttonBorder));
 
         float textW = font.textWidth(text);
         float textX = rect.x() + (rect.w() - textW) / 2;
         float textY = rect.y() + (rect.h() - font.height()) / 2;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(textX, textY, textW, font.height()),
                 text, font, style.buttonText));
 
@@ -347,20 +365,20 @@ public class NkContext {
         if (clicked) active = !active;
 
         // Draw checkbox box
-        drawCommands.add(new NkDrawCommand.FilledRect(boxRect, 2,
+        emit(new NkDrawCommand.FilledRect(boxRect, 2,
                 active ? style.checkboxActive : style.checkboxBackground));
-        drawCommands.add(new NkDrawCommand.StrokedRect(boxRect, 2, 1, style.checkboxBorder));
+        emit(new NkDrawCommand.StrokedRect(boxRect, 2, 1, style.checkboxBorder));
 
         // Draw checkmark
         if (active) {
             var inner = boxRect.shrink(style.checkboxPadding);
-            drawCommands.add(new NkDrawCommand.FilledRect(inner, 1, style.checkboxCursor));
+            emit(new NkDrawCommand.FilledRect(inner, 1, style.checkboxCursor));
         }
 
         // Draw text
         float textX = rect.x() + boxSize + style.itemSpacingX;
         float textY = rect.y() + (rect.h() - font.height()) / 2;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(textX, textY, font.textWidth(text), font.height()),
                 text, font, style.checkboxText));
 
@@ -379,7 +397,7 @@ public class NkContext {
 
         // Draw bar background (no rounding — thin bars distort with corner arcs)
         var barRect = new NkRect(rect.x() + cursorSize / 2, barY, usableW, barH);
-        drawCommands.add(new NkDrawCommand.FilledRect(barRect, 0, style.sliderBar));
+        emit(new NkDrawCommand.FilledRect(barRect, 0, style.sliderBar));
 
         // Handle interaction
         float ratio = (max > min) ? (value - min) / (max - min) : 0;
@@ -398,7 +416,7 @@ public class NkContext {
         // Draw filled portion
         float filledW = ratio * usableW;
         if (filledW > 0) {
-            drawCommands.add(new NkDrawCommand.FilledRect(
+            emit(new NkDrawCommand.FilledRect(
                     new NkRect(barRect.x(), barY, filledW, barH),
                     0, style.sliderBarFilled));
         }
@@ -412,7 +430,7 @@ public class NkContext {
         boolean dragging = input.isMouseDown(0) && input.isMouseHovering(rect);
         NkColor cursorColor = dragging ? style.sliderCursorActive
                 : hovering ? style.sliderCursorHover : style.sliderCursor;
-        drawCommands.add(new NkDrawCommand.FilledCircle(cursorRect, cursorColor));
+        emit(new NkDrawCommand.FilledCircle(cursorRect, cursorColor));
 
         return value;
     }
@@ -428,8 +446,8 @@ public class NkContext {
         if (rect == null) return current;
 
         // Background
-        drawCommands.add(new NkDrawCommand.FilledRect(rect, style.progressRounding, style.progressBackground));
-        drawCommands.add(new NkDrawCommand.StrokedRect(rect, style.progressRounding, 1, style.progressBorder));
+        emit(new NkDrawCommand.FilledRect(rect, style.progressRounding, style.progressBackground));
+        emit(new NkDrawCommand.StrokedRect(rect, style.progressRounding, 1, style.progressBorder));
 
         // Handle modification
         if (modifiable && input.isMouseDragging(0, rect)) {
@@ -441,7 +459,7 @@ public class NkContext {
         float ratio = max > 0 ? current / max : 0;
         float fillW = ratio * (rect.w() - 2);
         if (fillW > 0) {
-            drawCommands.add(new NkDrawCommand.FilledRect(
+            emit(new NkDrawCommand.FilledRect(
                     new NkRect(rect.x() + 1, rect.y() + 1, fillW, rect.h() - 2),
                     Math.max(0, style.progressRounding - 1), style.progressFill));
         }
@@ -458,12 +476,12 @@ public class NkContext {
         if (clicked) selected = !selected;
 
         if (selected || input.isMouseHovering(rect)) {
-            drawCommands.add(new NkDrawCommand.FilledRect(rect, 0,
+            emit(new NkDrawCommand.FilledRect(rect, 0,
                     selected ? style.checkboxActive.withAlpha(60) : style.treeNodeHover));
         }
 
         float textY = rect.y() + (rect.h() - font.height()) / 2;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(rect.x() + 4, textY, font.textWidth(text), font.height()),
                 text, font, style.labelText));
 
@@ -479,8 +497,8 @@ public class NkContext {
         boolean clicked = input.isMousePressed(0, rect);
 
         // Background
-        drawCommands.add(new NkDrawCommand.FilledRect(rect, 2, style.editBackground));
-        drawCommands.add(new NkDrawCommand.StrokedRect(rect, 2, 1, style.editBorder));
+        emit(new NkDrawCommand.FilledRect(rect, 2, style.editBackground));
+        emit(new NkDrawCommand.StrokedRect(rect, 2, 1, style.editBorder));
 
         // Simple editing: append typed text, handle backspace
         if (clicked || hovering) {
@@ -498,14 +516,14 @@ public class NkContext {
         // Draw text
         float textY = rect.y() + (rect.h() - font.height()) / 2;
         float textX = rect.x() + 4;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(textX, textY, font.textWidth(text), font.height()),
                 text, font, style.editText));
 
         // Draw cursor
         if (hovering) {
             float cursorX = textX + font.textWidth(text);
-            drawCommands.add(new NkDrawCommand.FilledRect(
+            emit(new NkDrawCommand.FilledRect(
                     new NkRect(cursorX, textY, 1, font.height()), 0, style.editCursor));
         }
 
@@ -525,7 +543,7 @@ public class NkContext {
         }
 
         float y = panel.cursorY - panel.scrollY;
-        drawCommands.add(new NkDrawCommand.Line(
+        emit(new NkDrawCommand.Line(
                 new NkVec2(panel.contentX, y),
                 new NkVec2(panel.contentX + panel.contentW, y),
                 1, style.separatorColor));
@@ -554,13 +572,13 @@ public class NkContext {
 
         // Draw hover highlight
         if (hovering) {
-            drawCommands.add(new NkDrawCommand.FilledRect(rect, 0, style.treeNodeHover));
+            emit(new NkDrawCommand.FilledRect(rect, 0, style.treeNodeHover));
         }
 
         // Draw arrow
         String arrow = state ? "v " : "> ";
         float textY = rect.y() + (rect.h() - font.height()) / 2;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(rect.x(), textY, font.textWidth(arrow + title), font.height()),
                 arrow + title, font, style.treeNodeText));
 
@@ -587,19 +605,19 @@ public class NkContext {
 
         // Draw combo button
         boolean hovering = input.isMouseHovering(rect);
-        drawCommands.add(new NkDrawCommand.FilledRect(rect, 2,
+        emit(new NkDrawCommand.FilledRect(rect, 2,
                 hovering ? style.comboButtonHover : style.comboBackground));
-        drawCommands.add(new NkDrawCommand.StrokedRect(rect, 2, 1, style.comboBorder));
+        emit(new NkDrawCommand.StrokedRect(rect, 2, 1, style.comboBorder));
 
         float textY = rect.y() + (rect.h() - font.height()) / 2;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(rect.x() + 4, textY, font.textWidth(currentText), font.height()),
                 currentText, font, style.comboText));
 
         // Arrow indicator
         String arrow = isOpen ? "^" : "v";
         float arrowX = rect.x() + rect.w() - font.textWidth(arrow) - 4;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(arrowX, textY, font.textWidth(arrow), font.height()),
                 arrow, font, style.comboText));
 
@@ -614,14 +632,17 @@ public class NkContext {
             isOpen = currentWindow.comboOpen && comboId.equals(currentWindow.comboId);
         }
 
-        // Draw popup
+        // Draw popup (outside scissor — emit full-viewport scissor so popup isn't clipped)
         if (isOpen) {
             float popupH = items.length * itemHeight + 2;
             float popupY = rect.y() + rect.h();
             var popupRect = new NkRect(rect.x(), popupY, rect.w(), popupH);
 
-            drawCommands.add(new NkDrawCommand.FilledRect(popupRect, 2, style.comboBackground));
-            drawCommands.add(new NkDrawCommand.StrokedRect(popupRect, 2, 1, style.comboBorder));
+            // Temporarily disable scissor clipping for the popup
+            emit(new NkDrawCommand.Scissor(0, 0, 8192, 8192));
+
+            emit(new NkDrawCommand.FilledRect(popupRect, 2, style.comboBackground));
+            emit(new NkDrawCommand.StrokedRect(popupRect, 2, 1, style.comboBorder));
 
             for (int i = 0; i < items.length; i++) {
                 float iy = popupY + 1 + i * itemHeight;
@@ -629,15 +650,15 @@ public class NkContext {
 
                 boolean itemHover = input.isMouseHovering(itemRect);
                 if (itemHover) {
-                    drawCommands.add(new NkDrawCommand.FilledRect(itemRect, 0, style.comboButtonHover));
+                    emit(new NkDrawCommand.FilledRect(itemRect, 0, style.comboButtonHover));
                 }
                 if (i == selected) {
-                    drawCommands.add(new NkDrawCommand.FilledRect(itemRect, 0,
+                    emit(new NkDrawCommand.FilledRect(itemRect, 0,
                             style.checkboxActive.withAlpha(40)));
                 }
 
                 float ity = iy + (itemHeight - font.height()) / 2;
-                drawCommands.add(new NkDrawCommand.Text(
+                emit(new NkDrawCommand.Text(
                         new NkRect(itemRect.x() + 4, ity, font.textWidth(items[i]), font.height()),
                         items[i], font, style.comboText));
 
@@ -652,6 +673,9 @@ public class NkContext {
                     && !input.isMouseHovering(rect) && currentWindow != null) {
                 currentWindow.comboOpen = false;
             }
+
+            // Consume mouse clicks when popup is open so items below don't activate
+            input.consumeClick();
         }
 
         return selected;
@@ -670,14 +694,14 @@ public class NkContext {
 
         // Draw label
         float textY = rect.y() + (rect.h() - font.height()) / 2;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(rect.x(), textY, font.textWidth(name), font.height()),
                 name, font, style.labelText));
 
         // Draw value background
         boolean hovering = input.isMouseHovering(valueRect);
-        drawCommands.add(new NkDrawCommand.FilledRect(valueRect, 2, style.editBackground));
-        drawCommands.add(new NkDrawCommand.StrokedRect(valueRect, 2, 1, style.editBorder));
+        emit(new NkDrawCommand.FilledRect(valueRect, 2, style.editBackground));
+        emit(new NkDrawCommand.StrokedRect(valueRect, 2, 1, style.editBorder));
 
         // Handle dragging
         if (input.isMouseDragging(0, valueRect)) {
@@ -689,7 +713,7 @@ public class NkContext {
         // Draw value text
         String valueText = formatFloat(value);
         float vTextX = valueRect.x() + (valueRect.w() - font.textWidth(valueText)) / 2;
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.Text(
                 new NkRect(vTextX, textY, font.textWidth(valueText), font.height()),
                 valueText, font, style.editText));
 
@@ -707,9 +731,9 @@ public class NkContext {
         float y = input.mouseY() + 12;
 
         var rect = new NkRect(x, y, w, h);
-        drawCommands.add(new NkDrawCommand.FilledRect(rect, 2, style.tooltipBackground));
-        drawCommands.add(new NkDrawCommand.StrokedRect(rect, 2, 1, style.tooltipBorder));
-        drawCommands.add(new NkDrawCommand.Text(
+        emit(new NkDrawCommand.FilledRect(rect, 2, style.tooltipBackground));
+        emit(new NkDrawCommand.StrokedRect(rect, 2, 1, style.tooltipBorder));
+        emit(new NkDrawCommand.Text(
                 new NkRect(x + pad, y + pad, font.textWidth(text), font.height()),
                 text, font, style.tooltipText));
     }
@@ -739,10 +763,10 @@ public class NkContext {
         if (rect == null) return false;
 
         // Draw group background (slightly darker)
-        drawCommands.add(new NkDrawCommand.FilledRect(rect, 0,
+        emit(new NkDrawCommand.FilledRect(rect, 0,
                 style.windowBackground.withAlpha(200)));
         if ((flags & WINDOW_BORDER) != 0) {
-            drawCommands.add(new NkDrawCommand.StrokedRect(rect, 0, 1, style.windowBorder));
+            emit(new NkDrawCommand.StrokedRect(rect, 0, 1, style.windowBorder));
         }
 
         // Push a new panel for the group
@@ -758,7 +782,7 @@ public class NkContext {
         panel.maxY = panel.contentY;
         panel.clip = rect;
 
-        drawCommands.add(new NkDrawCommand.Scissor(
+        emit(new NkDrawCommand.Scissor(
                 (int) rect.x(), (int) rect.y(), (int) rect.w(), (int) rect.h()));
 
         panelStack.push(panel);
@@ -775,11 +799,11 @@ public class NkContext {
         // Restore parent scissor
         var parent = currentPanel();
         if (parent != null && parent.clip != null) {
-            drawCommands.add(new NkDrawCommand.Scissor(
+            emit(new NkDrawCommand.Scissor(
                     (int) parent.clip.x(), (int) parent.clip.y(),
                     (int) parent.clip.w(), (int) parent.clip.h()));
         } else {
-            drawCommands.add(new NkDrawCommand.Scissor(0, 0, 8192, 8192));
+            emit(new NkDrawCommand.Scissor(0, 0, 8192, 8192));
         }
     }
 
@@ -794,8 +818,8 @@ public class NkContext {
         float barH = rect.h();
 
         // Draw the current color as a filled rect
-        drawCommands.add(new NkDrawCommand.FilledRect(rect, 2, color));
-        drawCommands.add(new NkDrawCommand.StrokedRect(rect, 2, 1, style.editBorder));
+        emit(new NkDrawCommand.FilledRect(rect, 2, color));
+        emit(new NkDrawCommand.StrokedRect(rect, 2, 1, style.editBorder));
 
         // If clicked/dragged, map X to hue and Y to brightness
         if (input.isMouseDragging(0, rect) || input.isMousePressed(0, rect)) {
@@ -811,14 +835,20 @@ public class NkContext {
 
     // ========================= Draw output =========================
 
-    /** Returns the accumulated draw commands for this frame. */
+    /** Returns draw commands sorted by window focus order (back to front). */
     public List<NkDrawCommand> drawCommands() {
-        return drawCommands;
+        var sorted = new ArrayList<NkDrawCommand>();
+        for (var title : windowOrder) {
+            var cmds = windowDrawCommands.get(title);
+            if (cmds != null) sorted.addAll(cmds);
+        }
+        return sorted;
     }
 
     /** Clears all draw commands and per-frame state. Call at the end of each frame. */
     public void clear() {
-        drawCommands.clear();
+        windowDrawCommands.values().forEach(List::clear);
+        activeWindowCommands = null;
         tooltipActive = false;
     }
 
