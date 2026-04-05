@@ -31,6 +31,16 @@ public class FfmWgpuBindings implements WgpuBindings {
 
     private static final Logger log = LoggerFactory.getLogger(FfmWgpuBindings.class);
 
+    /**
+     * Helper to set a WGPUStringView label on a descriptor.
+     * Uses WGPU_STRLEN (-1L) to indicate a null-terminated string,
+     * matching the C convention: {char_ptr, WGPU_STRLEN}.
+     */
+    private static void setStringView(MemorySegment stringView, MemorySegment cString) {
+        WGPUStringView.data(stringView, cString);
+        WGPUStringView.length(stringView, WGPU_STRLEN());
+    }
+
     private static final AtomicBoolean initialized = new AtomicBoolean(false);
 
     // Handle tracking — maps long handle IDs to native MemorySegment pointers
@@ -113,6 +123,7 @@ public class FfmWgpuBindings implements WgpuBindings {
         try (var arena = Arena.ofConfined()) {
             var surfaceDesc = WGPUSurfaceDescriptor.allocate(arena);
             WGPUSurfaceDescriptor.nextInChain(surfaceDesc, MemorySegment.NULL);
+            setStringView(WGPUSurfaceDescriptor.label(surfaceDesc), arena.allocateFrom("surface"));
 
             switch (surfaceInfo.type()) {
                 case X11 -> {
@@ -202,6 +213,7 @@ public class FfmWgpuBindings implements WgpuBindings {
 
             var viewDesc = WGPUTextureViewDescriptor.allocate(arena);
             WGPUTextureViewDescriptor.nextInChain(viewDesc, MemorySegment.NULL);
+            setStringView(WGPUTextureViewDescriptor.label(viewDesc), arena.allocateFrom("surface_texture_view"));
             WGPUTextureViewDescriptor.format(viewDesc, TEXTURE_FORMAT_BGRA8_UNORM);
             WGPUTextureViewDescriptor.dimension(viewDesc, WGPUTextureViewDimension_2D());
             WGPUTextureViewDescriptor.baseMipLevel(viewDesc, 0);
@@ -346,10 +358,7 @@ public class FfmWgpuBindings implements WgpuBindings {
             WGPUDeviceDescriptor.requiredLimits(desc, MemorySegment.NULL);
 
             // Set label
-            var labelView = WGPUDeviceDescriptor.label(desc);
-            var emptyLabel = arena.allocateFrom("");
-            WGPUStringView.data(labelView, emptyLabel);
-            WGPUStringView.length(labelView, 0);
+            setStringView(WGPUDeviceDescriptor.label(desc), arena.allocateFrom("device"));
 
             // Uncaptured error callback — prevents wgpu-native's default handler from panicking
             var errorCbInfo = WGPUDeviceDescriptor.uncapturedErrorCallbackInfo(desc);
@@ -464,6 +473,7 @@ public class FfmWgpuBindings implements WgpuBindings {
         try (var arena = Arena.ofConfined()) {
             var desc = WGPUBufferDescriptor.allocate(arena);
             WGPUBufferDescriptor.nextInChain(desc, MemorySegment.NULL);
+            setStringView(WGPUBufferDescriptor.label(desc), arena.allocateFrom("buffer"));
             WGPUBufferDescriptor.usage(desc, usage);
             WGPUBufferDescriptor.size(desc, size);
             WGPUBufferDescriptor.mappedAtCreation(desc, 0);
@@ -562,6 +572,7 @@ public class FfmWgpuBindings implements WgpuBindings {
         try (var arena = Arena.ofConfined()) {
             var desc = WGPUTextureDescriptor.allocate(arena);
             WGPUTextureDescriptor.nextInChain(desc, MemorySegment.NULL);
+            setStringView(WGPUTextureDescriptor.label(desc), arena.allocateFrom("texture"));
             WGPUTextureDescriptor.usage(desc, usage);
             WGPUTextureDescriptor.dimension(desc, dimension == TEXTURE_DIMENSION_3D ? 2 : 1); // WGPUTextureDimension: 1=2D, 2=3D
             WGPUTextureDescriptor.format(desc, format);
@@ -587,6 +598,7 @@ public class FfmWgpuBindings implements WgpuBindings {
         try (var arena = Arena.ofConfined()) {
             var desc = WGPUTextureViewDescriptor.allocate(arena);
             WGPUTextureViewDescriptor.nextInChain(desc, MemorySegment.NULL);
+            setStringView(WGPUTextureViewDescriptor.label(desc), arena.allocateFrom("texture_view"));
             WGPUTextureViewDescriptor.format(desc, format);
             WGPUTextureViewDescriptor.baseMipLevel(desc, 0);
             WGPUTextureViewDescriptor.mipLevelCount(desc, 1);
@@ -664,6 +676,7 @@ public class FfmWgpuBindings implements WgpuBindings {
         try (var arena = Arena.ofConfined()) {
             var desc = WGPUSamplerDescriptor.allocate(arena);
             WGPUSamplerDescriptor.nextInChain(desc, MemorySegment.NULL);
+            setStringView(WGPUSamplerDescriptor.label(desc), arena.allocateFrom("sampler"));
             WGPUSamplerDescriptor.addressModeU(desc, addressU);
             WGPUSamplerDescriptor.addressModeV(desc, addressV);
             WGPUSamplerDescriptor.addressModeW(desc, addressW);
@@ -704,19 +717,12 @@ public class FfmWgpuBindings implements WgpuBindings {
 
             // Set the WGSL code as a WGPUStringView
             var codeBytes = arena.allocateFrom(wgsl);
-            var codeView = WGPUShaderSourceWGSL.code(wgslSource);
-            WGPUStringView.data(codeView, codeBytes);
-            WGPUStringView.length(codeView, wgsl.length());
+            setStringView(WGPUShaderSourceWGSL.code(wgslSource), codeBytes);
 
             // Create the shader module descriptor
             var desc = WGPUShaderModuleDescriptor.allocate(arena);
             WGPUShaderModuleDescriptor.nextInChain(desc, wgslSource);
-
-            // Set label to empty string (required — NonNullInputString)
-            var labelView = WGPUShaderModuleDescriptor.label(desc);
-            var emptyStr = arena.allocateFrom("");
-            WGPUStringView.data(labelView, emptyStr);
-            WGPUStringView.length(labelView, 0);
+            setStringView(WGPUShaderModuleDescriptor.label(desc), arena.allocateFrom("shader_module"));
 
             var result = wgpuDeviceCreateShaderModule(dev, desc);
             if (result == null || result.equals(MemorySegment.NULL)) {
@@ -790,6 +796,7 @@ public class FfmWgpuBindings implements WgpuBindings {
 
             var desc = WGPUBindGroupLayoutDescriptor.allocate(arena);
             WGPUBindGroupLayoutDescriptor.nextInChain(desc, MemorySegment.NULL);
+            setStringView(WGPUBindGroupLayoutDescriptor.label(desc), arena.allocateFrom("bind_group_layout"));
             WGPUBindGroupLayoutDescriptor.entryCount(desc, entries.length);
             WGPUBindGroupLayoutDescriptor.entries(desc, entryArray);
 
@@ -821,6 +828,7 @@ public class FfmWgpuBindings implements WgpuBindings {
 
             var desc = WGPUPipelineLayoutDescriptor.allocate(arena);
             WGPUPipelineLayoutDescriptor.nextInChain(desc, MemorySegment.NULL);
+            setStringView(WGPUPipelineLayoutDescriptor.label(desc), arena.allocateFrom("pipeline_layout"));
             WGPUPipelineLayoutDescriptor.bindGroupLayoutCount(desc, bindGroupLayouts.length);
             WGPUPipelineLayoutDescriptor.bindGroupLayouts(desc, layoutArray);
 
@@ -847,16 +855,14 @@ public class FfmWgpuBindings implements WgpuBindings {
         try (var arena = Arena.ofConfined()) {
             var rpDesc = WGPURenderPipelineDescriptor.allocate(arena);
             WGPURenderPipelineDescriptor.nextInChain(rpDesc, MemorySegment.NULL);
+            setStringView(WGPURenderPipelineDescriptor.label(rpDesc), arena.allocateFrom("render_pipeline"));
             WGPURenderPipelineDescriptor.layout(rpDesc, get(desc.pipelineLayout()));
 
-            // Vertex state
+            // Vertex state (by value — embedded in the descriptor)
             var vertexState = WGPURenderPipelineDescriptor.vertex(rpDesc);
             WGPUVertexState.nextInChain(vertexState, MemorySegment.NULL);
             WGPUVertexState.module(vertexState, get(desc.vertexModule()));
-            var vertexEntryStr = arena.allocateFrom(desc.vertexEntryPoint());
-            var vertexEntryView = WGPUVertexState.entryPoint(vertexState);
-            WGPUStringView.data(vertexEntryView, vertexEntryStr);
-            WGPUStringView.length(vertexEntryView, desc.vertexEntryPoint().length());
+            setStringView(WGPUVertexState.entryPoint(vertexState), arena.allocateFrom(desc.vertexEntryPoint()));
             WGPUVertexState.constantCount(vertexState, 0);
             WGPUVertexState.constants(vertexState, MemorySegment.NULL);
 
@@ -924,10 +930,7 @@ public class FfmWgpuBindings implements WgpuBindings {
                 var fragState = WGPUFragmentState.allocate(arena);
                 WGPUFragmentState.nextInChain(fragState, MemorySegment.NULL);
                 WGPUFragmentState.module(fragState, get(desc.fragmentModule()));
-                var fragEntryStr = arena.allocateFrom(desc.fragmentEntryPoint());
-                var fragEntryView = WGPUFragmentState.entryPoint(fragState);
-                WGPUStringView.data(fragEntryView, fragEntryStr);
-                WGPUStringView.length(fragEntryView, desc.fragmentEntryPoint().length());
+                setStringView(WGPUFragmentState.entryPoint(fragState), arena.allocateFrom(desc.fragmentEntryPoint()));
                 WGPUFragmentState.constantCount(fragState, 0);
                 WGPUFragmentState.constants(fragState, MemorySegment.NULL);
 
@@ -1009,6 +1012,7 @@ public class FfmWgpuBindings implements WgpuBindings {
 
             var desc = WGPUBindGroupDescriptor.allocate(arena);
             WGPUBindGroupDescriptor.nextInChain(desc, MemorySegment.NULL);
+            setStringView(WGPUBindGroupDescriptor.label(desc), arena.allocateFrom("bind_group"));
             WGPUBindGroupDescriptor.layout(desc, bgLayout);
             WGPUBindGroupDescriptor.entryCount(desc, entries.length);
             WGPUBindGroupDescriptor.entries(desc, entryArray);
@@ -1036,6 +1040,7 @@ public class FfmWgpuBindings implements WgpuBindings {
         try (var arena = Arena.ofConfined()) {
             var desc = WGPUCommandEncoderDescriptor.allocate(arena);
             WGPUCommandEncoderDescriptor.nextInChain(desc, MemorySegment.NULL);
+            setStringView(WGPUCommandEncoderDescriptor.label(desc), arena.allocateFrom("command_encoder"));
 
             return store(wgpuDeviceCreateCommandEncoder(dev, desc));
         }
@@ -1049,6 +1054,7 @@ public class FfmWgpuBindings implements WgpuBindings {
         try (var arena = Arena.ofConfined()) {
             var rpDesc = WGPURenderPassDescriptor.allocate(arena);
             WGPURenderPassDescriptor.nextInChain(rpDesc, MemorySegment.NULL);
+            setStringView(WGPURenderPassDescriptor.label(rpDesc), arena.allocateFrom("render_pass"));
             WGPURenderPassDescriptor.occlusionQuerySet(rpDesc, MemorySegment.NULL);
             WGPURenderPassDescriptor.timestampWrites(rpDesc, MemorySegment.NULL);
 
@@ -1156,6 +1162,7 @@ public class FfmWgpuBindings implements WgpuBindings {
         try (var arena = Arena.ofConfined()) {
             var desc = WGPUCommandBufferDescriptor.allocate(arena);
             WGPUCommandBufferDescriptor.nextInChain(desc, MemorySegment.NULL);
+            setStringView(WGPUCommandBufferDescriptor.label(desc), arena.allocateFrom("command_buffer"));
 
             return store(wgpuCommandEncoderFinish(enc, desc));
         }
