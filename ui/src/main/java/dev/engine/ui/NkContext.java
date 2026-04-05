@@ -53,6 +53,7 @@ public class NkContext {
     private final List<String> windowOrder = new ArrayList<>();
     private NkWindow currentWindow;
     private final Deque<NkPanel> panelStack = new ArrayDeque<>();
+    private int treeDepth = 0;
 
     // Draw commands: per-window deferred rendering for z-order.
     // Each window's commands are collected separately, then merged in focus order.
@@ -671,24 +672,28 @@ public class NkContext {
             currentWindow.treeStates.put(title, state);
         }
 
+        // Indentation based on tree depth
+        float indent = treeDepth * 16;
+
         // Draw hover highlight on full row
         boolean hovering = input.isMouseHovering(rect);
         if (hovering) {
             emit(new NkDrawCommand.FilledRect(rect, 0, style.treeNodeHover));
         }
 
-        // Draw title (left-aligned)
+        // Draw title (indented)
         float textY = rect.y() + (rect.h() - font.height()) / 2;
         emit(new NkDrawCommand.Text(
-                new NkRect(rect.x() + 4, textY, font.textWidth(title), font.height()),
+                new NkRect(rect.x() + 4 + indent, textY, font.textWidth(title), font.height()),
                 title, font, style.treeNodeText));
 
-        // Draw arrow (right-aligned)
-        float arrowX = rect.x() + rect.w() - font.textWidth(arrow) - 4;
+        // Draw arrow (right of title)
+        float arrowX = rect.x() + 4 + indent + font.textWidth(title) + 4;
         emit(new NkDrawCommand.Text(
                 new NkRect(arrowX, textY, font.textWidth(arrow), font.height()),
                 arrow, font, style.treeNodeText));
 
+        treeDepth++;
         return state;
     }
 
@@ -717,8 +722,9 @@ public class NkContext {
             emit(new NkDrawCommand.FilledRect(rect, 0, style.treeNodeHover));
         }
 
-        // Left-aligned text with small padding (matches treePush)
-        float textX = rect.x() + 4;
+        // Indented text matching current tree depth
+        float indent = treeDepth * 16;
+        float textX = rect.x() + 4 + indent;
         float textY = rect.y() + (rect.h() - font.height()) / 2;
         emit(new NkDrawCommand.Text(
                 new NkRect(textX, textY, font.textWidth(title), font.height()),
@@ -735,7 +741,7 @@ public class NkContext {
 
     /** Ends a collapsible tree node (only call if treePush returned true). */
     public void treePop() {
-        // Tree indentation is handled by layout — no additional action needed
+        if (treeDepth > 0) treeDepth--;
     }
 
     /**
