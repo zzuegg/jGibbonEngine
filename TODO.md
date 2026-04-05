@@ -4,12 +4,13 @@ Full code review performed 2026-04-05 across all 467 source files.
 
 ## Critical Bugs
 
-- [ ] **Thread safety: Engine.run() race condition** — `Engine.java:152`. Render thread drains TransactionBuffer while logic thread writes concurrently. TransactionBuffer has no synchronization. Use TransactionBus (which has per-subscriber locks) or add synchronization.
-- [ ] **Profiler.lastFrame() returns currentFrame** — `Profiler.java:29`. Method named `lastFrame()` returns `currentFrame` (in-progress). `previousFrame()` returns `lastFrame`. Either rename or fix return values.
-- [ ] **GPU buffer leak: per-entity UBOs never cleaned up** — `UniformManager.java:79`. Creates objectUBOs ("obj_N") and materialUBOs ("mat_N") per entity. Never removed on EntityRemoved. Leaks GPU buffers for every entity that ever existed.
-- [ ] **Stale shader binding after entity reuse** — `ShaderManager.java:168`. entityShaders keyed by handle index only, no generation check. After entity destroy+recreate at same index, old shader persists.
-- [ ] **Engine.shutdown() doesn't shut down AssetManager** — `Engine.java:187`. FileWatcher thread keeps running. Add `assets.shutdown()` to teardown.
-- [ ] **Renderer.close() doesn't clean up MeshManager** — `Renderer.java:314`. MeshManager holds GPU resources (VBOs, IBOs, VAOs) via meshDataCache that are never released on shutdown.
+- [x] **Thread safety: Engine.run() race condition** — `Engine.java:152`. Render thread drains TransactionBuffer while logic thread writes concurrently. TransactionBuffer has no synchronization. Use TransactionBus (which has per-subscriber locks) or add synchronization.
+- [x] **Profiler.lastFrame() returns currentFrame** — `Profiler.java:29`. Renamed to `currentFrame()`; `lastFrame()` now correctly returns the previous completed frame. Tests updated accordingly.
+- [x] **GPU buffer leak: per-entity UBOs never cleaned up** — `UniformManager.java`. Per-entity UBO maps now keyed by `Handle<?>` (index + generation) instead of string. `removeEntity()` destroys the buffers when an entity is removed. `Renderer.renderFrame()` calls it for each `EntityRemoved` transaction.
+- [x] **Stale shader binding after entity reuse** — `ShaderManager.java`. `removeEntityShader()` added; called by `Renderer.renderFrame()` on `EntityRemoved`.
+- [x] **Engine.shutdown() doesn't shut down AssetManager** — `Engine.java`. Added `assets.shutdown()` to `shutdown()`.
+- [x] **Renderer.close() doesn't clean up MeshManager** — `Renderer.java`. Added `meshManager.close()` to `close()`. Added `MeshManager.close()` that destroys all GPU buffers and vertex inputs.
+- [x] **MeshRenderer leaks entity maps on EntityRemoved** — `MeshRenderer.java`. `meshDataAssignments`, `meshAssignments`, and `materialAssignments` were not cleared on `EntityRemoved`.
 
 ## Hardcoded Values (should be configurable/dynamic)
 
@@ -19,7 +20,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [ ] **Texture/sampler array sizes: magic numbers** — GL: boundTextures[32], boundSamplers[32]. Vk: currentTextures[8], pendingUboBuffers[16], pendingSsboBuffers[8]. Should be queried from DeviceCapability or configurable.
 - [ ] **MAX_FRAMES_IN_FLIGHT=2 hardcoded** — `VkRenderDevice.java:47`. Should be configurable through VulkanConfig.
 - [ ] **MAX_SETS_PER_FRAME=256 hardcoded** — `VkDescriptorManager.java:17`. Could be insufficient for complex scenes. Should auto-grow or be configurable.
-- [ ] **Global param bindings hardcoded** — `Renderer.java:79-81`. "Engine"=0, "Camera"=1, "Object"=2 are string literals scattered throughout. Define as constants, centralize binding assignment.
+- [x] **Global param bindings hardcoded** — `Renderer.java:79-81`. Extracted to `GlobalParamNames` constants class (`ENGINE`, `CAMERA`, `OBJECT`). Used in `Renderer` and `UniformManager`.
 - [ ] **Blend function hardcoded to SRC_ALPHA/ONE_MINUS_SRC_ALPHA** — `GlRenderDevice.java:623`. BlendMode exists but only supports NONE vs one hardcoded alpha blend. Need configurable src/dst factors, blend equation.
 - [ ] **All shaders forced to STANDARD_FORMAT vertex layout** — `ShaderManager.java:255`. Uses PrimitiveMeshes.STANDARD_FORMAT for ALL pipelines. Custom vertex formats (tangents, colors, bone weights) won't work.
 - [ ] **Shader entry points hardcoded ("vertexMain"/"fragmentMain")** — `ShaderManager.java:227`. Should be configurable per shader for custom entry points.
@@ -65,12 +66,12 @@ Full code review performed 2026-04-05 across all 467 source files.
 
 - [ ] **No lighting system** — LightData/LightType exist in core but Renderer has zero light handling. No light buffer upload, no light culling. MeshRenderer ignores LightData components.
 - [ ] **No shadow mapping** — Extensively designed in NOTES.md. No shadow pass, no shadow maps, no light-space matrices. LightData.CASTS_SHADOWS exists but nothing reads it.
-- [ ] **RenderStats never populated** — `RenderStats.java`. Tracks draws, vertices, binds but nothing calls recordDrawCall() etc. All counters always zero.
+- [x] **RenderStats never populated** — `RenderStats.java`. `Renderer.renderFrame()` now calls `recordDrawCall()`, `recordPipelineBind()`, `recordBufferBind()`, `recordTextureBind()`. Stats are reset at the top of each `renderFrame()` call. `Engine.renderStats()` now delegates to `renderer.renderStats()` (stats are owned by Renderer).
 
 ## Architectural Cleanup
 
 - [ ] **Deprecated APIs to remove** — GraphicsBackendFactory, GraphicsConfigLegacy, EngineConfig.graphicsBackend field, GlfwWindowToolkit in graphics:opengl, deprecated SetDepthTest/SetBlending/SetCullFace/SetWireframe commands. New APIs (GraphicsConfig, SetRenderState) are in place.
-- [ ] **ResourceCleaner.register() package-private** — Can't be used outside core.resource. Make public or provide public API for Cleaner safety net.
+- [x] **ResourceCleaner.register() package-private** — Made `public` so GPU resource owners outside `core.resource` can register cleanup actions.
 - [ ] **NativeResource not used by GPU resources** — Interface exists but no GPU resource implements it. No Cleaner safety net for dropped handles.
 - [ ] **GpuResourceManager deferred deletion delay doesn't match frames-in-flight** — `GpuResourceManager.java:175`. Double-buffer swap means N+2 deletion. If Vulkan uses 3 frames-in-flight, resources freed while still in use. Tie to actual fence/frame count.
 

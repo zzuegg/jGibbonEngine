@@ -8,6 +8,7 @@ import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.property.PropertyKey;
+import dev.engine.graphics.shader.GlobalParamNames;
 import dev.engine.graphics.shader.GlobalParamsRegistry;
 import dev.engine.graphics.shader.params.ObjectParams;
 import dev.engine.graphics.BufferResource;
@@ -28,8 +29,8 @@ public class UniformManager {
     private final GlobalParamsRegistry globalParams;
     private final Map<String, Handle<BufferResource>> globalUbos = new HashMap<>();
     private final Map<String, StructLayout> globalLayouts = new HashMap<>();
-    private final Map<String, Handle<BufferResource>> materialUbos = new HashMap<>();
-    private final Map<String, Handle<BufferResource>> objectUbos = new HashMap<>();
+    private final Map<Handle<?>, Handle<BufferResource>> materialUbos = new HashMap<>();
+    private final Map<Handle<?>, Handle<BufferResource>> objectUbos = new HashMap<>();
 
     public UniformManager(GpuResourceManager gpu, GlobalParamsRegistry globalParams) {
         this.gpu = gpu;
@@ -59,7 +60,7 @@ public class UniformManager {
     public void uploadPerFrameGlobals() {
         for (var entry : globalParams.entries()) {
             if (entry.data() == null) continue;
-            if ("Object".equals(entry.name())) continue;
+            if (GlobalParamNames.OBJECT.equals(entry.name())) continue;
             var ubo = globalUbos.get(entry.name());
             var layout = globalLayouts.get(entry.name());
             if (ubo != null && layout != null) {
@@ -72,11 +73,10 @@ public class UniformManager {
 
     /** Uploads per-object params and binds global UBOs to the draw command. */
     public Handle<BufferResource> uploadObjectParams(Handle<?> entity, dev.engine.core.math.Mat4 transform) {
-        var objectLayout = globalLayouts.get("Object");
+        var objectLayout = globalLayouts.get(GlobalParamNames.OBJECT);
         if (objectLayout == null) return null;
 
-        var objectKey = "obj_" + entity.index();
-        var objectUbo = objectUbos.computeIfAbsent(objectKey, k ->
+        var objectUbo = objectUbos.computeIfAbsent(entity, k ->
                 gpu.createBuffer(
                         objectLayout.size(), BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
         var objectParams = new ObjectParams(transform);
@@ -136,8 +136,7 @@ public class UniformManager {
         totalSize = align(totalSize, maxAlign);
 
         final int uboSize = Math.max(totalSize, 16);
-        var uboKey = "mat_" + entity.index();
-        var ubo = materialUbos.computeIfAbsent(uboKey, k ->
+        var ubo = materialUbos.computeIfAbsent(entity, k ->
                 gpu.createBuffer(
                         uboSize, BufferUsage.UNIFORM, AccessPattern.DYNAMIC));
 
@@ -168,6 +167,17 @@ public class UniformManager {
         materialUbos.clear();
         for (var ubo : objectUbos.values()) gpu.destroyBuffer(ubo);
         objectUbos.clear();
+    }
+
+    /**
+     * Releases all per-entity GPU buffers for the given entity handle.
+     * Must be called when an entity is removed so that buffers are not leaked.
+     */
+    public void removeEntity(Handle<?> entity) {
+        var objUbo = objectUbos.remove(entity);
+        if (objUbo != null) gpu.destroyBuffer(objUbo);
+        var matUbo = materialUbos.remove(entity);
+        if (matUbo != null) gpu.destroyBuffer(matUbo);
     }
 
     private static int align(int offset, int alignment) {

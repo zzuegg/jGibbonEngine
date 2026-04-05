@@ -198,6 +198,14 @@ public class ShaderManager {
         entityShaders.clear();
     }
 
+    /**
+     * Removes the cached shader binding for the given entity.
+     * Must be called when an entity is removed so that its slot can be reused safely.
+     */
+    public void removeEntityShader(dev.engine.core.handle.Handle<?> entity) {
+        entityShaders.remove(entity.index());
+    }
+
     // --- Internal ---
 
     private CompiledShader compileShader(String shaderName) {

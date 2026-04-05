@@ -44,6 +44,9 @@ public class MeshRenderer {
                 renderables.remove(removed.entity());
                 materials.remove(removed.entity());
                 materialData.remove(removed.entity());
+                meshDataAssignments.remove(removed.entity());
+                meshAssignments.remove(removed.entity());
+                materialAssignments.remove(removed.entity());
             }
             case Transaction.ComponentChanged cc -> processComponentChanged(cc);
             // Legacy transaction types — kept for compatibility
