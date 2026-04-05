@@ -38,6 +38,12 @@ public class UiSamplerExample extends BaseApplication {
     private boolean treeOpen = true;
     private boolean subTreeOpen = false;
 
+    // Chart state — ring buffer for live FPS/frame time
+    private final float[] fpsHistory = new float[120];
+    private final float[] frameTimeHistory = new float[120];
+    private int chartOffset = 0;
+    private int chartCount = 0;
+
     // Scene state
     private dev.engine.core.scene.Entity cube;
     private float cubeRotation = 0;
@@ -65,6 +71,17 @@ public class UiSamplerExample extends BaseApplication {
         cubeRotation += deltaTime * 0.5f;
 
         NkContext ui = debugUi();
+
+        // Update chart ring buffer
+        float fps = deltaTime > 0 ? 1.0f / deltaTime : 0;
+        int writeIdx = (chartOffset + chartCount) % fpsHistory.length;
+        fpsHistory[writeIdx] = fps;
+        frameTimeHistory[writeIdx] = deltaTime * 1000; // ms
+        if (chartCount < fpsHistory.length) {
+            chartCount++;
+        } else {
+            chartOffset = (chartOffset + 1) % fpsHistory.length;
+        }
 
         // ═══════════════════════════════════════════════════════════
         // Panel 1: Basic Widgets
@@ -271,6 +288,26 @@ public class UiSamplerExample extends BaseApplication {
             ui.layoutRowDynamic(20, 2);
             ui.label("Scale:");
             ui.label(String.format("%.1f", cubeScale));
+        }
+        ui.end();
+
+        // ═══════════════════════════════════════════════════════════
+        // Panel 6: Live Charts
+        // ═══════════════════════════════════════════════════════════
+        if (ui.begin("Performance", 10, 440, 280, 210,
+                NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE | NkContext.WINDOW_MINIMIZABLE)) {
+
+            ui.layoutRowDynamic(16, 1);
+            ui.label(String.format("FPS: %.0f", fps));
+
+            ui.layoutRowDynamic(60, 1);
+            ui.chart(fpsHistory, chartCount, chartOffset, NkColor.rgba(100, 200, 100, 255));
+
+            ui.layoutRowDynamic(16, 1);
+            ui.label(String.format("Frame: %.1f ms", deltaTime * 1000));
+
+            ui.layoutRowDynamic(60, 1);
+            ui.chart(frameTimeHistory, chartCount, chartOffset, NkColor.rgba(230, 160, 60, 255));
         }
         ui.end();
 

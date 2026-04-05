@@ -579,6 +579,75 @@ public class NkContext {
         panel.cursorY += style.itemSpacingY;
     }
 
+    // ========================= Chart API =========================
+
+    /**
+     * Draws a live value chart — a scrolling line graph from a ring buffer of values.
+     *
+     * @param values  array of values (oldest first)
+     * @param count   number of valid values in the array (may be less than values.length)
+     * @param offset  ring buffer start index (oldest value position)
+     * @param min     minimum Y axis value
+     * @param max     maximum Y axis value
+     * @param fgColor line color
+     * @param bgColor background color
+     */
+    public void chart(float[] values, int count, int offset, float min, float max,
+                      NkColor fgColor, NkColor bgColor) {
+        var rect = allocateWidget();
+        if (rect == null || count < 2) return;
+
+        // Background
+        emit(new NkDrawCommand.FilledRect(rect, 0, bgColor));
+        emit(new NkDrawCommand.StrokedRect(rect, 0, 1, style.windowBorder));
+
+        float range = max - min;
+        if (range <= 0) range = 1;
+
+        // Draw line segments between consecutive values
+        for (int i = 1; i < count; i++) {
+            int idx0 = (offset + i - 1) % values.length;
+            int idx1 = (offset + i) % values.length;
+
+            float v0 = Math.max(min, Math.min(max, values[idx0]));
+            float v1 = Math.max(min, Math.min(max, values[idx1]));
+
+            float x0 = rect.x() + (float)(i - 1) / (count - 1) * rect.w();
+            float x1 = rect.x() + (float) i / (count - 1) * rect.w();
+            float y0 = rect.y() + rect.h() - ((v0 - min) / range) * rect.h();
+            float y1 = rect.y() + rect.h() - ((v1 - min) / range) * rect.h();
+
+            emit(new NkDrawCommand.Line(new NkVec2(x0, y0), new NkVec2(x1, y1), 1, fgColor));
+        }
+
+        // Draw min/max labels
+        String maxLabel = String.format("%.1f", max);
+        String minLabel = String.format("%.1f", min);
+        emit(new NkDrawCommand.Text(
+                new NkRect(rect.x() + 2, rect.y() + 1, font.textWidth(maxLabel), font.height()),
+                maxLabel, font, fgColor));
+        emit(new NkDrawCommand.Text(
+                new NkRect(rect.x() + 2, rect.y() + rect.h() - font.height() - 1,
+                        font.textWidth(minLabel), font.height()),
+                minLabel, font, fgColor));
+    }
+
+    /**
+     * Simplified chart — draws the most recent `values.length` samples with auto-range.
+     */
+    public void chart(float[] values, int count, int offset, NkColor fgColor) {
+        float min = Float.MAX_VALUE, max = Float.MIN_VALUE;
+        for (int i = 0; i < count; i++) {
+            float v = values[(offset + i) % values.length];
+            if (v < min) min = v;
+            if (v > max) max = v;
+        }
+        float pad = (max - min) * 0.1f;
+        if (pad < 0.001f) pad = 1;
+        chart(values, count, offset, min - pad, max + pad, fgColor,
+                style.windowBackground.withAlpha(200));
+    }
+
     /** Begins a collapsible tree node. Returns true if expanded. Must call treePop() if returns true. */
     public boolean treePush(String title, boolean defaultOpen) {
         if (currentWindow == null) return false;
@@ -850,23 +919,41 @@ public class NkContext {
         var rect = allocateWidget();
         if (rect == null) return color;
 
-        // Draw a simple hue bar + saturation/value overlay
-        // For the debug UI, a simple color bar is sufficient
-        float barW = rect.w();
-        float barH = rect.h();
+        // Layout: [hue gradient bar] [preview square]
+        float previewSize = rect.h();
+        float barW = rect.w() - previewSize - 4;
 
-        // Draw the current color as a filled rect
-        emit(new NkDrawCommand.FilledRect(rect, 2, color));
-        emit(new NkDrawCommand.StrokedRect(rect, 2, 1, style.editBorder));
-
-        // If clicked/dragged, map X to hue and Y to brightness
-        if (input.isMouseDragging(0, rect) || input.isMousePressed(0, rect)) {
-            float hue = (input.mouseX() - rect.x()) / barW;
-            float val = 1.0f - (input.mouseY() - rect.y()) / barH;
-            hue = Math.max(0, Math.min(1, hue));
-            val = Math.max(0, Math.min(1, val));
-            color = hsvToRgb(hue, 0.8f, val);
+        // Draw hue gradient as colored stripes
+        var barRect = new NkRect(rect.x(), rect.y(), barW, rect.h());
+        int stripes = 12;
+        float stripeW = barW / stripes;
+        for (int i = 0; i < stripes; i++) {
+            float hue = (float) i / stripes;
+            var stripeColor = hsvToRgb(hue, 1.0f, 1.0f);
+            emit(new NkDrawCommand.FilledRect(
+                    new NkRect(rect.x() + i * stripeW, rect.y(), stripeW + 1, rect.h() / 2),
+                    0, stripeColor));
+            // Bottom half: darker (lower value)
+            var darkColor = hsvToRgb(hue, 1.0f, 0.5f);
+            emit(new NkDrawCommand.FilledRect(
+                    new NkRect(rect.x() + i * stripeW, rect.y() + rect.h() / 2, stripeW + 1, rect.h() / 2),
+                    0, darkColor));
         }
+        emit(new NkDrawCommand.StrokedRect(barRect, 0, 1, style.editBorder));
+
+        // Handle clicks/drags on the gradient bar
+        if (windowAcceptsInput() && (input.isMouseDragging(0, barRect) || input.isMousePressed(0, barRect))) {
+            float hue = (input.mouseX() - rect.x()) / barW;
+            float val = 1.0f - (input.mouseY() - rect.y()) / rect.h();
+            hue = Math.max(0, Math.min(1, hue));
+            val = Math.max(0.1f, Math.min(1, val));
+            color = hsvToRgb(hue, 1.0f, val);
+        }
+
+        // Draw preview of current color
+        var previewRect = new NkRect(rect.x() + barW + 4, rect.y(), previewSize, previewSize);
+        emit(new NkDrawCommand.FilledRect(previewRect, 2, color));
+        emit(new NkDrawCommand.StrokedRect(previewRect, 2, 1, style.editBorder));
 
         return color;
     }
