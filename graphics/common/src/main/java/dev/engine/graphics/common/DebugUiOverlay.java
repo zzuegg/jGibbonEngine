@@ -202,14 +202,11 @@ public class DebugUiOverlay implements AutoCloseable {
                     .set(RenderState.SCISSOR_TEST, true)
                     .build());
 
-            int sx = Math.max(0, batch.scissorX());
-            int sw = Math.min(batch.scissorW(), viewportWidth - sx);
-            int sh = Math.min(batch.scissorH(), viewportHeight);
+            // Scissor clamping is handled by the backend (WgpuRenderDevice clamps to RT dimensions)
             int sy = flipScissorY
-                    ? Math.max(0, viewportHeight - batch.scissorY() - sh)
-                    : Math.max(0, batch.scissorY());
-            sh = Math.min(sh, viewportHeight - sy);
-            rec.scissor(sx, sy, Math.max(1, sw), Math.max(1, sh));
+                    ? viewportHeight - batch.scissorY() - batch.scissorH()
+                    : batch.scissorY();
+            rec.scissor(batch.scissorX(), sy, batch.scissorW(), batch.scissorH());
 
             rec.bindUniformBuffer(uboBinding, uniformBuffer);
 

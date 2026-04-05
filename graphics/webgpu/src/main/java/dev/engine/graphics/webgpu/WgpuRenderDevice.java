@@ -283,8 +283,13 @@ public class WgpuRenderDevice implements RenderDevice {
     public Handle<BufferResource> createBuffer(BufferDescriptor descriptor) {
         if (nativeAvailable) {
             int usage = mapBufferUsage(descriptor.usage()) | WgpuBindings.BUFFER_USAGE_COPY_DST;
-            long buf = gpu.deviceCreateBuffer(wgpuDevice, descriptor.size(), usage);
-            return buffers.register(new WgpuBuffer(buf, descriptor.size()));
+            long size = descriptor.size();
+            // WebGPU requires uniform buffers to be at least 16 bytes
+            if (size < 16 && (usage & WgpuBindings.BUFFER_USAGE_UNIFORM) != 0) {
+                size = 16;
+            }
+            long buf = gpu.deviceCreateBuffer(wgpuDevice, size, usage);
+            return buffers.register(new WgpuBuffer(buf, size));
         }
         return buffers.register(new WgpuBuffer(0, descriptor.size()));
     }
@@ -1017,8 +1022,18 @@ public class WgpuRenderDevice implements RenderDevice {
             }
             case RenderCommand.Scissor cmd -> {
                 if (renderPassEncoder != 0 && nativeAvailable) {
-                    gpu.renderPassSetScissorRect(renderPassEncoder,
-                            cmd.x(), cmd.y(), cmd.width(), cmd.height());
+                    // Clamp scissor rect to render target dimensions — WebGPU validation
+                    // rejects scissors larger than the render target (unlike GL/VK which clamp silently)
+                    var rt = currentRenderTarget != null ? renderTargets.get(currentRenderTarget) : null;
+                    int rtW = rt != null ? rt.width() : cmd.width();
+                    int rtH = rt != null ? rt.height() : cmd.height();
+                    int sx = Math.max(0, cmd.x());
+                    int sy = Math.max(0, cmd.y());
+                    int sw = Math.min(cmd.width(), rtW - sx);
+                    int sh = Math.min(cmd.height(), rtH - sy);
+                    if (sw > 0 && sh > 0) {
+                        gpu.renderPassSetScissorRect(renderPassEncoder, sx, sy, sw, sh);
+                    }
                 }
             }
             case RenderCommand.BindPipeline cmd -> {

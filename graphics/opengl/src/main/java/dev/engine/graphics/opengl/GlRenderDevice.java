@@ -193,6 +193,12 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public void uploadTexture(Handle<TextureResource> texture, ByteBuffer pixels) {
+        // LWJGL DSA functions don't reliably handle heap buffers — copy to direct if needed
+        if (!pixels.isDirect()) {
+            var direct = ByteBuffer.allocateDirect(pixels.remaining()).order(pixels.order());
+            direct.put(pixels.duplicate()).flip();
+            pixels = direct;
+        }
         var tex = textures.get(texture);
         int glName = tex.glName();
         var desc = tex.desc();
