@@ -350,7 +350,10 @@ public class FfmWgpuBindings implements WgpuBindings {
         var deviceHolder = new MemorySegment[]{MemorySegment.NULL};
         var done = new boolean[]{false};
 
-        try (var arena = Arena.ofConfined()) {
+        // Use the shared callbackArena for all device descriptor allocations —
+        // the device creation is async and the descriptor must stay alive during event processing
+        var arena = callbackArena;
+        {
             var desc = WGPUDeviceDescriptor.allocate(arena);
             WGPUDeviceDescriptor.nextInChain(desc, MemorySegment.NULL);
             WGPUDeviceDescriptor.requiredFeatureCount(desc, 0);
@@ -368,7 +371,14 @@ public class FfmWgpuBindings implements WgpuBindings {
                      MemorySegment userdata1, MemorySegment userdata2) -> {
                         // Must not throw — any exception here causes a double-panic in Rust
                         try {
-                            log.error("WebGPU uncaptured error (type {})", type);
+                            String msg = "";
+                            var data = WGPUStringView.data(message);
+                            long len = WGPUStringView.length(message);
+                            if (data != null && !data.equals(MemorySegment.NULL)) {
+                                long readLen = (len <= 0 || len > 10_000) ? 4096 : len + 1;
+                                msg = data.reinterpret(readLen).getString(0);
+                            }
+                            System.err.println("[wgpu error type=" + type + "] " + msg);
                         } catch (Throwable ignored) {}
                     }, callbackArena);
             WGPUUncapturedErrorCallbackInfo.callback(errorCbInfo, errorFn);
@@ -400,10 +410,6 @@ public class FfmWgpuBindings implements WgpuBindings {
             WGPURequestDeviceCallbackInfo.userdata2(requestCbInfo, MemorySegment.NULL);
 
             wgpuAdapterRequestDevice(arena, adp, desc, requestCbInfo);
-        } catch (Throwable t) {
-            log.error("Failed to request device", t);
-            callbackArena.close();
-            return 0;
         }
 
         for (int i = 0; i < 1000 && !done[0]; i++) {
@@ -574,7 +580,8 @@ public class FfmWgpuBindings implements WgpuBindings {
             WGPUTextureDescriptor.nextInChain(desc, MemorySegment.NULL);
             setStringView(WGPUTextureDescriptor.label(desc), arena.allocateFrom("texture"));
             WGPUTextureDescriptor.usage(desc, usage);
-            WGPUTextureDescriptor.dimension(desc, dimension == TEXTURE_DIMENSION_3D ? 2 : 1); // WGPUTextureDimension: 1=2D, 2=3D
+            WGPUTextureDescriptor.dimension(desc, dimension == TEXTURE_DIMENSION_3D
+                    ? WGPUTextureDimension_3D() : WGPUTextureDimension_2D());
             WGPUTextureDescriptor.format(desc, format);
             WGPUTextureDescriptor.mipLevelCount(desc, 1);
             WGPUTextureDescriptor.sampleCount(desc, 1);
