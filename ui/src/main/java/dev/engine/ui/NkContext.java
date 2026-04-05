@@ -687,6 +687,65 @@ public class NkContext {
         // Tree indentation is handled by layout — no additional action needed
     }
 
+    /**
+     * Accordion section header — a styled collapsible section for inspector panels.
+     * Draws a separator line, header background, and expand/collapse arrow.
+     * Returns true if the section is expanded. Call {@link #sectionEnd()} when done.
+     *
+     * <pre>{@code
+     * if (ui.sectionBegin("Transform", true)) {
+     *     ui.layoutRowDynamic(22, 1);
+     *     ui.label("Content here");
+     *     ui.sectionEnd();
+     * }
+     * }</pre>
+     */
+    public boolean sectionBegin(String title, boolean defaultOpen) {
+        if (currentWindow == null) return false;
+
+        // Separator line above section
+        separator();
+
+        var rect = allocateWidget();
+        if (rect == null) return false;
+
+        Boolean state = currentWindow.treeStates.get("§" + title);
+        if (state == null) {
+            state = defaultOpen;
+            currentWindow.treeStates.put("§" + title, state);
+        }
+
+        boolean hovering = input.isMouseHovering(rect);
+        if (windowAcceptsInput() && input.isMousePressed(0, rect)) {
+            state = !state;
+            currentWindow.treeStates.put("§" + title, state);
+        }
+
+        // Header background
+        emit(new NkDrawCommand.FilledRect(rect, 0,
+                hovering ? style.headerBackground : style.windowBackground.withAlpha(230)));
+
+        // Arrow + title
+        String arrow = state ? "▼ " : "▶ ";
+        float textY = rect.y() + (rect.h() - font.height()) / 2;
+        emit(new NkDrawCommand.Text(
+                new NkRect(rect.x() + 4, textY, font.textWidth(arrow + title), font.height()),
+                arrow + title, font, style.headerText));
+
+        // Bottom border
+        float lineY = rect.y() + rect.h();
+        emit(new NkDrawCommand.Line(
+                new NkVec2(rect.x(), lineY), new NkVec2(rect.x() + rect.w(), lineY),
+                1, style.windowBorder));
+
+        return state;
+    }
+
+    /** Ends an accordion section (only call if sectionBegin returned true). */
+    public void sectionEnd() {
+        // Symmetry with sectionBegin — no action needed, layout handles spacing
+    }
+
     /** Draws a simple combo box (dropdown). Returns the new selected index. */
     public int combo(String[] items, int selected, float itemHeight) {
         if (items.length == 0) return selected;

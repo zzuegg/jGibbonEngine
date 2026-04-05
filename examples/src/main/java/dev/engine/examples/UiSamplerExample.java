@@ -353,9 +353,9 @@ public class UiSamplerExample extends BaseApplication {
                         | NkContext.WINDOW_NO_SCROLLBAR)) {
 
             // ── Transform section ──
-            ui.layoutRowDynamic(20, 1);
-            accTransform = ui.treePush("Transform", accTransform);
-            if (accTransform) {
+            ui.layoutRowDynamic(22, 1);
+            if (ui.sectionBegin("Transform", accTransform)) {
+                accTransform = true;
                 ui.layoutRowDynamic(22, 3);
                 cubeX = ui.propertyFloat("X", -10, cubeX, 10, 0.1f, 0.02f);
                 cubeY = ui.propertyFloat("Y", -10, cubeY, 10, 0.1f, 0.02f);
@@ -367,13 +367,13 @@ public class UiSamplerExample extends BaseApplication {
                 ui.layoutRowDynamic(18, 2);
                 ui.label("Rotation:");
                 ui.label(String.format("%.0f°", Math.toDegrees(cubeRotation) % 360));
-                ui.treePop();
-            }
+                ui.sectionEnd();
+            } else { accTransform = false; }
 
             // ── Material section ──
-            ui.layoutRowDynamic(20, 1);
-            accMaterial = ui.treePush("Material", accMaterial);
-            if (accMaterial) {
+            ui.layoutRowDynamic(22, 1);
+            if (ui.sectionBegin("Material", accMaterial)) {
+                accMaterial = true;
                 ui.layoutRowDynamic(22, 1);
                 materialType = ui.combo(new String[]{"Unlit", "PBR", "Textured"}, materialType, 18);
 
@@ -387,13 +387,13 @@ public class UiSamplerExample extends BaseApplication {
                         NkColor.rgb(255, 80, 80), NkColor.rgb(80, 200, 80), NkColor.rgb(80, 120, 255),
                         NkColor.rgb(255, 200, 50), NkColor.rgb(200, 80, 255), NkColor.rgb(255, 255, 255),
                 });
-                ui.treePop();
-            }
+                ui.sectionEnd();
+            } else { accMaterial = false; }
 
             // ── Lighting section ──
-            ui.layoutRowDynamic(20, 1);
-            accLighting = ui.treePush("Lighting", accLighting);
-            if (accLighting) {
+            ui.layoutRowDynamic(22, 1);
+            if (ui.sectionBegin("Lighting", accLighting)) {
+                accLighting = true;
                 ui.layoutRowDynamic(18, 1);
                 ui.label(String.format("Intensity: %.1f", lightIntensity));
                 ui.layoutRowDynamic(18, 1);
@@ -403,32 +403,32 @@ public class UiSamplerExample extends BaseApplication {
                 ui.label(String.format("Angle: %.0f°", lightAngle));
                 ui.layoutRowDynamic(18, 1);
                 lightAngle = ui.sliderFloat(0, lightAngle, 360, 1);
-                ui.treePop();
-            }
+                ui.sectionEnd();
+            } else { accLighting = false; }
 
             // ── Physics section ──
-            ui.layoutRowDynamic(20, 1);
-            accPhysics = ui.treePush("Physics", accPhysics);
-            if (accPhysics) {
+            ui.layoutRowDynamic(22, 1);
+            if (ui.sectionBegin("Physics", accPhysics)) {
+                accPhysics = true;
                 ui.layoutRowDynamic(18, 1);
                 ui.label("Gravity: -9.81");
                 ui.label("Mass: 1.0 kg");
                 ui.label("Friction: 0.5");
                 checkboxValue = ui.checkbox("Kinematic", checkboxValue);
-                ui.treePop();
-            }
+                ui.sectionEnd();
+            } else { accPhysics = false; }
 
             // ── Audio section ──
-            ui.layoutRowDynamic(20, 1);
-            accAudio = ui.treePush("Audio", accAudio);
-            if (accAudio) {
+            ui.layoutRowDynamic(22, 1);
+            if (ui.sectionBegin("Audio", accAudio)) {
+                accAudio = true;
                 ui.layoutRowDynamic(18, 1);
                 ui.label("No audio sources");
                 if (ui.button("Add Source")) {
                     System.out.println("Add audio source clicked");
                 }
-                ui.treePop();
-            }
+                ui.sectionEnd();
+            } else { accAudio = false; }
         }
         ui.end();
 
