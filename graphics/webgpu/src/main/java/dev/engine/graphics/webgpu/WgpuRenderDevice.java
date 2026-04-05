@@ -1295,8 +1295,10 @@ public class WgpuRenderDevice implements RenderDevice {
 
         var entries = new WgpuBindings.BindGroupEntry[bindingTypes.size()];
         int i = 0;
-        // Sequential indices for textures/samplers — they're bound to units 0,1,2...
-        // but shader bindings may be at higher indices (e.g. 3,4,5 after UBOs)
+        // Textures/samplers use sequential indices — they're bound to units 0,1,2
+        // via rec.bindTexture(unit, tex) but WGSL bindings may differ.
+        // UBOs use direct binding-index lookup — they're bound via
+        // rec.bindUniformBuffer(binding, buf) with shader-specific binding.
         int texIdx = 0;
         int smpIdx = 0;
         for (var entry : bindingTypes.entrySet()) {
@@ -1441,6 +1443,7 @@ public class WgpuRenderDevice implements RenderDevice {
         if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) return (T) Integer.valueOf(texSize);
         if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) return (T) Integer.valueOf(texSize);
         if (capability == DeviceCapability.BACKEND_NAME) return (T) "WebGPU";
+        if (capability == DeviceCapability.SHADER_TARGET) return (T) Integer.valueOf(28); // ShaderCompiler.TARGET_WGSL
         if (capability == DeviceCapability.DEVICE_NAME) return (T) "WebGPU";
         if (capability == DeviceCapability.API_VERSION) return (T) "WebGPU";
         if (capability == DeviceCapability.COMPUTE_SHADERS) return (T) Boolean.TRUE;

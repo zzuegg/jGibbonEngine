@@ -119,7 +119,8 @@ public class DebugUiOverlay implements AutoCloseable {
         currentIbSize = 32 * 1024;
         vertexBuffer = device.createBuffer(new BufferDescriptor(currentVbSize, BufferUsage.VERTEX, AccessPattern.STREAM));
         indexBuffer = device.createBuffer(new BufferDescriptor(currentIbSize, BufferUsage.INDEX, AccessPattern.STREAM));
-        uniformBuffer = device.createBuffer(new BufferDescriptor(8, BufferUsage.UNIFORM, AccessPattern.STREAM));
+        // WebGPU requires 16-byte minimum uniform buffer binding size
+        uniformBuffer = device.createBuffer(new BufferDescriptor(16, BufferUsage.UNIFORM, AccessPattern.STREAM));
 
         initialized = true;
     }
@@ -179,8 +180,8 @@ public class DebugUiOverlay implements AutoCloseable {
             }
         }
 
-        // Upload screen size to uniform buffer
-        try (var writer = device.writeBuffer(uniformBuffer, 0, 8)) {
+        // Upload screen size to uniform buffer (16 bytes for WebGPU alignment)
+        try (var writer = device.writeBuffer(uniformBuffer, 0, 16)) {
             var mem = writer.memory();
             mem.putFloat(0, viewportWidth);
             mem.putFloat(4, viewportHeight);
@@ -201,11 +202,14 @@ public class DebugUiOverlay implements AutoCloseable {
                     .set(RenderState.SCISSOR_TEST, true)
                     .build());
 
+            int sx = Math.max(0, batch.scissorX());
+            int sw = Math.min(batch.scissorW(), viewportWidth - sx);
+            int sh = Math.min(batch.scissorH(), viewportHeight);
             int sy = flipScissorY
-                    ? viewportHeight - batch.scissorY() - batch.scissorH()
-                    : batch.scissorY();
-            rec.scissor(batch.scissorX(), sy,
-                    batch.scissorW(), batch.scissorH());
+                    ? Math.max(0, viewportHeight - batch.scissorY() - sh)
+                    : Math.max(0, batch.scissorY());
+            sh = Math.min(sh, viewportHeight - sy);
+            rec.scissor(sx, sy, Math.max(1, sw), Math.max(1, sh));
 
             rec.bindUniformBuffer(uboBinding, uniformBuffer);
 
