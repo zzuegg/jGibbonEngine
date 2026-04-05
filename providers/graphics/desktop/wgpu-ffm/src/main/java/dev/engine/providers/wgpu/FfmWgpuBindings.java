@@ -345,6 +345,25 @@ public class FfmWgpuBindings implements WgpuBindings {
             WGPUDeviceDescriptor.requiredFeatures(desc, MemorySegment.NULL);
             WGPUDeviceDescriptor.requiredLimits(desc, MemorySegment.NULL);
 
+            // Set label
+            var labelView = WGPUDeviceDescriptor.label(desc);
+            var emptyLabel = arena.allocateFrom("");
+            WGPUStringView.data(labelView, emptyLabel);
+            WGPUStringView.length(labelView, 0);
+
+            // Uncaptured error callback — prevents wgpu-native's default handler from panicking
+            var errorCbInfo = WGPUDeviceDescriptor.uncapturedErrorCallbackInfo(desc);
+            WGPUUncapturedErrorCallbackInfo.nextInChain(errorCbInfo, MemorySegment.NULL);
+            var errorFn = WGPUUncapturedErrorCallback.allocate(
+                    (MemorySegment deviceSeg, int type, MemorySegment message,
+                     MemorySegment userdata1, MemorySegment userdata2) -> {
+                        // Must not throw — any exception here causes a double-panic in Rust
+                        try {
+                            log.error("WebGPU uncaptured error (type {})", type);
+                        } catch (Throwable ignored) {}
+                    }, callbackArena);
+            WGPUUncapturedErrorCallbackInfo.callback(errorCbInfo, errorFn);
+
             // Device lost callback
             var deviceLostCbInfo = WGPUDeviceDescriptor.deviceLostCallbackInfo(desc);
             WGPUDeviceLostCallbackInfo.mode(deviceLostCbInfo, WGPUCallbackMode_AllowSpontaneous());
@@ -684,16 +703,30 @@ public class FfmWgpuBindings implements WgpuBindings {
             WGPUChainedStruct.next(chain, MemorySegment.NULL);
 
             // Set the WGSL code as a WGPUStringView
-            var codeStr = arena.allocateFrom(wgsl);
+            var codeBytes = arena.allocateFrom(wgsl);
             var codeView = WGPUShaderSourceWGSL.code(wgslSource);
-            WGPUStringView.data(codeView, codeStr);
+            WGPUStringView.data(codeView, codeBytes);
             WGPUStringView.length(codeView, wgsl.length());
 
             // Create the shader module descriptor
             var desc = WGPUShaderModuleDescriptor.allocate(arena);
             WGPUShaderModuleDescriptor.nextInChain(desc, wgslSource);
 
-            return store(wgpuDeviceCreateShaderModule(dev, desc));
+            // Set label to empty string (required — NonNullInputString)
+            var labelView = WGPUShaderModuleDescriptor.label(desc);
+            var emptyStr = arena.allocateFrom("");
+            WGPUStringView.data(labelView, emptyStr);
+            WGPUStringView.length(labelView, 0);
+
+            var result = wgpuDeviceCreateShaderModule(dev, desc);
+            if (result == null || result.equals(MemorySegment.NULL)) {
+                log.error("wgpuDeviceCreateShaderModule returned null");
+                return 0;
+            }
+            return store(result);
+        } catch (Throwable t) {
+            log.error("Failed to create shader module: {}", t.getMessage(), t);
+            return 0;
         }
     }
 
