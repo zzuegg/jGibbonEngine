@@ -829,12 +829,11 @@ public class NkContext {
                 value = Math.min(max, value);
             }
 
-            // Handle dragging on value area (or anywhere on the widget)
-            if (input.isMouseDragging(0, rect) && !input.isMouseDragging(0, decRect) && !input.isMouseDragging(0, incRect)) {
+            // Handle dragging — don't snap to step during drag for smooth feel
+            if (input.isMouseDragging(0, rect)) {
                 float dx = input.mouseDeltaX();
                 if (dx != 0) {
                     value += dx * incPerPixel;
-                    if (step > 0) value = Math.round(value / step) * step;
                     value = Math.max(min, Math.min(max, value));
                 }
             }
