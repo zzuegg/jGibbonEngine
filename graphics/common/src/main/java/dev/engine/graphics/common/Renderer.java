@@ -266,13 +266,13 @@ public class Renderer implements AutoCloseable {
                 draw.setRenderState(renderState);
 
                 uniformManager.bindGlobals(draw, cmd.renderable(), objectUbo);
-                resources.recordUse(GpuResourceManager.BUFFER); // global UBOs
+                resources.recordUse(GpuResourceManager.BUFFER_UNIFORM); // global UBOs
 
                 if (mat != null) {
                     int materialSlot = cmd.renderable().bindingFor("MaterialBuffer",
                             uniformManager.globalParams().nextBinding());
                     uniformManager.uploadAndBindMaterial(mat, cmd.entity(), draw, materialSlot);
-                    resources.recordUse(GpuResourceManager.BUFFER); // material UBO
+                    resources.recordUse(GpuResourceManager.BUFFER_UNIFORM); // material UBO
 
                     var compiled = shaderManager.getEntityShader(cmd.entity());
                     if (compiled != null) {
@@ -283,11 +283,11 @@ public class Renderer implements AutoCloseable {
                 }
 
                 draw.bindVertexBuffer(cmd.renderable().vertexBuffer(), cmd.renderable().vertexInput());
-                resources.recordUse(GpuResourceManager.BUFFER); // VBO
+                resources.recordUse(GpuResourceManager.BUFFER_VERTEX);
                 resources.recordUse(GpuResourceManager.VERTEX_INPUT);
                 if (cmd.renderable().indexBuffer() != null) {
                     draw.bindIndexBuffer(cmd.renderable().indexBuffer());
-                    resources.recordUse(GpuResourceManager.BUFFER); // IBO
+                    resources.recordUse(GpuResourceManager.BUFFER_INDEX);
                     draw.drawIndexed(cmd.renderable().indexCount(), 0);
                 } else {
                     draw.draw(cmd.renderable().vertexCount(), 0);

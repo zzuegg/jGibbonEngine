@@ -38,6 +38,10 @@ public class GpuResourceManager {
 
     /** Well-known resource type keys used by this manager. */
     public static final String BUFFER        = "buffer";
+    public static final String BUFFER_VERTEX = "buffer/vertex";
+    public static final String BUFFER_INDEX  = "buffer/index";
+    public static final String BUFFER_UNIFORM = "buffer/uniform";
+    public static final String BUFFER_STORAGE = "buffer/storage";
     public static final String TEXTURE       = "texture";
     public static final String RENDER_TARGET = "render_target";
     public static final String PIPELINE      = "pipeline";
@@ -46,6 +50,9 @@ public class GpuResourceManager {
 
     private final RenderDevice device;
     private final ResourceStats resourceStats;
+
+    // Maps buffer handle → resource stats key, so destroy/write can track the correct sub-type
+    private final java.util.Map<Handle<BufferResource>, String> bufferTypes = new java.util.concurrent.ConcurrentHashMap<>();
 
     // Deferred deletion queues (thread-safe for concurrent destroy calls)
     private volatile java.util.Queue<Runnable> deletionQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
@@ -60,6 +67,10 @@ public class GpuResourceManager {
         this.resourceStats = resourceStats;
         // Pre-register well-known types
         resourceStats.register(BUFFER);
+        resourceStats.register(BUFFER_VERTEX);
+        resourceStats.register(BUFFER_INDEX);
+        resourceStats.register(BUFFER_UNIFORM);
+        resourceStats.register(BUFFER_STORAGE);
         resourceStats.register(TEXTURE);
         resourceStats.register(RENDER_TARGET);
         resourceStats.register(PIPELINE);
@@ -71,7 +82,10 @@ public class GpuResourceManager {
 
     public Handle<BufferResource> createBuffer(BufferDescriptor descriptor) {
         var handle = device.createBuffer(descriptor);
+        var subType = bufferSubType(descriptor.usage());
+        bufferTypes.put(handle, subType);
         resourceStats.recordCreate(BUFFER);
+        resourceStats.recordCreate(subType);
         return handle;
     }
 
@@ -81,18 +95,22 @@ public class GpuResourceManager {
 
     public BufferWriter writeBuffer(Handle<BufferResource> buffer) {
         resourceStats.recordUpdate(BUFFER);
+        resourceStats.recordUpdate(bufferTypes.getOrDefault(buffer, BUFFER));
         return device.writeBuffer(buffer);
     }
 
     public BufferWriter writeBuffer(Handle<BufferResource> buffer, long offset, long length) {
         resourceStats.recordUpdate(BUFFER);
+        resourceStats.recordUpdate(bufferTypes.getOrDefault(buffer, BUFFER));
         return device.writeBuffer(buffer, offset, length);
     }
 
     public void destroyBuffer(Handle<BufferResource> buffer) {
+        var subType = bufferTypes.remove(buffer);
         deletionQueue.add(() -> {
             device.destroyBuffer(buffer);
             resourceStats.recordDestroy(BUFFER);
+            if (subType != null) resourceStats.recordDestroy(subType);
         });
     }
 
@@ -236,6 +254,21 @@ public class GpuResourceManager {
         }
     }
 
+    /** Returns the resource stats sub-type key for a buffer handle, or {@link #BUFFER} if unknown. */
+    public String bufferSubType(Handle<BufferResource> buffer) {
+        return bufferTypes.getOrDefault(buffer, BUFFER);
+    }
+
     /** Direct device access — escape hatch for operations not covered by this manager. */
     public RenderDevice device() { return device; }
+
+    private static String bufferSubType(BufferUsage usage) {
+        return switch (usage.name()) {
+            case "VERTEX"  -> BUFFER_VERTEX;
+            case "INDEX"   -> BUFFER_INDEX;
+            case "UNIFORM" -> BUFFER_UNIFORM;
+            case "STORAGE" -> BUFFER_STORAGE;
+            default        -> BUFFER;
+        };
+    }
 }
