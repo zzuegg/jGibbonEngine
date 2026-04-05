@@ -1,0 +1,85 @@
+# Engine Code Review TODO
+
+Full code review performed 2026-04-05 across all 467 source files.
+
+## Critical Bugs
+
+- [ ] **Thread safety: Engine.run() race condition** — `Engine.java:152`. Render thread drains TransactionBuffer while logic thread writes concurrently. TransactionBuffer has no synchronization. Use TransactionBus (which has per-subscriber locks) or add synchronization.
+- [ ] **Profiler.lastFrame() returns currentFrame** — `Profiler.java:29`. Method named `lastFrame()` returns `currentFrame` (in-progress). `previousFrame()` returns `lastFrame`. Either rename or fix return values.
+- [ ] **GPU buffer leak: per-entity UBOs never cleaned up** — `UniformManager.java:79`. Creates objectUBOs ("obj_N") and materialUBOs ("mat_N") per entity. Never removed on EntityRemoved. Leaks GPU buffers for every entity that ever existed.
+- [ ] **Stale shader binding after entity reuse** — `ShaderManager.java:168`. entityShaders keyed by handle index only, no generation check. After entity destroy+recreate at same index, old shader persists.
+- [ ] **Engine.shutdown() doesn't shut down AssetManager** — `Engine.java:187`. FileWatcher thread keeps running. Add `assets.shutdown()` to teardown.
+- [ ] **Renderer.close() doesn't clean up MeshManager** — `Renderer.java:314`. MeshManager holds GPU resources (VBOs, IBOs, VAOs) via meshDataCache that are never released on shutdown.
+
+## Hardcoded Values (should be configurable/dynamic)
+
+- [ ] **Primitive topology hardcoded to TRIANGLES** — All draw commands in Gl/Vk/Wgpu RenderDevice. Topology should be part of PipelineDescriptor or DrawCommand. Prevents drawing lines, points, triangle strips.
+- [ ] **Clear color hardcoded (0.05, 0.05, 0.08)** — `Renderer.java:65`, `VkRenderDevice.java:60`. Duplicated magic constant. Default should come from config.
+- [ ] **Push constant UBO size hardcoded to 128 bytes** — `GlRenderDevice.java:96`, `VkDescriptorManager.java:101`. Should be configurable via GraphicsConfig or DeviceCapability.
+- [ ] **Texture/sampler array sizes: magic numbers** — GL: boundTextures[32], boundSamplers[32]. Vk: currentTextures[8], pendingUboBuffers[16], pendingSsboBuffers[8]. Should be queried from DeviceCapability or configurable.
+- [ ] **MAX_FRAMES_IN_FLIGHT=2 hardcoded** — `VkRenderDevice.java:47`. Should be configurable through VulkanConfig.
+- [ ] **MAX_SETS_PER_FRAME=256 hardcoded** — `VkDescriptorManager.java:17`. Could be insufficient for complex scenes. Should auto-grow or be configurable.
+- [ ] **Global param bindings hardcoded** — `Renderer.java:79-81`. "Engine"=0, "Camera"=1, "Object"=2 are string literals scattered throughout. Define as constants, centralize binding assignment.
+- [ ] **Blend function hardcoded to SRC_ALPHA/ONE_MINUS_SRC_ALPHA** — `GlRenderDevice.java:623`. BlendMode exists but only supports NONE vs one hardcoded alpha blend. Need configurable src/dst factors, blend equation.
+- [ ] **All shaders forced to STANDARD_FORMAT vertex layout** — `ShaderManager.java:255`. Uses PrimitiveMeshes.STANDARD_FORMAT for ALL pipelines. Custom vertex formats (tangents, colors, bone weights) won't work.
+- [ ] **Shader entry points hardcoded ("vertexMain"/"fragmentMain")** — `ShaderManager.java:227`. Should be configurable per shader for custom entry points.
+- [ ] **Camera defaults (near=0.1, far=1000) not in config** — `Camera.java:15`. Should be configurable through EngineConfig or named constants.
+- [ ] **Deprecated cull face/front face in legacy commands** — `GlRenderDevice.java:631`. Legacy SetCullFace hardcodes GL_BACK/GL_CCW. Remove deprecated path since SetRenderState replacement exists.
+
+## Missing Configuration
+
+- [ ] **EngineConfig missing common options** — Missing: FPS cap, VSync toggle, MSAA sample count, anisotropic filtering, gamma/sRGB mode, fullscreen mode, monitor selection, cursor visibility, debug overlay toggle.
+- [ ] **GraphicsConfig missing graphics settings** — Only has headless and validation. Missing: MSAA, VSync mode, sRGB framebuffer, aniso level, GPU selection, shader cache directory, max texture size override.
+- [ ] **WindowDescriptor too minimal** — Only title/width/height. Missing: resizable, fullscreen, decorated, transparent, always-on-top, min/max size, initial position, high-DPI flag, cursor mode.
+
+## Designed but Not Implemented (from NOTES.md)
+
+- [ ] **DoubleBufferedPipeline + FrameSnapshot unused** — Implemented classes never used by Engine or BaseApplication. Threaded Engine.run() directly accesses scene with no snapshot mechanism.
+- [ ] **RenderGraph not integrated into Renderer** — RenderGraph, RenderPass, PassBuilder, PassContext all implemented but Renderer has monolithic renderFrame(). Graph should drive shadow/geometry/post-process passes.
+- [ ] **PostProcessChain not integrated** — Implemented but never called from Renderer. No hook for bloom, tone mapping, FXAA, etc.
+- [ ] **UploadStrategy not used by Renderer** — Interface + PerObjectUploadStrategy exist but Renderer does inline upload. PerObjectUploadStrategy even has a TODO comment.
+- [ ] **EventBus never instantiated** — Fully implemented with subscribe/publish/unsubscribe but not used by Engine, Renderer, AssetManager, or anything.
+- [ ] **TransactionBus never used** — Multi-consumer filtered bus implemented. Only the simpler TransactionBuffer is used. Bus is more appropriate for the architecture described in NOTES.md.
+- [ ] **Asset dependency tracking** — NOTES.md: "Assets can depend on other assets. Manager resolves dependencies transitively." Not implemented.
+- [ ] **Asset eviction/reference counting** — NOTES.md: "Reference counting or GC-based eviction for unused assets." Cache is unbounded ConcurrentHashMap. No LRU, no memory budget.
+- [ ] **Async asset loading with placeholders** — NOTES.md: "Callers get a handle immediately; placeholder assets used until loading completes." API blocks synchronously. No placeholder/fallback system.
+- [ ] **Disk shader compilation cache** — NOTES.md: "Cache is persistent across sessions (disk cache)." Only in-memory cache exists. Every restart recompiles all shaders.
+- [ ] **Shader hot-reload** — Infrastructure exists (AssetManager has watchForReload, ShaderManager has invalidate) but never wired together.
+- [ ] **Error/fallback shader** — NOTES.md: "Fallback/error shader always available." ShaderManager returns null on failure, entities disappear. Should render visible error (e.g. magenta).
+- [ ] **Object versioning system** — NOTES.md extensively describes monotonic version counters, hierarchical versioning, cache invalidation. VersionCounter class exists but is unused.
+- [ ] **Static vs Dynamic object distinction** — NOTES.md describes static/dynamic categorization for persistent shadow maps, skipping updates. No mechanism to mark entities.
+- [ ] **Multi-window rendering** — NOTES.md describes per-window render threads. Architecture is single-window only.
+
+## Performance Issues
+
+- [ ] **New CommandRecorder per draw call** — `Renderer.java:251`. Creates and submits a CommandRecorder for every entity. Prevents any command batching. Should batch into one recorder or sort by state.
+- [ ] **No frustum culling** — Renderer draws ALL entities every frame regardless of camera frustum. No spatial data structure (BVH, octree). Critical for non-trivial scenes.
+- [ ] **No draw call sorting** — Entities drawn in arbitrary HashMap order. No sorting by pipeline/material/depth. Causes maximum state thrashing.
+- [ ] **MaterialData.set() copies entire PropertyMap** — `MaterialData.java:72`. O(n) per property change. Consider builder or mutable-then-freeze.
+- [ ] **WeakCache.getOrCreate() linear scan** — `WeakCache.java:35`. Iterates entire map for identity lookup. O(n) per call. Use IdentityHashMap-based index.
+- [ ] **HierarchicalScene.getWorldTransform() recursive, uncached** — Walks parent chain every call. O(depth) per entity per frame. Cache world transforms, invalidate on change.
+- [ ] **AbstractScene.query() linear scan** — Iterates all entities per query. No component index. O(n) per query.
+- [ ] **Entity HashMap for 2-4 components** — HashMap overhead for typical small component counts. Array-based map would be more efficient.
+
+## Missing Renderer Features
+
+- [ ] **No lighting system** — LightData/LightType exist in core but Renderer has zero light handling. No light buffer upload, no light culling. MeshRenderer ignores LightData components.
+- [ ] **No shadow mapping** — Extensively designed in NOTES.md. No shadow pass, no shadow maps, no light-space matrices. LightData.CASTS_SHADOWS exists but nothing reads it.
+- [ ] **RenderStats never populated** — `RenderStats.java`. Tracks draws, vertices, binds but nothing calls recordDrawCall() etc. All counters always zero.
+
+## Architectural Cleanup
+
+- [ ] **Deprecated APIs to remove** — GraphicsBackendFactory, GraphicsConfigLegacy, EngineConfig.graphicsBackend field, GlfwWindowToolkit in graphics:opengl, deprecated SetDepthTest/SetBlending/SetCullFace/SetWireframe commands. New APIs (GraphicsConfig, SetRenderState) are in place.
+- [ ] **ResourceCleaner.register() package-private** — Can't be used outside core.resource. Make public or provide public API for Cleaner safety net.
+- [ ] **NativeResource not used by GPU resources** — Interface exists but no GPU resource implements it. No Cleaner safety net for dropped handles.
+- [ ] **GpuResourceManager deferred deletion delay doesn't match frames-in-flight** — `GpuResourceManager.java:175`. Double-buffer swap means N+2 deletion. If Vulkan uses 3 frames-in-flight, resources freed while still in use. Tie to actual fence/frame count.
+
+## Previously Identified (from 2026-04-04 review)
+
+- [ ] **WebGPU compute shader support** — `WgpuRenderDevice.java`. Push constants, compute pipeline, dispatch, storage images, texture copy/blit unimplemented.
+- [ ] **Vulkan streaming buffer** — `VkRenderDevice.java:603-605`. Returns null. Needs persistent mapped buffer with ring buffer regions.
+- [ ] **Vulkan storage image (bindImage)** — `VkRenderDevice.java:1006-1008`. Needs VK_DESCRIPTOR_TYPE_STORAGE_IMAGE support.
+- [ ] **SDL3 window property stubs** — `Sdl3WindowToolkit.java`. get(), set(), sizeRef(), focusedRef(), swapBuffers() are stubs.
+- [ ] **Async buffer mapping for TeaVM WebGPU** — Browser can't do synchronous mapping. Needs promise wrapper or skip readback on web.
+- [ ] **Slang generic specialization parsing robustness** — `SlangCompilerNative.java:245-276`. Current regex works. Revisit when it breaks.
+- [ ] **WGSL binding extraction regex** — `WgpuRenderDevice.java:623-625`. Works for current shaders. Revisit on Slang output changes.
