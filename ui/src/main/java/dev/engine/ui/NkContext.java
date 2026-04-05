@@ -661,9 +661,10 @@ public class NkContext {
             currentWindow.treeStates.put(title, state);
         }
 
-        // Arrow area — only toggle expand on arrow click
-        float arrowW = font.textWidth("v ") + 4;
-        var arrowRect = new NkRect(rect.x(), rect.y(), arrowW, rect.h());
+        // Arrow on the right — click to toggle expand
+        String arrow = state ? "v" : ">";
+        float arrowW = font.textWidth(arrow) + 8;
+        var arrowRect = new NkRect(rect.x() + rect.w() - arrowW, rect.y(), arrowW, rect.h());
 
         if (windowAcceptsInput() && input.isMousePressed(0, arrowRect)) {
             state = !state;
@@ -676,16 +677,17 @@ public class NkContext {
             emit(new NkDrawCommand.FilledRect(rect, 0, style.treeNodeHover));
         }
 
-        // Draw arrow
-        String arrow = state ? "v " : "> ";
+        // Draw title (left-aligned)
         float textY = rect.y() + (rect.h() - font.height()) / 2;
         emit(new NkDrawCommand.Text(
-                new NkRect(rect.x(), textY, font.textWidth(arrow), font.height()),
-                arrow, font, style.treeNodeText));
-        // Draw title
-        emit(new NkDrawCommand.Text(
-                new NkRect(rect.x() + arrowW, textY, font.textWidth(title), font.height()),
+                new NkRect(rect.x() + 4, textY, font.textWidth(title), font.height()),
                 title, font, style.treeNodeText));
+
+        // Draw arrow (right-aligned)
+        float arrowX = rect.x() + rect.w() - font.textWidth(arrow) - 4;
+        emit(new NkDrawCommand.Text(
+                new NkRect(arrowX, textY, font.textWidth(arrow), font.height()),
+                arrow, font, style.treeNodeText));
 
         return state;
     }
@@ -715,12 +717,12 @@ public class NkContext {
             emit(new NkDrawCommand.FilledRect(rect, 0, style.treeNodeHover));
         }
 
-        // Draw text
+        // Left-aligned text with small padding (matches treePush)
+        float textX = rect.x() + 4;
         float textY = rect.y() + (rect.h() - font.height()) / 2;
-        String prefix = leaf ? "  " : "";
         emit(new NkDrawCommand.Text(
-                new NkRect(rect.x(), textY, font.textWidth(prefix + title), font.height()),
-                prefix + title, font,
+                new NkRect(textX, textY, font.textWidth(title), font.height()),
+                title, font,
                 selected ? style.headerText : style.treeNodeText));
 
         // Handle click on label area

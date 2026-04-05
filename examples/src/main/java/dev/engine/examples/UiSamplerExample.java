@@ -257,17 +257,17 @@ public class UiSamplerExample extends BaseApplication {
             ui.layoutRowDynamic(18, 1);
             treeOpen = ui.treePush("Scene", treeOpen);
             if (treeOpen) {
-                if (ui.treeNode("  Root", selectedTreeItems.contains(0), false))
+                if (ui.treeNode("Root", selectedTreeItems.contains(0), false))
                     toggleSelect(0);
-                subTreeOpen = ui.treePush("  Entities", subTreeOpen);
+                subTreeOpen = ui.treePush("Entities", subTreeOpen);
                 if (subTreeOpen) {
-                    if (ui.treeNode("    Cube", selectedTreeItems.contains(1), true))
+                    if (ui.treeNode("Cube", selectedTreeItems.contains(1), true))
                         toggleSelect(1);
-                    if (ui.treeNode("    Ground", selectedTreeItems.contains(2), true))
+                    if (ui.treeNode("Ground", selectedTreeItems.contains(2), true))
                         toggleSelect(2);
-                    if (ui.treeNode("    Light", selectedTreeItems.contains(3), true))
+                    if (ui.treeNode("Light", selectedTreeItems.contains(3), true))
                         toggleSelect(3);
-                    if (ui.treeNode("    Camera", selectedTreeItems.contains(4), true))
+                    if (ui.treeNode("Camera", selectedTreeItems.contains(4), true))
                         toggleSelect(4);
                     ui.treePop();
                 }
