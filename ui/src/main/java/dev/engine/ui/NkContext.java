@@ -781,14 +781,14 @@ public class NkContext {
         var rect = allocateWidget();
         if (rect == null) return value;
 
-        // Split rect: [-] [label] [value] [+]
+        // Split rect: [label] [-] [value] [+]
         float btnW = rect.h(); // square buttons
         float labelW = font.textWidth(name) + 8;
         float valueW = rect.w() - labelW - btnW * 2;
 
-        var decRect = new NkRect(rect.x(), rect.y(), btnW, rect.h());
-        var labelRect = new NkRect(rect.x() + btnW, rect.y(), labelW, rect.h());
-        var valueRect = new NkRect(rect.x() + btnW + labelW, rect.y(), valueW, rect.h());
+        var labelRect = new NkRect(rect.x(), rect.y(), labelW, rect.h());
+        var decRect = new NkRect(rect.x() + labelW, rect.y(), btnW, rect.h());
+        var valueRect = new NkRect(rect.x() + labelW + btnW, rect.y(), valueW, rect.h());
         var incRect = new NkRect(rect.x() + rect.w() - btnW, rect.y(), btnW, rect.h());
 
         // Draw decrement button
