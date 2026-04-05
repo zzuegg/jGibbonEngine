@@ -59,6 +59,9 @@ public class NkContext {
     private final Map<String, List<NkDrawCommand>> windowDrawCommands = new LinkedHashMap<>();
     private List<NkDrawCommand> activeWindowCommands;
 
+    // Overlay commands rendered on top of everything (popups, tooltips)
+    private final List<NkDrawCommand> overlayCommands = new ArrayList<>();
+
     // Tooltip state
     private boolean tooltipActive;
 
@@ -71,6 +74,16 @@ public class NkContext {
         if (activeWindowCommands != null) {
             activeWindowCommands.add(cmd);
         }
+    }
+
+    /** Emits to the overlay layer — rendered on top of all windows (for popups). */
+    private void emitOverlay(NkDrawCommand cmd) {
+        overlayCommands.add(cmd);
+    }
+
+    /** Returns true if the current window accepts mouse input (not blocked by a front window). */
+    private boolean windowAcceptsInput() {
+        return currentWindow != null && currentWindow.inputActive;
     }
 
     public NkInput input() { return input; }
@@ -97,8 +110,23 @@ public class NkContext {
         }
         currentWindow = win;
 
-        // Bring to front when clicked
-        if (input.isMousePressed(0, win.bounds) && windowOrder.indexOf(title) != windowOrder.size() - 1) {
+        // Check if this window is the topmost at the click position
+        boolean isTopmostAtClick = true;
+        int myOrder = windowOrder.indexOf(title);
+        if (input.isMouseClicked(0)) {
+            for (int wi = windowOrder.size() - 1; wi > myOrder; wi--) {
+                var frontWin = windows.get(windowOrder.get(wi));
+                if (frontWin != null && !frontWin.closed && !frontWin.collapsed
+                        && frontWin.bounds.contains(input.mouseClickX(0), input.mouseClickY(0))) {
+                    isTopmostAtClick = false;
+                    break;
+                }
+            }
+        }
+        win.inputActive = isTopmostAtClick;
+
+        // Bring to front when clicked (only if topmost at click position)
+        if (isTopmostAtClick && input.isMousePressed(0, win.bounds) && myOrder != windowOrder.size() - 1) {
             windowOrder.remove(title);
             windowOrder.add(title);
         }
@@ -113,8 +141,8 @@ public class NkContext {
 
         var bounds = win.bounds;
 
-        // Handle window dragging (header area)
-        if ((flags & WINDOW_MOVABLE) != 0 && (flags & WINDOW_TITLE) != 0) {
+        // Handle window dragging (header area) — only if this window accepts input
+        if ((flags & WINDOW_MOVABLE) != 0 && (flags & WINDOW_TITLE) != 0 && windowAcceptsInput()) {
             var headerRect = new NkRect(bounds.x(), bounds.y(), bounds.w(), style.headerHeight);
             if (input.isMousePressed(0, headerRect)) {
                 win.dragging = true;
@@ -632,17 +660,15 @@ public class NkContext {
             isOpen = currentWindow.comboOpen && comboId.equals(currentWindow.comboId);
         }
 
-        // Draw popup (outside scissor — emit full-viewport scissor so popup isn't clipped)
+        // Draw popup on overlay layer (on top of all windows, not clipped by parent)
         if (isOpen) {
             float popupH = items.length * itemHeight + 2;
             float popupY = rect.y() + rect.h();
             var popupRect = new NkRect(rect.x(), popupY, rect.w(), popupH);
 
-            // Temporarily disable scissor clipping for the popup
-            emit(new NkDrawCommand.Scissor(0, 0, 8192, 8192));
-
-            emit(new NkDrawCommand.FilledRect(popupRect, 2, style.comboBackground));
-            emit(new NkDrawCommand.StrokedRect(popupRect, 2, 1, style.comboBorder));
+            emitOverlay(new NkDrawCommand.Scissor(0, 0, 8192, 8192));
+            emitOverlay(new NkDrawCommand.FilledRect(popupRect, 2, style.comboBackground));
+            emitOverlay(new NkDrawCommand.StrokedRect(popupRect, 2, 1, style.comboBorder));
 
             for (int i = 0; i < items.length; i++) {
                 float iy = popupY + 1 + i * itemHeight;
@@ -650,15 +676,15 @@ public class NkContext {
 
                 boolean itemHover = input.isMouseHovering(itemRect);
                 if (itemHover) {
-                    emit(new NkDrawCommand.FilledRect(itemRect, 0, style.comboButtonHover));
+                    emitOverlay(new NkDrawCommand.FilledRect(itemRect, 0, style.comboButtonHover));
                 }
                 if (i == selected) {
-                    emit(new NkDrawCommand.FilledRect(itemRect, 0,
+                    emitOverlay(new NkDrawCommand.FilledRect(itemRect, 0,
                             style.checkboxActive.withAlpha(40)));
                 }
 
                 float ity = iy + (itemHeight - font.height()) / 2;
-                emit(new NkDrawCommand.Text(
+                emitOverlay(new NkDrawCommand.Text(
                         new NkRect(itemRect.x() + 4, ity, font.textWidth(items[i]), font.height()),
                         items[i], font, style.comboText));
 
@@ -847,19 +873,22 @@ public class NkContext {
 
     // ========================= Draw output =========================
 
-    /** Returns draw commands sorted by window focus order (back to front). */
+    /** Returns draw commands sorted by window focus order (back to front), overlay on top. */
     public List<NkDrawCommand> drawCommands() {
         var sorted = new ArrayList<NkDrawCommand>();
         for (var title : windowOrder) {
             var cmds = windowDrawCommands.get(title);
             if (cmds != null) sorted.addAll(cmds);
         }
+        // Overlay (popups, tooltips) renders on top of everything
+        sorted.addAll(overlayCommands);
         return sorted;
     }
 
     /** Clears all draw commands and per-frame state. Call at the end of each frame. */
     public void clear() {
         windowDrawCommands.values().forEach(List::clear);
+        overlayCommands.clear();
         activeWindowCommands = null;
         tooltipActive = false;
     }

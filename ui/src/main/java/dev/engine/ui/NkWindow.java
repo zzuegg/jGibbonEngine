@@ -22,6 +22,9 @@ public class NkWindow {
     // Tree node states (keyed by title)
     final Map<String, Boolean> treeStates = new HashMap<>();
 
+    // Input focus — false if a window in front blocks clicks
+    boolean inputActive = true;
+
     // Combo popup state
     boolean comboOpen;
     String comboId;
