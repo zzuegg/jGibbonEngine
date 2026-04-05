@@ -1,9 +1,9 @@
 {
   "javaVersion": 25,
   "backendCount": 3,
-  "moduleCount": 15,
-  "featureCount": 11,
-  "tutorialCount": 2,
+  "moduleCount": 16,
+  "featureCount": 14,
+  "tutorialCount": 3,
   "exampleCount": 0,
   "guideCount": 7
 }

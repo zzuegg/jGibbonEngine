@@ -95,6 +95,7 @@ public class HeadlessRenderDevice implements RenderDevice {
     @SuppressWarnings("unchecked")
     public <T> T queryCapability(DeviceCapability<T> cap) {
         if (cap == DeviceCapability.BACKEND_NAME) return (T) "Headless";
+        if (cap == DeviceCapability.SHADER_TARGET) return (T) Integer.valueOf(2); // ShaderCompiler.TARGET_GLSL
         if (cap == DeviceCapability.DEVICE_NAME) return (T) "Headless Test Device";
         if (cap == DeviceCapability.MAX_TEXTURE_SIZE) return (T) Integer.valueOf(4096);
         return null;

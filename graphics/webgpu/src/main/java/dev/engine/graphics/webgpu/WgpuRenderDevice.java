@@ -145,6 +145,7 @@ public class WgpuRenderDevice implements RenderDevice {
     private final Handle<BufferResource>[] boundSsbos = new Handle[16];
     private Handle<PipelineResource> currentPipeline;
     private boolean bindingsDirty;
+    private boolean bindGroupValid;
     private long currentBindGroup;
 
     // ── Render state tracking (for pipeline-baked state in WebGPU) ────
@@ -243,8 +244,13 @@ public class WgpuRenderDevice implements RenderDevice {
                 throw new RuntimeException("Failed to get WebGPU device");
             }
 
+            // Process events to ensure device callbacks have completed before querying state
+            gpu.instanceProcessEvents(wgpuInstance);
+
             wgpuQueue = gpu.deviceGetQueue(wgpuDevice);
-            deviceLimits = gpu.deviceGetLimits(wgpuDevice);
+            // deviceGetLimits is broken in jwebgpu 0.1.15 (struct layout mismatch
+            // causes native SIGABRT). Skip it — queryCapability() uses safe defaults.
+            deviceLimits = null;
 
             // Configure presentation surface if requested
             if (presentToSurface) {
@@ -277,8 +283,13 @@ public class WgpuRenderDevice implements RenderDevice {
     public Handle<BufferResource> createBuffer(BufferDescriptor descriptor) {
         if (nativeAvailable) {
             int usage = mapBufferUsage(descriptor.usage()) | WgpuBindings.BUFFER_USAGE_COPY_DST;
-            long buf = gpu.deviceCreateBuffer(wgpuDevice, descriptor.size(), usage);
-            return buffers.register(new WgpuBuffer(buf, descriptor.size()));
+            long size = descriptor.size();
+            // WebGPU requires uniform buffers to be at least 16 bytes
+            if (size < 16 && (usage & WgpuBindings.BUFFER_USAGE_UNIFORM) != 0) {
+                size = 16;
+            }
+            long buf = gpu.deviceCreateBuffer(wgpuDevice, size, usage);
+            return buffers.register(new WgpuBuffer(buf, size));
         }
         return buffers.register(new WgpuBuffer(0, descriptor.size()));
     }
@@ -1017,8 +1028,18 @@ public class WgpuRenderDevice implements RenderDevice {
             }
             case RenderCommand.Scissor cmd -> {
                 if (renderPassEncoder != 0 && nativeAvailable) {
-                    gpu.renderPassSetScissorRect(renderPassEncoder,
-                            cmd.x(), cmd.y(), cmd.width(), cmd.height());
+                    // Clamp scissor rect to render target dimensions — WebGPU validation
+                    // rejects scissors larger than the render target (unlike GL/VK which clamp silently)
+                    var rt = currentRenderTarget != null ? renderTargets.get(currentRenderTarget) : null;
+                    int rtW = rt != null ? rt.width() : cmd.width();
+                    int rtH = rt != null ? rt.height() : cmd.height();
+                    int sx = Math.max(0, cmd.x());
+                    int sy = Math.max(0, cmd.y());
+                    int sw = Math.min(cmd.width(), rtW - sx);
+                    int sh = Math.min(cmd.height(), rtH - sy);
+                    if (sw > 0 && sh > 0) {
+                        gpu.renderPassSetScissorRect(renderPassEncoder, sx, sy, sw, sh);
+                    }
                 }
             }
             case RenderCommand.BindPipeline cmd -> {
@@ -1078,21 +1099,21 @@ public class WgpuRenderDevice implements RenderDevice {
                 if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), 1, cmd.firstVertex(), 0);
+                    if (bindGroupValid) gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), 1, cmd.firstVertex(), 0);
                 }
             }
             case RenderCommand.DrawIndexed cmd -> {
                 if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), 1, cmd.firstIndex(), 0, 0);
+                    if (bindGroupValid) gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), 1, cmd.firstIndex(), 0, 0);
                 }
             }
             case RenderCommand.DrawInstanced cmd -> {
                 if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), cmd.instanceCount(),
+                    if (bindGroupValid) gpu.renderPassDraw(renderPassEncoder, cmd.vertexCount(), cmd.instanceCount(),
                             cmd.firstVertex(), cmd.firstInstance());
                 }
             }
@@ -1100,7 +1121,7 @@ public class WgpuRenderDevice implements RenderDevice {
                 if (renderPassEncoder != 0 && nativeAvailable) {
                     flushPipelineVariant();
                     flushBindings();
-                    gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), cmd.instanceCount(),
+                    if (bindGroupValid) gpu.renderPassDrawIndexed(renderPassEncoder, cmd.indexCount(), cmd.instanceCount(),
                             cmd.firstIndex(), 0, cmd.firstInstance());
                 }
             }
@@ -1295,6 +1316,12 @@ public class WgpuRenderDevice implements RenderDevice {
 
         var entries = new WgpuBindings.BindGroupEntry[bindingTypes.size()];
         int i = 0;
+        // Textures/samplers use sequential indices — they're bound to units 0,1,2
+        // via rec.bindTexture(unit, tex) but WGSL bindings may differ.
+        // UBOs use direct binding-index lookup — they're bound via
+        // rec.bindUniformBuffer(binding, buf) with shader-specific binding.
+        int texIdx = 0;
+        int smpIdx = 0;
         for (var entry : bindingTypes.entrySet()) {
             int binding = entry.getKey();
             var type = entry.getValue();
@@ -1311,26 +1338,28 @@ public class WgpuRenderDevice implements RenderDevice {
                     }
                 }
                 case TEXTURE -> {
-                    // Look up texture by its binding index (textures are bound to units matching shader bindings)
-                    if (binding < boundTextures.length && boundTextures[binding] != null) {
-                        var tex = textures.get(boundTextures[binding]);
+                    // Use sequential index — textures are bound to units 0,1,2...
+                    if (texIdx < boundTextures.length && boundTextures[texIdx] != null) {
+                        var tex = textures.get(boundTextures[texIdx]);
                         if (tex != null && tex.view() != 0) {
                             entries[i] = new WgpuBindings.BindGroupEntry(binding,
                                     WgpuBindings.BindingResourceType.TEXTURE_VIEW,
                                     tex.view(), 0, 0);
                         }
                     }
+                    texIdx++;
                 }
                 case SAMPLER -> {
-                    // Look up sampler by its binding index (samplers are bound to units matching shader bindings)
-                    if (binding < boundSamplers.length && boundSamplers[binding] != null) {
-                        var smp = samplers.get(boundSamplers[binding]);
+                    // Use sequential index — samplers are bound to units 0,1,2...
+                    if (smpIdx < boundSamplers.length && boundSamplers[smpIdx] != null) {
+                        var smp = samplers.get(boundSamplers[smpIdx]);
                         if (smp != null && smp.nativeSampler() != 0) {
                             entries[i] = new WgpuBindings.BindGroupEntry(binding,
                                     WgpuBindings.BindingResourceType.SAMPLER,
                                     smp.nativeSampler(), 0, 0);
                         }
                     }
+                    smpIdx++;
                 }
                 case STORAGE -> {
                     if (binding < boundSsbos.length && boundSsbos[binding] != null) {
@@ -1344,16 +1373,18 @@ public class WgpuRenderDevice implements RenderDevice {
                 }
             }
 
-            // Fill null entries with a placeholder
+            // Skip if resource not bound — wgpu-native panics on null handles
             if (entries[i] == null) {
-                entries[i] = new WgpuBindings.BindGroupEntry(binding,
-                        WgpuBindings.BindingResourceType.BUFFER, 0, 0, 0);
+                log.warn("Bind group entry {} ({}) has no bound resource — skipping draw", binding, type);
+                bindGroupValid = false;
+                return;
             }
             i++;
         }
 
         currentBindGroup = gpu.deviceCreateBindGroup(wgpuDevice, pipelineInfo.bindGroupLayout(), entries);
         gpu.renderPassSetBindGroup(renderPassEncoder, 0, currentBindGroup);
+        bindGroupValid = true;
 
         // Set stencil reference if needed
         if (stencilTestEnabled) {
@@ -1433,6 +1464,7 @@ public class WgpuRenderDevice implements RenderDevice {
         if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) return (T) Integer.valueOf(texSize);
         if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) return (T) Integer.valueOf(texSize);
         if (capability == DeviceCapability.BACKEND_NAME) return (T) "WebGPU";
+        if (capability == DeviceCapability.SHADER_TARGET) return (T) Integer.valueOf(28); // ShaderCompiler.TARGET_WGSL
         if (capability == DeviceCapability.DEVICE_NAME) return (T) "WebGPU";
         if (capability == DeviceCapability.API_VERSION) return (T) "WebGPU";
         if (capability == DeviceCapability.COMPUTE_SHADERS) return (T) Boolean.TRUE;
@@ -1521,6 +1553,11 @@ public class WgpuRenderDevice implements RenderDevice {
                 case 4 -> WgpuBindings.VERTEX_FORMAT_FLOAT32X4;
                 default -> WgpuBindings.VERTEX_FORMAT_FLOAT32X4;
             };
+        }
+        if (attr.componentType() == ComponentType.UNSIGNED_BYTE || attr.componentType() == ComponentType.BYTE) {
+            if (attr.componentCount() == 4 && attr.normalized()) {
+                return WgpuBindings.VERTEX_FORMAT_UNORM8X4;
+            }
         }
         return WgpuBindings.VERTEX_FORMAT_FLOAT32X4;
     }

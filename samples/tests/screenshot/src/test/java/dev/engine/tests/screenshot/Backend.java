@@ -56,14 +56,14 @@ public enum Backend {
             return (windowDesc, config) -> {
                 var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
                 var window = toolkit.createWindow(windowDesc);
-                var device = new WgpuRenderDevice(window, new JWebGpuBindings());
+                var device = new WgpuRenderDevice(window, new dev.engine.providers.wgpu.FfmWgpuBindings());
                 return new GraphicsBackend(toolkit, window, device);
             };
         }
 
         @Override
         public boolean isAvailable() {
-            return new JWebGpuBindings().isAvailable();
+            return new dev.engine.providers.wgpu.FfmWgpuBindings().isAvailable();
         }
     };
 

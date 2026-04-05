@@ -14,6 +14,11 @@ public interface ComponentType {
         @Override public int sizeInBytes() { return 1; }
     };
 
+    ComponentType UNSIGNED_BYTE = new ComponentType() {
+        @Override public String name() { return "UNSIGNED_BYTE"; }
+        @Override public int sizeInBytes() { return 1; }
+    };
+
     ComponentType INT = new ComponentType() {
         @Override public String name() { return "INT"; }
         @Override public int sizeInBytes() { return 4; }

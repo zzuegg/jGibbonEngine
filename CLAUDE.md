@@ -65,6 +65,7 @@ See `NOTES.md` for all engine code conventions. Key points:
 ./gradlew :examples:run -PmainClass=dev.engine.examples.SlangExample              # Slang scene
 ./gradlew :examples:run -PmainClass=dev.engine.examples.HighLevelSceneExample     # high-level scene
 ./gradlew :examples:run -PmainClass=dev.engine.examples.SpinningCubeExample       # spinning cube
+./gradlew :examples:run -PmainClass=dev.engine.examples.UiSamplerExample          # UI widget showcase
 ./gradlew :examples:run                                                           # triangle
 ```
 

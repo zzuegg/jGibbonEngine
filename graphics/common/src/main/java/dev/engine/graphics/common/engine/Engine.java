@@ -13,7 +13,11 @@ import dev.engine.core.profiler.RenderStats;
 import dev.engine.core.scene.AbstractScene;
 import dev.engine.core.scene.Scene;
 import dev.engine.graphics.RenderDevice;
+import dev.engine.graphics.common.DebugUiOverlay;
 import dev.engine.graphics.common.Renderer;
+import dev.engine.ui.NkBuiltinFont;
+import dev.engine.ui.NkContext;
+import dev.engine.ui.NkFont;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +47,10 @@ public class Engine {
     private final Renderer renderer;
     private final AbstractScene scene;
     private final Profiler profiler;
+
+    // Debug UI
+    private final NkContext debugUi;
+    private final DebugUiOverlay debugUiOverlay;
 
     // Threading
     private volatile boolean running = false;
@@ -75,6 +83,19 @@ public class Engine {
         // Module manager — synchronous executor for cross-platform compatibility
         this.modules = new ModuleManager<>(new VariableTimestep<>(Time::new), Runnable::run);
 
+        // Debug UI
+        NkFont uiFont = new NkBuiltinFont(2);
+        this.debugUi = new NkContext(uiFont);
+        this.debugUiOverlay = new DebugUiOverlay(device);
+        this.debugUiOverlay.init(uiFont, this.renderer.shaderManager());
+
+        // Register the overlay to render after the scene
+        this.renderer.addPostSceneCallback(() -> {
+            var vp = this.renderer.viewport();
+            debugUiOverlay.render(debugUi, vp.width(), vp.height());
+            debugUi.clear();
+        });
+
         log.info("Engine initialized (headless={}, threaded={})", config.headless(), config.threaded());
     }
 
@@ -87,6 +108,8 @@ public class Engine {
     public Profiler profiler() { return profiler; }
     public RenderStats renderStats() { return renderer.renderStats(); }
     public EngineConfig config() { return config; }
+    public NkContext debugUi() { return debugUi; }
+    public DebugUiOverlay debugUiOverlay() { return debugUiOverlay; }
     public long frameNumber() { return frameNumber.get(); }
     public double totalTime() { return totalTime; }
 
@@ -185,6 +208,7 @@ public class Engine {
         stop();
         modules.shutdown();
         assets.shutdown();
+        debugUiOverlay.close();
         renderer.close();
         log.info("Engine shut down");
     }

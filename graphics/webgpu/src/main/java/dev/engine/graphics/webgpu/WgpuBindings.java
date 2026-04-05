@@ -467,43 +467,43 @@ public interface WgpuBindings {
             int blendAlphaOperation
     ) {}
 
-    // ===== WebGPU enum ordinals =====
-    // These constants mirror the WebGPU enum values used by the engine.
-    // They must match the values used by the provider implementation.
+    // ===== WebGPU enum ordinals (wgpu-native v27 / webgpu.h 2025) =====
+    // These constants match the C enum values in webgpu.h.
+    // Note: v27 renumbered most enums — 0 is now "Undefined" for most types.
 
-    // --- Buffer usage flags ---
-    int BUFFER_USAGE_COPY_SRC      = 0x0004;
-    int BUFFER_USAGE_COPY_DST      = 0x0008;
-    int BUFFER_USAGE_INDEX         = 0x0010;
-    int BUFFER_USAGE_VERTEX        = 0x0020;
-    int BUFFER_USAGE_UNIFORM       = 0x0040;
-    int BUFFER_USAGE_STORAGE       = 0x0080;
-    int BUFFER_USAGE_MAP_READ      = 0x0001;
+    // --- Buffer usage flags (bitmask, unchanged) ---
+    int BUFFER_USAGE_COPY_SRC  = 0x0004;
+    int BUFFER_USAGE_COPY_DST  = 0x0008;
+    int BUFFER_USAGE_INDEX     = 0x0010;
+    int BUFFER_USAGE_VERTEX    = 0x0020;
+    int BUFFER_USAGE_UNIFORM   = 0x0040;
+    int BUFFER_USAGE_STORAGE   = 0x0080;
+    int BUFFER_USAGE_MAP_READ  = 0x0001;
 
-    // --- Texture usage flags ---
-    int TEXTURE_USAGE_COPY_SRC          = 0x01;
-    int TEXTURE_USAGE_COPY_DST          = 0x02;
-    int TEXTURE_USAGE_TEXTURE_BINDING   = 0x04;
-    int TEXTURE_USAGE_RENDER_ATTACHMENT = 0x10;
+    // --- Texture usage flags (bitmask, unchanged) ---
+    int TEXTURE_USAGE_COPY_SRC          = 0x0001;
+    int TEXTURE_USAGE_COPY_DST          = 0x0002;
+    int TEXTURE_USAGE_TEXTURE_BINDING   = 0x0004;
+    int TEXTURE_USAGE_RENDER_ATTACHMENT = 0x0010;
 
     // --- Index format ---
-    int INDEX_FORMAT_UINT32 = 1;
+    int INDEX_FORMAT_UINT32 = 2;
 
-    // --- Shader stage visibility ---
+    // --- Shader stage visibility (bitmask, unchanged) ---
     int SHADER_STAGE_VERTEX   = 0x1;
     int SHADER_STAGE_FRAGMENT = 0x2;
 
     // --- Primitive topology ---
-    int PRIMITIVE_TOPOLOGY_TRIANGLE_LIST = 3;
+    int PRIMITIVE_TOPOLOGY_TRIANGLE_LIST = 4;
 
     // --- Front face ---
-    int FRONT_FACE_CCW = 0;
-    int FRONT_FACE_CW  = 1;
+    int FRONT_FACE_CCW = 1;
+    int FRONT_FACE_CW  = 2;
 
     // --- Cull mode ---
-    int CULL_MODE_NONE  = 0;
-    int CULL_MODE_FRONT = 1;
-    int CULL_MODE_BACK  = 2;
+    int CULL_MODE_NONE  = 1;
+    int CULL_MODE_FRONT = 2;
+    int CULL_MODE_BACK  = 3;
 
     // --- Compare function ---
     int COMPARE_NEVER         = 1;
@@ -516,14 +516,14 @@ public interface WgpuBindings {
     int COMPARE_ALWAYS        = 8;
 
     // --- Stencil operation ---
-    int STENCIL_OP_KEEP            = 0;
-    int STENCIL_OP_ZERO            = 1;
-    int STENCIL_OP_REPLACE         = 2;
-    int STENCIL_OP_INVERT          = 3;
-    int STENCIL_OP_INCREMENT_CLAMP = 4;
-    int STENCIL_OP_DECREMENT_CLAMP = 5;
-    int STENCIL_OP_INCREMENT_WRAP  = 6;
-    int STENCIL_OP_DECREMENT_WRAP  = 7;
+    int STENCIL_OP_KEEP            = 1;
+    int STENCIL_OP_ZERO            = 2;
+    int STENCIL_OP_REPLACE         = 3;
+    int STENCIL_OP_INVERT          = 4;
+    int STENCIL_OP_INCREMENT_CLAMP = 5;
+    int STENCIL_OP_DECREMENT_CLAMP = 6;
+    int STENCIL_OP_INCREMENT_WRAP  = 7;
+    int STENCIL_OP_DECREMENT_WRAP  = 8;
 
     // --- Optional bool ---
     int OPTIONAL_BOOL_FALSE = 0;
@@ -549,52 +549,53 @@ public interface WgpuBindings {
     int BLEND_OP_MAX              = 4;
 
     // --- Texture format ---
-    int TEXTURE_FORMAT_R8_UNORM              = 1;
-    int TEXTURE_FORMAT_RGBA8_UNORM           = 4;
-    int TEXTURE_FORMAT_BGRA8_UNORM           = 23;
-    int TEXTURE_FORMAT_R16_FLOAT             = 14;
-    int TEXTURE_FORMAT_RG16_FLOAT            = 15;
-    int TEXTURE_FORMAT_RGBA16_FLOAT          = 16;
-    int TEXTURE_FORMAT_R32_FLOAT             = 17;
-    int TEXTURE_FORMAT_RG32_FLOAT            = 18;
-    int TEXTURE_FORMAT_RGBA32_FLOAT          = 19;
-    int TEXTURE_FORMAT_R32_UINT              = 20;
-    int TEXTURE_FORMAT_R32_SINT              = 21;
-    int TEXTURE_FORMAT_DEPTH24_PLUS          = 35;
-    int TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8 = 37;
-    int TEXTURE_FORMAT_DEPTH32_FLOAT         = 36;
+    int TEXTURE_FORMAT_R8_UNORM              = 0x01;
+    int TEXTURE_FORMAT_RGBA8_UNORM           = 0x12;
+    int TEXTURE_FORMAT_BGRA8_UNORM           = 0x17;
+    int TEXTURE_FORMAT_R16_FLOAT             = 0x07;
+    int TEXTURE_FORMAT_RG16_FLOAT            = 0x11;
+    int TEXTURE_FORMAT_RGBA16_FLOAT          = 0x22;
+    int TEXTURE_FORMAT_R32_FLOAT             = 0x0C;
+    int TEXTURE_FORMAT_RG32_FLOAT            = 0x1D;
+    int TEXTURE_FORMAT_RGBA32_FLOAT          = 0x23;
+    int TEXTURE_FORMAT_R32_UINT              = 0x0D;
+    int TEXTURE_FORMAT_R32_SINT              = 0x0E;
+    int TEXTURE_FORMAT_DEPTH24_PLUS          = 0x28;
+    int TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8 = 0x29;
+    int TEXTURE_FORMAT_DEPTH32_FLOAT         = 0x2A;
 
     // --- Texture dimension ---
-    int TEXTURE_DIMENSION_2D = 0;
-    int TEXTURE_DIMENSION_3D = 1;
+    int TEXTURE_DIMENSION_2D = 2;
+    int TEXTURE_DIMENSION_3D = 3;
 
     // --- Texture view dimension ---
     int TEXTURE_VIEW_DIMENSION_2D       = 2;
     int TEXTURE_VIEW_DIMENSION_2D_ARRAY = 3;
     int TEXTURE_VIEW_DIMENSION_CUBE     = 4;
-    int TEXTURE_VIEW_DIMENSION_3D       = 5;
+    int TEXTURE_VIEW_DIMENSION_3D       = 6;
 
     // --- Filter mode ---
-    int FILTER_MODE_NEAREST = 0;
-    int FILTER_MODE_LINEAR  = 1;
+    int FILTER_MODE_NEAREST = 1;
+    int FILTER_MODE_LINEAR  = 2;
 
     // --- Mipmap filter mode ---
-    int MIPMAP_FILTER_MODE_NEAREST = 0;
-    int MIPMAP_FILTER_MODE_LINEAR  = 1;
+    int MIPMAP_FILTER_MODE_NEAREST = 1;
+    int MIPMAP_FILTER_MODE_LINEAR  = 2;
 
     // --- Address mode ---
+    int ADDRESS_MODE_CLAMP_TO_EDGE = 1;
     int ADDRESS_MODE_REPEAT        = 2;
     int ADDRESS_MODE_MIRROR_REPEAT = 3;
-    int ADDRESS_MODE_CLAMP_TO_EDGE = 1;
 
     // --- Vertex format ---
-    int VERTEX_FORMAT_FLOAT32    = 14;
-    int VERTEX_FORMAT_FLOAT32X2  = 15;
-    int VERTEX_FORMAT_FLOAT32X3  = 16;
-    int VERTEX_FORMAT_FLOAT32X4  = 17;
+    int VERTEX_FORMAT_UNORM8X4   = 0x09;
+    int VERTEX_FORMAT_FLOAT32    = 0x1C;
+    int VERTEX_FORMAT_FLOAT32X2  = 0x1D;
+    int VERTEX_FORMAT_FLOAT32X3  = 0x1E;
+    int VERTEX_FORMAT_FLOAT32X4  = 0x1F;
 
     // --- Vertex step mode ---
-    int VERTEX_STEP_MODE_VERTEX = 0;
+    int VERTEX_STEP_MODE_VERTEX = 2;
 
     // --- Color write mask ---
     int COLOR_WRITE_MASK_ALL = 0xF;

@@ -119,6 +119,7 @@ public class GlRenderDevice implements RenderDevice {
 
         // Device info
         capabilities.registerStatic(DeviceCapability.BACKEND_NAME, "OpenGL");
+        capabilities.registerStatic(DeviceCapability.SHADER_TARGET, 2); // ShaderCompiler.TARGET_GLSL
         capabilities.register(DeviceCapability.DEVICE_NAME, () -> gl.glGetString(GlBindings.GL_RENDERER));
         capabilities.register(DeviceCapability.API_VERSION, () -> gl.glGetString(GlBindings.GL_VERSION));
     }
@@ -192,6 +193,12 @@ public class GlRenderDevice implements RenderDevice {
 
     @Override
     public void uploadTexture(Handle<TextureResource> texture, ByteBuffer pixels) {
+        // LWJGL DSA functions don't reliably handle heap buffers — copy to direct if needed
+        if (!pixels.isDirect()) {
+            var direct = ByteBuffer.allocateDirect(pixels.remaining()).order(pixels.order());
+            direct.put(pixels.duplicate()).flip();
+            pixels = direct;
+        }
         var tex = textures.get(texture);
         int glName = tex.glName();
         var desc = tex.desc();
@@ -399,6 +406,7 @@ public class GlRenderDevice implements RenderDevice {
     private static int mapComponentType(ComponentType type) {
         if (type == ComponentType.FLOAT) return GlBindings.GL_FLOAT;
         if (type == ComponentType.BYTE) return GlBindings.GL_BYTE;
+        if (type == ComponentType.UNSIGNED_BYTE) return GlBindings.GL_UNSIGNED_BYTE;
         if (type == ComponentType.INT) return GlBindings.GL_INT;
         return GlBindings.GL_FLOAT;
     }

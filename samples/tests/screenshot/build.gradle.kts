@@ -14,6 +14,7 @@ dependencies {
     testImplementation(project(":providers:lwjgl-gl"))
     testImplementation(project(":providers:lwjgl-vk"))
     testImplementation(project(":providers:jwebgpu"))
+    testImplementation(project(":providers:wgpu-ffm"))
     testImplementation(project(":providers:slang"))
     testImplementation(project(":providers:lwjgl-glfw"))
     testImplementation(project(":platforms:desktop"))
