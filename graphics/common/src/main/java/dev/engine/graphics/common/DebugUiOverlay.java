@@ -11,64 +11,38 @@ import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
+import dev.engine.graphics.pipeline.ShaderBinary;
 import dev.engine.graphics.pipeline.ShaderSource;
 import dev.engine.graphics.pipeline.ShaderStage;
 import dev.engine.graphics.renderstate.BlendMode;
 import dev.engine.graphics.renderstate.CullMode;
 import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.graphics.sampler.SamplerDescriptor;
+import dev.engine.graphics.shader.ShaderCompiler;
 import dev.engine.graphics.texture.TextureDescriptor;
 import dev.engine.ui.NkContext;
 import dev.engine.ui.NkDrawList;
 import dev.engine.ui.NkFont;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 /**
  * Renders the debug UI overlay using the engine's graphics API.
  *
- * <p>Creates a pipeline with a simple 2D shader, manages the font atlas texture,
- * and converts {@link NkDrawList} output into GPU draw calls each frame.
+ * <p>Compiles the UI shader via Slang (cross-platform: GLSL, SPIRV, WGSL),
+ * manages the font atlas texture, and converts {@link NkDrawList} output
+ * into GPU draw calls each frame.
  */
 public class DebugUiOverlay implements AutoCloseable {
 
-    private static final String VERTEX_SHADER = """
-            #version 450
-            layout(location = 0) in vec2 aPos;
-            layout(location = 1) in vec2 aUV;
-            layout(location = 2) in vec4 aColor;
-
-            layout(location = 0) out vec2 vUV;
-            layout(location = 1) out vec4 vColor;
-
-            layout(push_constant) uniform PushConstants {
-                vec2 screenSize;
-            } pc;
-
-            void main() {
-                // Convert from screen coordinates to clip space
-                vec2 pos = aPos / pc.screenSize * 2.0 - 1.0;
-                pos.y = -pos.y; // Flip Y for screen-space origin at top-left
-                gl_Position = vec4(pos, 0.0, 1.0);
-                vUV = aUV;
-                vColor = aColor;
-            }
-            """;
-
-    private static final String FRAGMENT_SHADER = """
-            #version 450
-            layout(location = 0) in vec2 vUV;
-            layout(location = 1) in vec4 vColor;
-
-            layout(binding = 0) uniform sampler2D uFontAtlas;
-
-            layout(location = 0) out vec4 fragColor;
-
-            void main() {
-                vec4 texColor = texture(uFontAtlas, vUV);
-                fragColor = vColor * texColor;
-            }
-            """;
+    private static final Logger log = LoggerFactory.getLogger(DebugUiOverlay.class);
 
     // Vertex format: pos(2f) + uv(2f) + color(4 normalized bytes) = 20 bytes
     private static final VertexFormat VERTEX_FORMAT = VertexFormat.of(
@@ -98,14 +72,23 @@ public class DebugUiOverlay implements AutoCloseable {
 
     /**
      * Initializes GPU resources. Must be called after the device is ready.
+     *
+     * @param font the font to use for text rendering
+     * @param compiler the shader compiler (Slang → GLSL/SPIRV/WGSL)
      */
-    public void init(NkFont font) {
-        // Create pipeline
-        var pipelineDesc = PipelineDescriptor.of(
-                new ShaderSource(ShaderStage.VERTEX, VERTEX_SHADER),
-                new ShaderSource(ShaderStage.FRAGMENT, FRAGMENT_SHADER)
-        ).withVertexFormat(VERTEX_FORMAT);
-        pipeline = device.createPipeline(pipelineDesc);
+    public void init(NkFont font, ShaderCompiler compiler) {
+        // Detect target format from backend
+        var backend = device.queryCapability(DeviceCapability.BACKEND_NAME);
+        int slangTarget = switch (backend) {
+            case "Vulkan" -> ShaderCompiler.TARGET_SPIRV;
+            case "WebGPU" -> ShaderCompiler.TARGET_WGSL;
+            default -> ShaderCompiler.TARGET_GLSL;
+        };
+
+        // Load and compile the Slang shader
+        String slangSource = loadShaderResource("shaders/debug_ui.slang");
+        pipeline = compileUiShader(slangSource, compiler, slangTarget);
+        log.info("Debug UI shader compiled for target: {}", backend);
 
         // Create font atlas texture
         var texDesc = TextureDescriptor.rgba(font.atlasWidth(), font.atlasHeight());
@@ -125,6 +108,38 @@ public class DebugUiOverlay implements AutoCloseable {
         indexBuffer = device.createBuffer(new BufferDescriptor(currentIbSize, BufferUsage.INDEX, AccessPattern.STREAM));
 
         initialized = true;
+    }
+
+    private Handle<PipelineResource> compileUiShader(String source, ShaderCompiler compiler, int target) {
+        var entryPoints = List.of(
+                new ShaderCompiler.EntryPointDesc("vertexMain", ShaderCompiler.STAGE_VERTEX),
+                new ShaderCompiler.EntryPointDesc("fragmentMain", ShaderCompiler.STAGE_FRAGMENT));
+
+        try (var result = compiler.compile(source, entryPoints, target)) {
+            if (target == ShaderCompiler.TARGET_SPIRV) {
+                return device.createPipeline(PipelineDescriptor.ofSpirv(
+                        new ShaderBinary(ShaderStage.VERTEX, result.codeBytes(0)),
+                        new ShaderBinary(ShaderStage.FRAGMENT, result.codeBytes(1)))
+                        .withVertexFormat(VERTEX_FORMAT));
+            } else {
+                // For WGSL, Slang preserves entry point names. For GLSL, Slang renames to "main".
+                String vsEntry = (target == ShaderCompiler.TARGET_WGSL) ? "vertexMain" : "main";
+                String fsEntry = (target == ShaderCompiler.TARGET_WGSL) ? "fragmentMain" : "main";
+                return device.createPipeline(PipelineDescriptor.of(
+                        new ShaderSource(ShaderStage.VERTEX, result.code(0), vsEntry),
+                        new ShaderSource(ShaderStage.FRAGMENT, result.code(1), fsEntry))
+                        .withVertexFormat(VERTEX_FORMAT));
+            }
+        }
+    }
+
+    private static String loadShaderResource(String path) {
+        try (InputStream is = DebugUiOverlay.class.getClassLoader().getResourceAsStream(path)) {
+            if (is != null) return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("Failed to load UI shader: {}", path, e);
+        }
+        throw new RuntimeException("Debug UI shader not found on classpath: " + path);
     }
 
     /**
@@ -175,7 +190,7 @@ public class DebugUiOverlay implements AutoCloseable {
 
         // Push constants for screen size
         ByteBuffer pushConstants = ByteBuffer.allocateDirect(8)
-                .order(java.nio.ByteOrder.nativeOrder())
+                .order(ByteOrder.nativeOrder())
                 .putFloat(viewportWidth)
                 .putFloat(viewportHeight)
                 .flip();
