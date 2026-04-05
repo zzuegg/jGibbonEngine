@@ -244,7 +244,9 @@ public class WgpuRenderDevice implements RenderDevice {
             }
 
             wgpuQueue = gpu.deviceGetQueue(wgpuDevice);
-            deviceLimits = gpu.deviceGetLimits(wgpuDevice);
+            // deviceGetLimits is broken in jwebgpu 0.1.15 (struct layout mismatch
+            // causes native SIGABRT). Skip it — queryCapability() uses safe defaults.
+            deviceLimits = null;
 
             // Configure presentation surface if requested
             if (presentToSurface) {
@@ -1289,6 +1291,10 @@ public class WgpuRenderDevice implements RenderDevice {
 
         var entries = new WgpuBindings.BindGroupEntry[bindingTypes.size()];
         int i = 0;
+        // Sequential indices for textures/samplers — they're bound to units 0,1,2...
+        // but shader bindings may be at higher indices (e.g. 3,4,5 after UBOs)
+        int texIdx = 0;
+        int smpIdx = 0;
         for (var entry : bindingTypes.entrySet()) {
             int binding = entry.getKey();
             var type = entry.getValue();
@@ -1305,26 +1311,28 @@ public class WgpuRenderDevice implements RenderDevice {
                     }
                 }
                 case TEXTURE -> {
-                    // Look up texture by its binding index (textures are bound to units matching shader bindings)
-                    if (binding < boundTextures.length && boundTextures[binding] != null) {
-                        var tex = textures.get(boundTextures[binding]);
+                    // Use sequential index — textures are bound to units 0,1,2...
+                    if (texIdx < boundTextures.length && boundTextures[texIdx] != null) {
+                        var tex = textures.get(boundTextures[texIdx]);
                         if (tex != null && tex.view() != 0) {
                             entries[i] = new WgpuBindings.BindGroupEntry(binding,
                                     WgpuBindings.BindingResourceType.TEXTURE_VIEW,
                                     tex.view(), 0, 0);
                         }
                     }
+                    texIdx++;
                 }
                 case SAMPLER -> {
-                    // Look up sampler by its binding index (samplers are bound to units matching shader bindings)
-                    if (binding < boundSamplers.length && boundSamplers[binding] != null) {
-                        var smp = samplers.get(boundSamplers[binding]);
+                    // Use sequential index — samplers are bound to units 0,1,2...
+                    if (smpIdx < boundSamplers.length && boundSamplers[smpIdx] != null) {
+                        var smp = samplers.get(boundSamplers[smpIdx]);
                         if (smp != null && smp.nativeSampler() != 0) {
                             entries[i] = new WgpuBindings.BindGroupEntry(binding,
                                     WgpuBindings.BindingResourceType.SAMPLER,
                                     smp.nativeSampler(), 0, 0);
                         }
                     }
+                    smpIdx++;
                 }
                 case STORAGE -> {
                     if (binding < boundSsbos.length && boundSsbos[binding] != null) {
