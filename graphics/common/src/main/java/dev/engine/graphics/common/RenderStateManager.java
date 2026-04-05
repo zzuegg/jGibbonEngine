@@ -75,6 +75,7 @@ public class RenderStateManager {
     public static boolean isRenderStateKey(PropertyKey<?, ?> key) {
         return key == RenderState.DEPTH_TEST || key == RenderState.DEPTH_WRITE
             || key == RenderState.DEPTH_FUNC || key == RenderState.BLEND_MODE
+            || key == RenderState.BLEND_MODES
             || key == RenderState.CULL_MODE || key == RenderState.FRONT_FACE
             || key == RenderState.WIREFRAME || key == RenderState.LINE_WIDTH
             || key == RenderState.SCISSOR_TEST
