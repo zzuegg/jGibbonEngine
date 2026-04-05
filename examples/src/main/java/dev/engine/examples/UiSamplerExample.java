@@ -353,7 +353,7 @@ public class UiSamplerExample extends BaseApplication {
         // ═══════════════════════════════════════════════════════════
         if (ui.begin("Inspector", 860, 10, 240, 640,
                 NkContext.WINDOW_BORDER | NkContext.WINDOW_MOVABLE | NkContext.WINDOW_TITLE
-                        | NkContext.WINDOW_NO_SCROLLBAR)) {
+                        | NkContext.WINDOW_MINIMIZABLE)) {
 
             // ── Transform section ──
             ui.layoutRowDynamic(22, 1);

@@ -726,7 +726,7 @@ public class NkContext {
                 hovering ? style.headerBackground : style.windowBackground.withAlpha(230)));
 
         // Arrow + title
-        String arrow = state ? "▼ " : "▶ ";
+        String arrow = state ? "v " : "> ";
         float textY = rect.y() + (rect.h() - font.height()) / 2;
         emit(new NkDrawCommand.Text(
                 new NkRect(rect.x() + 4, textY, font.textWidth(arrow + title), font.height()),
