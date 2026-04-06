@@ -33,13 +33,16 @@ jobs:
           chrome-version: stable
         id: setup-chrome
 
+      - name: Compile scenes module
+        run: ./gradlew :samples:tests:screenshot:scenes:compileJava --no-daemon --stacktrace
+
       - name: Build web test app (TeaVM)
-        run: ./gradlew :samples:tests:screenshot:web:assembleWebTest --no-daemon
+        run: ./gradlew :samples:tests:screenshot:web:assembleWebTest --no-daemon --stacktrace
 
       - name: Run web screenshot tests
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-        run: ./gradlew :samples:tests:screenshot:web:test --no-daemon
+        run: ./gradlew :samples:tests:screenshot:web:test --no-daemon --stacktrace
         continue-on-error: true  # Don't fail the build until references are established
 
       - name: Upload web screenshots

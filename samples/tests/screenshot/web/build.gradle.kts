@@ -4,9 +4,10 @@ plugins {
 
 val teavmVersion = "0.13.1"
 
-// SLF4J is incompatible with TeaVM's classlib — exclude from main (TeaVM) configurations only
-listOf(configurations.compileClasspath, configurations.runtimeClasspath).forEach {
-    it.configure { exclude(group = "org.slf4j", module = "slf4j-api") }
+// SLF4J is incompatible with TeaVM's classlib — teavm-windowing provides its own shim.
+// Must match the pattern used in platforms/web.
+configurations.all {
+    exclude(group = "org.slf4j", module = "slf4j-api")
 }
 
 dependencies {
@@ -19,6 +20,7 @@ dependencies {
     implementation(project(":providers:teavm-webgpu"))
     implementation(project(":providers:teavm-windowing"))
     implementation(project(":platforms:web"))
+    implementation(project(":ui"))
 
     implementation("org.teavm:teavm-jso:$teavmVersion")
     implementation("org.teavm:teavm-jso-apis:$teavmVersion")
@@ -27,8 +29,6 @@ dependencies {
     // Test source set: JUnit runner with CDP client (runs on JVM)
     testImplementation(project(":samples:tests:screenshot:scenes"))
     testImplementation(project(":graphics:api"))
-
-    testRuntimeOnly("ch.qos.logback:logback-classic:1.5.6")
 }
 
 teavm {
