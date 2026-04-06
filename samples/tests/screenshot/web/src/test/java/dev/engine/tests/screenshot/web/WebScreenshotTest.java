@@ -86,6 +86,11 @@ class WebScreenshotTest {
             var appUrl = "http://127.0.0.1:" + serverPort + "/";
             cdp = ChromeDevTools.launch(chromeBin, appUrl);
             cdp.send("Runtime.enable", null);
+            // Force viewport to exactly canvas size with DPR=1 so captureScreenshot
+            // returns only the canvas content (no black borders)
+            cdp.send("Emulation.setDeviceMetricsOverride",
+                    "{\"width\":" + WIDTH + ",\"height\":" + HEIGHT
+                    + ",\"deviceScaleFactor\":1,\"mobile\":false}");
             System.out.println("[WebTest] Chrome launched with " + appUrl);
 
             // Wait for app to be ready (WebGPU initialized + scenes discovered)
@@ -176,19 +181,19 @@ class WebScreenshotTest {
             assumeTrue(expectedCaptureName.equals(captureReady),
                     "Scene " + expectedCaptureName + " was not rendered by web app (got: " + captureReady + ")");
 
-            // Capture page screenshot as PNG (more reliable than canvas pixel readback
-            // which returns black due to WebGPU swap chain timing)
+            // Capture screenshot via CDP (Page.captureScreenshot)
+            // Emulation.setDeviceMetricsOverride ensures viewport matches canvas exactly
             byte[] pngBytes = cdp.captureScreenshot();
             assertNotNull(pngBytes, "Failed to capture screenshot");
 
             // Acknowledge capture so app moves to next scene
             cdp.evaluate("window._captureAck = true");
 
-            // Convert PNG to RGBA pixel array for comparison
+            // Convert PNG to RGBA for comparison and saving
             byte[] pixels = pngToRgba(pngBytes);
 
             // Save screenshot
-            saveScreenshot(pngBytes, "webgpu-browser", sceneName + suffix);
+            saveScreenshot(pixels, "webgpu-browser", sceneName + suffix);
 
             // Compare against reference if one exists
             var reference = loadReference("webgpu-browser", sceneName + suffix);
@@ -205,21 +210,20 @@ class WebScreenshotTest {
         });
     }
 
-    private void saveScreenshot(byte[] pngBytes, String backend, String name) {
+    private void saveScreenshot(byte[] pixels, String backend, String name) {
         try {
             var dir = new File("build/screenshots/" + backend);
             dir.mkdirs();
-            Files.write(Path.of(dir.getPath(), name + ".png"), pngBytes);
+            ScreenshotHelper.save(pixels, WIDTH, HEIGHT, dir.getPath() + "/" + name + ".png");
         } catch (IOException e) {
             System.err.println("Warning: failed to save screenshot: " + e.getMessage());
         }
     }
 
-    /** Decodes a PNG byte array to RGBA pixel data (256x256x4). */
+    /** Decodes a PNG byte array to RGBA pixel data. */
     private byte[] pngToRgba(byte[] pngBytes) throws IOException {
         var image = ImageIO.read(new java.io.ByteArrayInputStream(pngBytes));
         if (image == null) return null;
-        // Crop to canvas size (screenshot may include browser chrome)
         int w = Math.min(image.getWidth(), WIDTH);
         int h = Math.min(image.getHeight(), HEIGHT);
         var pixels = new byte[WIDTH * HEIGHT * 4];

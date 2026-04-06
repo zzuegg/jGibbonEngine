@@ -7,6 +7,8 @@ import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuBindings;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuInit;
 import dev.engine.providers.teavm.windowing.CanvasWindowToolkit;
+import org.teavm.interop.Async;
+import org.teavm.interop.AsyncCallback;
 import org.teavm.jso.JSBody;
 
 /**
@@ -103,7 +105,7 @@ public class WebTestApp {
                         String suffix = captureFrames.length > 1 ? "_f" + frame : "";
                         signalCaptureReady(sceneName + suffix);
 
-                        // Yield to browser event loop and wait for ack
+                        // Yield and wait for test runner to acknowledge
                         toolkit.pollEvents();
                         waitForAck(toolkit);
                     }
@@ -150,6 +152,40 @@ public class WebTestApp {
 
     @JSBody(script = "window._captureAck = false; window._captureReady = null;")
     private static native void clearAck();
+
+    /**
+     * Snapshots canvas pixels inside a requestAnimationFrame callback,
+     * which is the only time a WebGPU canvas has valid pixel content.
+     * Blocks (via TeaVM async) until the snapshot is complete.
+     */
+    @Async
+    private static native void snapshotCanvas(int w, int h);
+
+    private static void snapshotCanvas(int w, int h, AsyncCallback<Void> callback) {
+        snapshotCanvasJS(w, h, () -> callback.complete(null));
+    }
+
+    @JSBody(params = {"w", "h", "done"}, script = """
+        requestAnimationFrame(function() {
+            var canvas = document.getElementById('canvas');
+            var off = new OffscreenCanvas(w, h);
+            var ctx = off.getContext('2d');
+            ctx.drawImage(canvas, 0, 0);
+            var data = ctx.getImageData(0, 0, w, h).data;
+            var hex = '';
+            for (var i = 0; i < data.length; i++) {
+                hex += data[i].toString(16).padStart(2, '0');
+            }
+            window._capturePixels = hex;
+            done.onFrame();
+        });
+    """)
+    private static native void snapshotCanvasJS(int w, int h, FrameCallback done);
+
+    @org.teavm.jso.JSFunctor
+    private interface FrameCallback extends org.teavm.jso.JSObject {
+        void onFrame();
+    }
 
     @JSBody(script = "return !!window._startRendering;")
     private static native boolean isStartSignaled();
