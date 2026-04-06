@@ -6,8 +6,11 @@ import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
+import dev.engine.graphics.GraphicsBackendFactory;
 import dev.engine.graphics.opengl.OpenGlBackend;
+import dev.engine.graphics.vulkan.VulkanBackend;
 import dev.engine.platform.desktop.DesktopPlatform;
+import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.ui.NkColor;
 import dev.engine.ui.NkContext;
@@ -474,13 +477,30 @@ public class UiSamplerExample extends BaseApplication {
     // ═══════════════════════════════════════════════════════════════
 
     public static void main(String[] args) {
-        var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
+        String backend = System.getProperty("engine.backend", "opengl");
+        var hints = "opengl".equals(backend)
+                ? GlfwWindowToolkit.OPENGL_HINTS
+                : GlfwWindowToolkit.NO_API_HINTS;
+        var toolkit = new GlfwWindowToolkit(hints);
+
+        GraphicsBackendFactory graphicsBackend = switch (backend) {
+            case "vulkan" -> VulkanBackend.factory(toolkit, new VulkanBackend.SurfaceCreator() {
+                public String[] requiredInstanceExtensions() {
+                    return GlfwWindowToolkit.getRequiredVulkanExtensions();
+                }
+                public long createSurface(long instance, long windowHandle) {
+                    return GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
+                }
+            }, new LwjglVkBindings());
+            default -> OpenGlBackend.factory(toolkit,
+                    new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
+        };
+
         var config = EngineConfig.builder()
-                .windowTitle("UI Sampler — Debug UI Showcase")
+                .windowTitle("UI Sampler — Debug UI Showcase (" + backend + ")")
                 .windowSize(1120, 680)
                 .platform(DesktopPlatform.builder().build())
-                .graphicsBackend(OpenGlBackend.factory(toolkit,
-                        new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()))
+                .graphicsBackend(graphicsBackend)
                 .build();
         new UiSamplerExample().launch(config);
     }
