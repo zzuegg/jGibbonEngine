@@ -77,8 +77,7 @@ public class DepthTestCapture {
 
         var setup = new CommandRecorder();
         setup.viewport(0, 0, 800, 600);
-        setup.setDepthTest(true);
-        setup.setCullFace(true);
+        setup.setRenderState(dev.engine.graphics.renderstate.RenderState.defaults());
         setup.clear(0.05f, 0.05f, 0.08f, 1f);
         setup.bindPipeline(pipeline);
         device.submit(setup.finish());

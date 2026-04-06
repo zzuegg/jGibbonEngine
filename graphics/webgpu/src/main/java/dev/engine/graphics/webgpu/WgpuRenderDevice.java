@@ -1119,22 +1119,6 @@ public class WgpuRenderDevice implements RenderDevice {
                             cmd.firstIndex(), 0, cmd.firstInstance());
                 }
             }
-            case RenderCommand.SetDepthTest cmd -> {
-                depthTestEnabled = cmd.enabled();
-                pipelineStateDirty = true;
-            }
-            case RenderCommand.SetBlending cmd -> {
-                blendEnabled = cmd.enabled();
-                currentBlendMode = cmd.enabled() ? BlendMode.ALPHA : BlendMode.NONE;
-                pipelineStateDirty = true;
-            }
-            case RenderCommand.SetCullFace cmd -> {
-                wgpuCullMode = cmd.enabled() ? WgpuBindings.CULL_MODE_BACK : WgpuBindings.CULL_MODE_NONE;
-                pipelineStateDirty = true;
-            }
-            case RenderCommand.SetWireframe cmd -> {
-                if (cmd.enabled()) log.warn("WebGPU does not support wireframe rendering — ignored");
-            }
             case RenderCommand.SetRenderState cmd -> {
                 var props = cmd.properties();
                 if (props.contains(RenderState.DEPTH_TEST)) depthTestEnabled = props.get(RenderState.DEPTH_TEST);

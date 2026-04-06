@@ -131,8 +131,7 @@ public class CaptureScreenshots {
         device.beginFrame();
         rec = new CommandRecorder();
         rec.viewport(0, 0, 800, 600);
-        rec.setDepthTest(true);
-        rec.setCullFace(true);
+        rec.setRenderState(dev.engine.graphics.renderstate.RenderState.defaults());
         rec.clear(0.08f, 0.08f, 0.1f, 1f);
         rec.bindPipeline(cubePipeline);
         rec.bindUniformBuffer(0, ubo);
@@ -173,8 +172,7 @@ public class CaptureScreenshots {
         device.beginFrame();
         var setup2 = new CommandRecorder();
         setup2.viewport(0, 0, 800, 600);
-        setup2.setDepthTest(true);
-        setup2.setCullFace(true);
+        setup2.setRenderState(dev.engine.graphics.renderstate.RenderState.defaults());
         setup2.clear(0.05f, 0.05f, 0.08f, 1f);
         setup2.bindPipeline(cubePipeline);
         device.submit(setup2.finish());

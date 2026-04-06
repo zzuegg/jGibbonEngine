@@ -10,6 +10,7 @@ import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
 import dev.engine.graphics.command.CommandRecorder;
+import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.graphics.opengl.GlRenderDevice;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.graphics.pipeline.PipelineDescriptor;
@@ -130,8 +131,7 @@ public class SceneExample {
             // Setup pass
             var setup = new CommandRecorder();
             setup.viewport(0, 0, w, h);
-            setup.setDepthTest(true);
-            setup.setCullFace(true);
+            setup.setRenderState(RenderState.defaults());
             setup.clear(0.05f, 0.05f, 0.08f, 1f);
             setup.bindPipeline(pipeline);
             device.submit(setup.finish());

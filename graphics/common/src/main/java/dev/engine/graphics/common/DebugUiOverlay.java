@@ -129,15 +129,6 @@ public class DebugUiOverlay implements AutoCloseable {
         initialized = true;
     }
 
-    /**
-     * Legacy init without GpuResourceManager — creates an unmanaged instance.
-     * @deprecated Use {@link #init(NkFont, ShaderManager, GpuResourceManager)} instead.
-     */
-    @Deprecated
-    public void init(NkFont font, ShaderManager shaderManager) {
-        init(font, shaderManager, new GpuResourceManager(device));
-    }
-
     private static String loadShaderResource(String path) {
         try (InputStream is = DebugUiOverlay.class.getClassLoader().getResourceAsStream(path)) {
             if (is != null) return new String(is.readAllBytes(), StandardCharsets.UTF_8);

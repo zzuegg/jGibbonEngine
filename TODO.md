@@ -71,7 +71,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 
 ## Architectural Cleanup
 
-- [ ] **Deprecated APIs to remove** — GraphicsBackendFactory, GraphicsConfigLegacy, EngineConfig.graphicsBackend field, GlfwWindowToolkit in graphics:opengl, deprecated SetDepthTest/SetBlending/SetCullFace/SetWireframe commands. New APIs (GraphicsConfig, SetRenderState) are in place.
+- [x] **Deprecated render commands removed** — SetDepthTest/SetBlending/SetCullFace/SetWireframe removed from RenderCommand, CommandRecorder, and all three backends. Examples migrated to SetRenderState. GlfwWindowToolkit wrapper in graphics:opengl deleted. DebugUiOverlay 2-arg init removed. GraphicsBackendFactory/GraphicsConfigLegacy kept for now (still used by examples and tests).
 - [x] **ResourceCleaner.register() package-private** — Fixed: made `public`.
 - [x] **NativeResource not used by GPU resources** — Fixed: Handle<T> now supports Cleaner registration. GpuResourceManager registers cleanup actions on all created handles. Leaked handles are automatically cleaned by GC with warn-level logging.
 - [x] **GpuResourceManager deferred deletion delay doesn't match frames-in-flight** — Fixed: replaced double-buffer with ring of N+1 queues (N = FRAMES_IN_FLIGHT). Vulkan reports MAX_FRAMES_IN_FLIGHT=2, so resources are deferred 3 frames. Added DeviceCapability.FRAMES_IN_FLIGHT.

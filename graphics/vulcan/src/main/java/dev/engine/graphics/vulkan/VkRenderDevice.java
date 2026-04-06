@@ -1019,29 +1019,6 @@ public class VkRenderDevice implements RenderDevice {
                 case dev.engine.graphics.command.RenderCommand.BindImage bi -> {
                     log.warn("BindImage not yet implemented for Vulkan (needs storage image descriptors) — command ignored");
                 }
-                case dev.engine.graphics.command.RenderCommand.SetDepthTest sdt -> {
-                    vk.cmdSetDepthTestEnable(cmd, sdt.enabled());
-                    vk.cmdSetDepthWriteEnable(cmd, sdt.enabled());
-                }
-                case dev.engine.graphics.command.RenderCommand.SetBlending sb -> {
-                    if (currentBoundPipeline != null) {
-                        var blendConfig = sb.enabled()
-                                ? VkPipelineFactory.BlendConfig.ALPHA
-                                : VkPipelineFactory.BlendConfig.NONE;
-                        currentBlendMode = sb.enabled() ? BlendMode.ALPHA : BlendMode.NONE;
-                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
-                    }
-                }
-                case dev.engine.graphics.command.RenderCommand.SetCullFace scf -> {
-                    vk.cmdSetCullMode(cmd, scf.enabled() ? VkBindings.VK_CULL_MODE_BACK_BIT : VkBindings.VK_CULL_MODE_NONE);
-                }
-                case dev.engine.graphics.command.RenderCommand.SetWireframe sw -> {
-                    currentWireframe = sw.enabled();
-                    if (currentBoundPipeline != null) {
-                        var blendConfig = mapBlendMode(currentBlendMode);
-                        rebindPipelineVariant(cmd, blendConfig, currentWireframe);
-                    }
-                }
                 case dev.engine.graphics.command.RenderCommand.BindRenderTarget brt -> {
                     var rtAlloc = renderTargetRegistry.get(brt.renderTarget());
                     if (rtAlloc != null) {

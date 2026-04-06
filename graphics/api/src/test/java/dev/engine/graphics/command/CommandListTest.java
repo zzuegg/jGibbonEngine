@@ -86,20 +86,6 @@ class CommandListTest {
         assertEquals(CullMode.BACK, stateCmd.properties().get(RenderState.CULL_MODE));
     }
 
-    @Test void deprecatedStateCommandsStillWork() {
-        var ctx = new CommandRecorder();
-        ctx.setDepthTest(true);
-        ctx.setBlending(true);
-        ctx.setCullFace(true);
-        ctx.setWireframe(false);
-        var list = ctx.finish();
-        assertEquals(4, list.commands().size());
-        assertInstanceOf(RenderCommand.SetDepthTest.class, list.commands().get(0));
-        assertInstanceOf(RenderCommand.SetBlending.class, list.commands().get(1));
-        assertInstanceOf(RenderCommand.SetCullFace.class, list.commands().get(2));
-        assertInstanceOf(RenderCommand.SetWireframe.class, list.commands().get(3));
-    }
-
     @Test void setRenderStateCommand() {
         var state = PropertyMap.<RenderState>builder()
             .set(RenderState.DEPTH_TEST, true)

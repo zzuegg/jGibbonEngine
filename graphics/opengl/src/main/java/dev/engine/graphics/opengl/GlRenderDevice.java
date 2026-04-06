@@ -621,30 +621,6 @@ public class GlRenderDevice implements RenderDevice {
                 gl.glBindFramebuffer(GlBindings.GL_FRAMEBUFFER, 0);
                 currentRenderTarget = null;
             }
-            case RenderCommand.SetDepthTest cmd -> {
-                if (cmd.enabled()) gl.glEnable(GlBindings.GL_DEPTH_TEST);
-                else gl.glDisable(GlBindings.GL_DEPTH_TEST);
-            }
-            case RenderCommand.SetBlending cmd -> {
-                if (cmd.enabled()) {
-                    gl.glEnable(GlBindings.GL_BLEND);
-                    gl.glBlendFunc(GlBindings.GL_SRC_ALPHA, GlBindings.GL_ONE_MINUS_SRC_ALPHA);
-                } else {
-                    gl.glDisable(GlBindings.GL_BLEND);
-                }
-            }
-            case RenderCommand.SetCullFace cmd -> {
-                if (cmd.enabled()) {
-                    gl.glEnable(GlBindings.GL_CULL_FACE);
-                    gl.glCullFace(GlBindings.GL_BACK);
-                    gl.glFrontFace(GlBindings.GL_CCW);
-                } else {
-                    gl.glDisable(GlBindings.GL_CULL_FACE);
-                }
-            }
-            case RenderCommand.SetWireframe cmd -> {
-                gl.glPolygonMode(GlBindings.GL_FRONT_AND_BACK, cmd.enabled() ? GlBindings.GL_LINE : GlBindings.GL_FILL);
-            }
             case RenderCommand.Clear cmd -> {
                 gl.glClearColor(cmd.r(), cmd.g(), cmd.b(), cmd.a());
                 gl.glClear(GlBindings.GL_COLOR_BUFFER_BIT | GlBindings.GL_DEPTH_BUFFER_BIT);
