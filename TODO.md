@@ -16,7 +16,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 ## Hardcoded Values (should be configurable/dynamic)
 
 - [ ] **Primitive topology hardcoded to TRIANGLES** — All draw commands in Gl/Vk/Wgpu RenderDevice. Topology should be part of PipelineDescriptor or DrawCommand. Prevents drawing lines, points, triangle strips.
-- [ ] **Clear color hardcoded (0.05, 0.05, 0.08)** — `Renderer.java:65`, `VkRenderDevice.java:60`. Duplicated magic constant. Default should come from config.
+- [x] **Clear color hardcoded (0.05, 0.05, 0.08)** — Not duplicated: Renderer has setClearColor() API, VkRenderDevice reads it from the Clear command. Both just have matching defaults.
 - [ ] **Push constant UBO size hardcoded to 128 bytes** — `GlRenderDevice.java:96`, `VkDescriptorManager.java:101`. Should be configurable via GraphicsConfig or DeviceCapability.
 - [ ] **Texture/sampler array sizes: magic numbers** — GL: boundTextures[32], boundSamplers[32]. Vk: currentTextures[8], pendingUboBuffers[16], pendingSsboBuffers[8]. Should be queried from DeviceCapability or configurable.
 - [ ] **MAX_FRAMES_IN_FLIGHT=2 hardcoded** — `VkRenderDevice.java:47`. Should be configurable through VulkanConfig.
@@ -26,7 +26,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [ ] **All shaders forced to STANDARD_FORMAT vertex layout** — `ShaderManager.java:255`. Uses PrimitiveMeshes.STANDARD_FORMAT for ALL pipelines. Custom vertex formats (tangents, colors, bone weights) won't work.
 - [ ] **Shader entry points hardcoded ("vertexMain"/"fragmentMain")** — `ShaderManager.java:227`. Should be configurable per shader for custom entry points.
 - [ ] **Camera defaults (near=0.1, far=1000) not in config** — `Camera.java:15`. Should be configurable through EngineConfig or named constants.
-- [ ] **Deprecated cull face/front face in legacy commands** — `GlRenderDevice.java:631`. Legacy SetCullFace hardcodes GL_BACK/GL_CCW. Remove deprecated path since SetRenderState replacement exists.
+- [x] **Deprecated cull face/front face in legacy commands** — Fixed: SetCullFace and all legacy render commands removed from all backends.
 
 ## Missing Configuration
 
