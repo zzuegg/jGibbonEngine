@@ -1,0 +1,136 @@
+name: Screenshot Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: screenshot-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  screenshot-report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Grant Gradle wrapper execute permission
+        run: chmod +x gradlew
+
+      - name: Install Mesa software rendering and virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            mesa-utils \
+            libegl-mesa0 \
+            libgl1-mesa-dri \
+            libglx-mesa0 \
+            libvulkan1 \
+            mesa-vulkan-drivers \
+            xvfb \
+            libjemalloc2
+
+      - name: Verify software rendering
+        run: |
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export MESA_GL_VERSION_OVERRIDE=4.5
+          export GALLIUM_DRIVER=llvmpipe
+          xvfb-run -a glxinfo | head -30 || echo "glxinfo not available"
+          echo "---"
+          ls /usr/share/vulkan/icd.d/ 2>/dev/null || echo "No Vulkan ICDs found"
+          echo "---"
+          vulkaninfo --summary 2>/dev/null || echo "vulkaninfo not available"
+
+      - name: Compile project
+        run: |
+          xvfb-run -a ./gradlew :samples:tests:screenshot:testClasses --no-daemon 2>&1
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.5"
+          MESA_GLSL_VERSION_OVERRIDE: "450"
+          GALLIUM_DRIVER: llvmpipe
+
+      - name: Run screenshot tests (samples)
+        id: samples_test
+        continue-on-error: true
+        run: |
+          xvfb-run -a -s "-screen 0 1280x720x24" \
+            ./gradlew :samples:tests:screenshot:screenshotReport --no-daemon --continue 2>&1
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.5"
+          MESA_GLSL_VERSION_OVERRIDE: "450"
+          GALLIUM_DRIVER: llvmpipe
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+
+      - name: Run screenshot tests (examples)
+        id: examples_test
+        continue-on-error: true
+        run: |
+          xvfb-run -a -s "-screen 0 1280x720x24" \
+            ./gradlew :examples:screenshotReport --no-daemon --continue 2>&1
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.5"
+          MESA_GLSL_VERSION_OVERRIDE: "450"
+          GALLIUM_DRIVER: llvmpipe
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+
+      - name: List generated files
+        if: always()
+        run: |
+          echo "=== Samples screenshots ==="
+          find samples/tests/screenshot/build/screenshots -type f 2>/dev/null || echo "No samples screenshots"
+          echo ""
+          echo "=== Samples test results ==="
+          find samples/tests/screenshot/build/test-results -type f 2>/dev/null || echo "No samples test results"
+          echo ""
+          echo "=== Examples screenshots ==="
+          find examples/build/screenshots -type f 2>/dev/null || echo "No examples screenshots"
+          echo ""
+          echo "=== Examples test results ==="
+          find examples/build/test-results -type f 2>/dev/null || echo "No examples test results"
+
+      - name: Upload screenshot report (samples)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-report-samples
+          path: |
+            samples/tests/screenshot/build/screenshots/
+            samples/tests/screenshot/build/test-results/
+          retention-days: 30
+
+      - name: Upload screenshot report (examples)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-report-examples
+          path: |
+            examples/build/screenshots/
+            examples/build/test-results/
+          retention-days: 30
+
+      - name: Check test outcomes
+        if: always()
+        run: |
+          echo "Samples test result: ${{ steps.samples_test.outcome }}"
+          echo "Examples test result: ${{ steps.examples_test.outcome }}"
+          if [ "${{ steps.samples_test.outcome }}" = "failure" ] || [ "${{ steps.examples_test.outcome }}" = "failure" ]; then
+            echo "::error::One or more screenshot test suites failed"
+            exit 1
+          fi

@@ -10,6 +10,8 @@ public class RenderStats {
     private int bufferBinds;
     private int renderTargetBinds;
 
+    private final ResourceStats resourceStats = new ResourceStats();
+
     public void recordDrawCall(int vertices, int indices) {
         drawCalls++;
         verticesSubmitted += vertices;
@@ -29,7 +31,11 @@ public class RenderStats {
     public int bufferBinds() { return bufferBinds; }
     public int renderTargetBinds() { return renderTargetBinds; }
 
+    /** Per-resource-type lifecycle stats (live totals + per-frame create/destroy counts). */
+    public ResourceStats resources() { return resourceStats; }
+
     public void reset() {
+        resourceStats.newFrame();
         drawCalls = 0;
         verticesSubmitted = 0;
         indicesSubmitted = 0;
@@ -41,7 +47,7 @@ public class RenderStats {
 
     @Override
     public String toString() {
-        return "RenderStats{draws=%d, verts=%d, indices=%d, pipelines=%d, textures=%d}"
-                .formatted(drawCalls, verticesSubmitted, indicesSubmitted, pipelineBinds, textureBinds);
+        return "RenderStats{draws=%d, verts=%d, indices=%d, pipelines=%d, textures=%d, resources=%s}"
+                .formatted(drawCalls, verticesSubmitted, indicesSubmitted, pipelineBinds, textureBinds, resourceStats);
     }
 }

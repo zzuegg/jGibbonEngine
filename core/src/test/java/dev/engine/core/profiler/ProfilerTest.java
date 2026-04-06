@@ -19,7 +19,7 @@ class ProfilerTest {
             try (var scope = profiler.scope("render")) {
                 spinWait(1_000_000); // ~1ms
             }
-            var results = profiler.lastFrame();
+            var results = profiler.currentFrame();
             assertNotNull(results);
             var render = results.get("render");
             assertNotNull(render);
@@ -35,7 +35,7 @@ class ProfilerTest {
                     spinWait(500_000);
                 }
             }
-            var results = profiler.lastFrame();
+            var results = profiler.currentFrame();
             var frame = results.get("frame");
             assertNotNull(frame);
             assertEquals(2, frame.children().size());
@@ -49,7 +49,7 @@ class ProfilerTest {
                     spinWait(500_000);
                 }
             }
-            var results = profiler.lastFrame();
+            var results = profiler.currentFrame();
             var parent = results.get("parent");
             var child = parent.children().get("child");
             assertTrue(parent.cpuNanos() >= child.cpuNanos());
@@ -62,7 +62,7 @@ class ProfilerTest {
             try (var s = profiler.scope("old")) { spinWait(100_000); }
             profiler.newFrame();
             try (var s = profiler.scope("new")) { spinWait(100_000); }
-            var results = profiler.lastFrame();
+            var results = profiler.currentFrame();
             assertNull(results.get("old"));
             assertNotNull(results.get("new"));
         }
