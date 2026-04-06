@@ -36,14 +36,29 @@ jobs:
       - name: Compile scenes module
         run: ./gradlew :samples:tests:screenshot:scenes:compileJava --no-daemon --stacktrace
 
-      - name: Build web test app (TeaVM)
+      - name: Compile web module (Java)
+        run: ./gradlew :samples:tests:screenshot:web:compileJava --no-daemon --stacktrace
+
+      - name: Generate JavaScript (TeaVM)
+        run: ./gradlew :samples:tests:screenshot:web:generateJavaScript --no-daemon --stacktrace 2>&1 | tee build-teavm.log || true
+
+      - name: Assemble web test app
         run: ./gradlew :samples:tests:screenshot:web:assembleWebTest --no-daemon --stacktrace
 
       - name: Run web screenshot tests
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
         run: ./gradlew :samples:tests:screenshot:web:test --no-daemon --stacktrace
-        continue-on-error: true  # Don't fail the build until references are established
+        continue-on-error: true
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build-teavm.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload web screenshots
         if: always()
@@ -52,3 +67,4 @@ jobs:
           name: web-screenshots
           path: samples/tests/screenshot/web/build/screenshots/
           retention-days: 30
+          if-no-files-found: ignore
