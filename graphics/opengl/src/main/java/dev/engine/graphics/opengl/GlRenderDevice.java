@@ -900,25 +900,47 @@ public class GlRenderDevice implements RenderDevice {
         log.info("GlRenderDevice closed");
     }
 
-    private static int mapTextureFormat(TextureFormat format) {
+    private int mapTextureFormat(TextureFormat format) {
         if (format == TextureFormat.RGBA8) return GlBindings.GL_RGBA8;
         if (format == TextureFormat.RGB8) return GlBindings.GL_RGB8;
         if (format == TextureFormat.R8) return GlBindings.GL_R8;
+        if (format == TextureFormat.RGBA16F) return GlBindings.GL_RGBA16F;
+        if (format == TextureFormat.RGBA32F) return GlBindings.GL_RGBA32F;
+        if (format == TextureFormat.RG16F) return GlBindings.GL_RG16F;
+        if (format == TextureFormat.RG32F) return GlBindings.GL_RG32F;
+        if (format == TextureFormat.R16F) return GlBindings.GL_R16F;
+        if (format == TextureFormat.R32F) return GlBindings.GL_R32F;
+        if (format == TextureFormat.R32UI) return GlBindings.GL_R32UI;
+        if (format == TextureFormat.R32I) return GlBindings.GL_R32I;
         if (format == TextureFormat.DEPTH24) return GlBindings.GL_DEPTH_COMPONENT24;
         if (format == TextureFormat.DEPTH32F) return GlBindings.GL_DEPTH_COMPONENT32F;
         if (format == TextureFormat.DEPTH24_STENCIL8) return GlBindings.GL_DEPTH24_STENCIL8;
         if (format == TextureFormat.DEPTH32F_STENCIL8) return GlBindings.GL_DEPTH32F_STENCIL8;
+        if (format == TextureFormat.BGRA8) {
+            log.warn("OpenGL does not support BGRA8 as internal format — falling back to RGBA8");
+            return GlBindings.GL_RGBA8;
+        }
+        log.warn("Unsupported texture format '{}' — falling back to RGBA8", format.name());
         return GlBindings.GL_RGBA8;
     }
 
-    private static int[] mapUploadFormat(TextureFormat format) {
+    private int[] mapUploadFormat(TextureFormat format) {
         if (format == TextureFormat.RGBA8) return new int[]{GlBindings.GL_RGBA, GlBindings.GL_UNSIGNED_BYTE};
         if (format == TextureFormat.RGB8) return new int[]{GlBindings.GL_RGB, GlBindings.GL_UNSIGNED_BYTE};
         if (format == TextureFormat.R8) return new int[]{GlBindings.GL_RED, GlBindings.GL_UNSIGNED_BYTE};
+        if (format == TextureFormat.RGBA16F) return new int[]{GlBindings.GL_RGBA, GlBindings.GL_HALF_FLOAT};
+        if (format == TextureFormat.RGBA32F) return new int[]{GlBindings.GL_RGBA, GlBindings.GL_FLOAT};
+        if (format == TextureFormat.RG16F) return new int[]{GlBindings.GL_RG, GlBindings.GL_HALF_FLOAT};
+        if (format == TextureFormat.RG32F) return new int[]{GlBindings.GL_RG, GlBindings.GL_FLOAT};
+        if (format == TextureFormat.R16F) return new int[]{GlBindings.GL_RED, GlBindings.GL_HALF_FLOAT};
+        if (format == TextureFormat.R32F) return new int[]{GlBindings.GL_RED, GlBindings.GL_FLOAT};
+        if (format == TextureFormat.R32UI) return new int[]{GlBindings.GL_RED_INTEGER, GlBindings.GL_UNSIGNED_INT};
+        if (format == TextureFormat.R32I) return new int[]{GlBindings.GL_RED_INTEGER, GlBindings.GL_INT};
         if (format == TextureFormat.DEPTH24) return new int[]{GlBindings.GL_DEPTH_COMPONENT, GlBindings.GL_UNSIGNED_INT};
         if (format == TextureFormat.DEPTH32F) return new int[]{GlBindings.GL_DEPTH_COMPONENT, GlBindings.GL_FLOAT};
         if (format == TextureFormat.DEPTH24_STENCIL8) return new int[]{GlBindings.GL_DEPTH_STENCIL, GlBindings.GL_UNSIGNED_INT_24_8};
         if (format == TextureFormat.DEPTH32F_STENCIL8) return new int[]{GlBindings.GL_DEPTH_STENCIL, GlBindings.GL_FLOAT_32_UNSIGNED_INT_24_8_REV};
+        log.warn("Unsupported upload format '{}' — falling back to RGBA/UNSIGNED_BYTE", format.name());
         return new int[]{GlBindings.GL_RGBA, GlBindings.GL_UNSIGNED_BYTE};
     }
 

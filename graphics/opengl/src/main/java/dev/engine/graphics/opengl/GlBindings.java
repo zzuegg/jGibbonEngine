@@ -27,6 +27,7 @@ public interface GlBindings {
     int GL_UNSIGNED_INT  = 0x1405;
     int GL_INT           = 0x1404;
     int GL_FLOAT         = 0x1406;
+    int GL_HALF_FLOAT    = 0x140B;
 
     // --- Blend factors ---
     int GL_ZERO                = 0;
@@ -82,6 +83,14 @@ public interface GlBindings {
     int GL_R8                  = 0x8229;
     int GL_RGB8                = 0x8051;
     int GL_RGBA8               = 0x8058;
+    int GL_R16F                = 0x822D;
+    int GL_RG16F               = 0x822F;
+    int GL_RGBA16F             = 0x881A;
+    int GL_R32F                = 0x822E;
+    int GL_RG32F               = 0x8230;
+    int GL_RGBA32F             = 0x8814;
+    int GL_R32UI               = 0x8236;
+    int GL_R32I                = 0x8235;
     int GL_DEPTH_COMPONENT24   = 0x81A6;
     int GL_DEPTH_COMPONENT32F  = 0x8CAC;
     int GL_DEPTH24_STENCIL8    = 0x88F0;
@@ -89,8 +98,10 @@ public interface GlBindings {
 
     // --- Texture upload formats ---
     int GL_RED              = 0x1903;
+    int GL_RG               = 0x8227;
     int GL_RGB              = 0x1907;
     int GL_RGBA             = 0x1908;
+    int GL_RED_INTEGER      = 0x8D94;
     int GL_DEPTH_COMPONENT  = 0x1902;
     int GL_DEPTH_STENCIL    = 0x84F9;
 

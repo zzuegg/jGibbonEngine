@@ -1133,7 +1133,7 @@ public class WgpuRenderDevice implements RenderDevice {
                 pipelineStateDirty = true;
             }
             case RenderCommand.SetWireframe cmd -> {
-                // WebGPU does not support wireframe natively
+                if (cmd.enabled()) log.warn("WebGPU does not support wireframe rendering — ignored");
             }
             case RenderCommand.SetRenderState cmd -> {
                 var props = cmd.properties();
@@ -1166,16 +1166,16 @@ public class WgpuRenderDevice implements RenderDevice {
                 pipelineStateDirty = true;
             }
             case RenderCommand.PushConstants cmd -> {
-                log.trace("PushConstants not yet implemented for WebGPU");
+                log.warn("PushConstants not supported on WebGPU — command ignored");
             }
             case RenderCommand.BindComputePipeline cmd -> {
-                log.trace("BindComputePipeline not yet implemented for WebGPU");
+                log.warn("BindComputePipeline not supported on WebGPU — command ignored");
             }
             case RenderCommand.Dispatch cmd -> {
-                log.trace("Dispatch not yet implemented for WebGPU");
+                log.warn("Dispatch not supported on WebGPU — command ignored");
             }
             case RenderCommand.BindImage cmd -> {
-                log.trace("BindImage not yet implemented for WebGPU");
+                log.warn("BindImage not supported on WebGPU — command ignored");
             }
             case RenderCommand.MemoryBarrier cmd -> {
                 // WebGPU handles barriers implicitly
@@ -1193,16 +1193,16 @@ public class WgpuRenderDevice implements RenderDevice {
                 }
             }
             case RenderCommand.CopyTexture cmd -> {
-                log.trace("CopyTexture not yet implemented for WebGPU");
+                log.warn("CopyTexture not yet implemented for WebGPU — command ignored");
             }
             case RenderCommand.BlitTexture cmd -> {
-                log.trace("BlitTexture not yet implemented for WebGPU");
+                log.warn("BlitTexture not yet implemented for WebGPU — command ignored");
             }
             case RenderCommand.DrawIndirect cmd -> {
-                log.trace("DrawIndirect not yet implemented for WebGPU");
+                log.warn("DrawIndirect not yet implemented for WebGPU — command ignored");
             }
             case RenderCommand.DrawIndexedIndirect cmd -> {
-                log.trace("DrawIndexedIndirect not yet implemented for WebGPU");
+                log.warn("DrawIndexedIndirect not yet implemented for WebGPU — command ignored");
             }
         }
     }
@@ -1461,7 +1461,7 @@ public class WgpuRenderDevice implements RenderDevice {
         if (capability == DeviceCapability.SHADER_TARGET) return (T) Integer.valueOf(28); // ShaderCompiler.TARGET_WGSL
         if (capability == DeviceCapability.DEVICE_NAME) return (T) "WebGPU";
         if (capability == DeviceCapability.API_VERSION) return (T) "WebGPU";
-        if (capability == DeviceCapability.COMPUTE_SHADERS) return (T) Boolean.TRUE;
+        if (capability == DeviceCapability.COMPUTE_SHADERS) return (T) Boolean.FALSE;
         if (capability == DeviceCapability.GEOMETRY_SHADERS) return (T) Boolean.FALSE;
         if (capability == DeviceCapability.TESSELLATION) return (T) Boolean.FALSE;
         if (capability == DeviceCapability.ANISOTROPIC_FILTERING) return (T) Boolean.TRUE;
@@ -1535,6 +1535,11 @@ public class WgpuRenderDevice implements RenderDevice {
         if (format == TextureFormat.R32F) return WgpuBindings.TEXTURE_FORMAT_R32_FLOAT;
         if (format == TextureFormat.R32UI) return WgpuBindings.TEXTURE_FORMAT_R32_UINT;
         if (format == TextureFormat.R32I) return WgpuBindings.TEXTURE_FORMAT_R32_SINT;
+        if (format == TextureFormat.DEPTH32F_STENCIL8) {
+            log.warn("WebGPU does not support DEPTH32F_STENCIL8 — falling back to DEPTH24_PLUS_STENCIL8");
+            return WgpuBindings.TEXTURE_FORMAT_DEPTH24_PLUS_STENCIL8;
+        }
+        log.warn("Unsupported texture format '{}' on WebGPU — falling back to RGBA8_UNORM", format.name());
         return WgpuBindings.TEXTURE_FORMAT_RGBA8_UNORM;
     }
 
@@ -1553,6 +1558,8 @@ public class WgpuRenderDevice implements RenderDevice {
                 return WgpuBindings.VERTEX_FORMAT_UNORM8X4;
             }
         }
+        log.warn("Unsupported vertex attribute type {} x{} on WebGPU — falling back to FLOAT32X4",
+                attr.componentType().name(), attr.componentCount());
         return WgpuBindings.VERTEX_FORMAT_FLOAT32X4;
     }
 

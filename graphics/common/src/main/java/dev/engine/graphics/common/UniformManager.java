@@ -8,6 +8,7 @@ import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec2;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.property.PropertyKey;
+import dev.engine.graphics.shader.GlobalParamNames;
 import dev.engine.graphics.shader.GlobalParamsRegistry;
 import dev.engine.graphics.shader.params.ObjectParams;
 import dev.engine.graphics.BufferResource;
@@ -59,7 +60,7 @@ public class UniformManager {
     public void uploadPerFrameGlobals() {
         for (var entry : globalParams.entries()) {
             if (entry.data() == null) continue;
-            if ("Object".equals(entry.name())) continue;
+            if (GlobalParamNames.OBJECT.equals(entry.name())) continue;
             var ubo = globalUbos.get(entry.name());
             var layout = globalLayouts.get(entry.name());
             if (ubo != null && layout != null) {
@@ -72,7 +73,7 @@ public class UniformManager {
 
     /** Uploads per-object params and binds global UBOs to the draw command. */
     public Handle<BufferResource> uploadObjectParams(Handle<?> entity, dev.engine.core.math.Mat4 transform) {
-        var objectLayout = globalLayouts.get("Object");
+        var objectLayout = globalLayouts.get(GlobalParamNames.OBJECT);
         if (objectLayout == null) return null;
 
         var objectKey = "obj_" + entity.index();
@@ -90,7 +91,7 @@ public class UniformManager {
     public void bindGlobals(CommandRecorder draw, dev.engine.graphics.renderer.Renderable r, Handle<BufferResource> objectUbo) {
         for (var entry : globalParams.entries()) {
             Handle<BufferResource> ubo;
-            if ("Object".equals(entry.name())) {
+            if (GlobalParamNames.OBJECT.equals(entry.name())) {
                 ubo = objectUbo;
             } else {
                 ubo = globalUbos.get(entry.name());
