@@ -1213,6 +1213,7 @@ public class VkRenderDevice implements RenderDevice {
             case "DEVICE_NAME" -> (T) vk.getDeviceName(instance, physicalDevice);
             case "TEXTURE_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.TEXTURE_BINDING_OFFSET);
             case "SSBO_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.SSBO_BINDING_OFFSET);
+            case "FRAMES_IN_FLIGHT" -> (T) Integer.valueOf(MAX_FRAMES_IN_FLIGHT);
             case "COMPUTE_SHADERS" -> (T) Boolean.TRUE;
             case "GEOMETRY_SHADERS" -> (T) Boolean.TRUE;
             case "TESSELLATION" -> (T) Boolean.TRUE;

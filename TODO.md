@@ -41,7 +41,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [ ] **PostProcessChain not integrated** — Implemented but never called from Renderer. No hook for bloom, tone mapping, FXAA, etc.
 - [ ] **UploadStrategy not used by Renderer** — Interface + PerObjectUploadStrategy exist but Renderer does inline upload. PerObjectUploadStrategy even has a TODO comment.
 - [ ] **EventBus never instantiated** — Fully implemented with subscribe/publish/unsubscribe but not used by Engine, Renderer, AssetManager, or anything.
-- [ ] **TransactionBus never used** — Multi-consumer filtered bus implemented. Only the simpler TransactionBuffer is used. Bus is more appropriate for the architecture described in NOTES.md.
+- [x] **TransactionBus never used** — Fixed: AbstractScene now uses TransactionBus instead of TransactionBuffer.
 - [ ] **Asset dependency tracking** — NOTES.md: "Assets can depend on other assets. Manager resolves dependencies transitively." Not implemented.
 - [ ] **Asset eviction/reference counting** — NOTES.md: "Reference counting or GC-based eviction for unused assets." Cache is unbounded ConcurrentHashMap. No LRU, no memory budget.
 - [ ] **Async asset loading with placeholders** — NOTES.md: "Callers get a handle immediately; placeholder assets used until loading completes." API blocks synchronously. No placeholder/fallback system.
@@ -74,7 +74,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [ ] **Deprecated APIs to remove** — GraphicsBackendFactory, GraphicsConfigLegacy, EngineConfig.graphicsBackend field, GlfwWindowToolkit in graphics:opengl, deprecated SetDepthTest/SetBlending/SetCullFace/SetWireframe commands. New APIs (GraphicsConfig, SetRenderState) are in place.
 - [x] **ResourceCleaner.register() package-private** — Fixed: made `public`.
 - [x] **NativeResource not used by GPU resources** — Fixed: Handle<T> now supports Cleaner registration. GpuResourceManager registers cleanup actions on all created handles. Leaked handles are automatically cleaned by GC with warn-level logging.
-- [ ] **GpuResourceManager deferred deletion delay doesn't match frames-in-flight** — `GpuResourceManager.java:175`. Double-buffer swap means N+2 deletion. If Vulkan uses 3 frames-in-flight, resources freed while still in use. Tie to actual fence/frame count.
+- [x] **GpuResourceManager deferred deletion delay doesn't match frames-in-flight** — Fixed: replaced double-buffer with ring of N+1 queues (N = FRAMES_IN_FLIGHT). Vulkan reports MAX_FRAMES_IN_FLIGHT=2, so resources are deferred 3 frames. Added DeviceCapability.FRAMES_IN_FLIGHT.
 
 ## Previously Identified (from 2026-04-04 review)
 

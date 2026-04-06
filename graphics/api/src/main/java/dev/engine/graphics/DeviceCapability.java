@@ -24,6 +24,9 @@ public interface DeviceCapability<T> {
     DeviceCapability<Boolean> MULTI_DRAW_INDIRECT = boolCap("MULTI_DRAW_INDIRECT");
     DeviceCapability<Boolean> BINDLESS_TEXTURES = boolCap("BINDLESS_TEXTURES");
 
+    /** Number of frames that can be in-flight simultaneously. Used by GpuResourceManager to defer resource deletion. */
+    DeviceCapability<Integer> FRAMES_IN_FLIGHT = intCap("FRAMES_IN_FLIGHT");
+
     // --- Backend binding layout ---
     DeviceCapability<Integer> TEXTURE_BINDING_OFFSET = intCap("TEXTURE_BINDING_OFFSET");
     DeviceCapability<Integer> SSBO_BINDING_OFFSET = intCap("SSBO_BINDING_OFFSET");

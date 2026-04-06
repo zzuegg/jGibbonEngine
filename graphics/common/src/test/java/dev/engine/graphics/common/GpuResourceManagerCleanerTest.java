@@ -37,8 +37,7 @@ class GpuResourceManagerCleanerTest {
         var buffer = gpu.createBuffer(64, BufferUsage.VERTEX, AccessPattern.STATIC);
         assertEquals(1, gpu.liveBufferCount());
         gpu.destroyBuffer(buffer);
-        gpu.processDeferred();
-        gpu.processDeferred();
+        flushDeferred();
         assertEquals(0, gpu.liveBufferCount());
     }
 
@@ -56,8 +55,7 @@ class GpuResourceManagerCleanerTest {
             System.gc();
             Thread.sleep(50);
         }
-        gpu.processDeferred();
-        gpu.processDeferred();
+        flushDeferred();
 
         assertEquals(0, gpu.liveBufferCount(),
                 "Abandoned buffer should have been cleaned by GC + processDeferred");
@@ -70,8 +68,7 @@ class GpuResourceManagerCleanerTest {
             System.gc();
             Thread.sleep(50);
         }
-        gpu.processDeferred();
-        gpu.processDeferred();
+        flushDeferred();
 
         assertEquals(0, gpu.liveTextureCount(),
                 "Abandoned texture should have been cleaned by GC + processDeferred");
@@ -80,16 +77,14 @@ class GpuResourceManagerCleanerTest {
     @Test void explicitlyClosedBufferNotDoubleFreed() throws InterruptedException {
         var buffer = gpu.createBuffer(64, BufferUsage.UNIFORM, AccessPattern.DYNAMIC);
         gpu.destroyBuffer(buffer);
-        gpu.processDeferred();
-        gpu.processDeferred();
+        flushDeferred();
 
         assertEquals(0, gpu.liveBufferCount());
 
         // Let GC run — Cleaner should NOT decrement again
         System.gc();
         Thread.sleep(200);
-        gpu.processDeferred();
-        gpu.processDeferred();
+        flushDeferred();
 
         assertEquals(0, gpu.liveBufferCount(), "Should still be 0, not negative");
     }
@@ -113,6 +108,14 @@ class GpuResourceManagerCleanerTest {
         assertFalse(vi.isClosed());
         gpu.destroyVertexInput(vi);
         assertTrue(vi.isClosed());
+    }
+
+    /** Flushes the entire deferral ring — processes all pending deletions regardless of depth. */
+    private void flushDeferred() {
+        // Process enough times to rotate through the entire ring + 1
+        for (int i = 0; i < 4; i++) {
+            gpu.processDeferred();
+        }
     }
 
     private void createAndAbandonBuffer() {

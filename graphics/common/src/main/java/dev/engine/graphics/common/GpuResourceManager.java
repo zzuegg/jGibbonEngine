@@ -58,17 +58,33 @@ public class GpuResourceManager {
     private final java.util.Map<Handle<BufferResource>, String> bufferTypes =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
-    // Deferred deletion queues (thread-safe for concurrent destroy calls and Cleaner thread)
+    // Ring of deferred deletion queues. Resources queued in frame N are deleted
+    // after deferralDepth frames, ensuring in-flight GPU frames don't reference freed resources.
+    // deferralDepth = framesInFlight + 1 (e.g. 3 queues for 2 frames-in-flight).
+    private final java.util.Queue<Runnable>[] deferralRing;
+    private int deferralHead = 0;
+    // Active queue for new deletions (thread-safe for Cleaner thread)
     private volatile java.util.Queue<Runnable> deletionQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
-    private volatile java.util.Queue<Runnable> pendingQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
     public GpuResourceManager(RenderDevice device) {
         this(device, new ResourceStats());
     }
 
+    @SuppressWarnings("unchecked")
     public GpuResourceManager(RenderDevice device, ResourceStats resourceStats) {
         this.device = device;
         this.resourceStats = resourceStats;
+
+        // Query frames-in-flight from the device (default 1 for immediate-mode backends)
+        var fif = device.queryCapability(DeviceCapability.FRAMES_IN_FLIGHT);
+        int framesInFlight = (fif != null && fif > 0) ? fif : 1;
+        // Need framesInFlight + 1 deferral stages: current frame + N in-flight
+        this.deferralRing = new java.util.concurrent.ConcurrentLinkedQueue[framesInFlight + 1];
+        for (int i = 0; i < deferralRing.length; i++) {
+            deferralRing[i] = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        }
+        log.debug("GpuResourceManager: framesInFlight={}, deferralDepth={}", framesInFlight, deferralRing.length);
+
         // Pre-register well-known types
         resourceStats.register(BUFFER);
         resourceStats.register(BUFFER_VERTEX);
@@ -288,13 +304,27 @@ public class GpuResourceManager {
     /**
      * Processes the deferred deletion queue.
      * Call once per frame after GPU submission is complete (after endFrame).
+     *
+     * <p>Resources are deferred through a ring of queues sized to match
+     * the device's frames-in-flight count. A resource queued in frame N
+     * is deleted after {@code framesInFlight + 1} calls to processDeferred(),
+     * ensuring all in-flight GPU frames have finished using it.
      */
     public void processDeferred() {
-        // Swap queues — pending from last frame is now safe to delete
-        var toDelete = pendingQueue;
-        pendingQueue = deletionQueue;
+        // Move current deletionQueue into the ring at the head position
+        var incoming = deletionQueue;
         deletionQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
 
+        // The oldest slot in the ring is safe to process — enough frames have passed
+        var toDelete = deferralRing[deferralHead];
+
+        // Store incoming deletions into this slot (will be processed after a full ring rotation)
+        deferralRing[deferralHead] = incoming;
+
+        // Advance head
+        deferralHead = (deferralHead + 1) % deferralRing.length;
+
+        // Process the old queue
         Runnable action;
         while ((action = toDelete.poll()) != null) {
             action.run();
@@ -322,11 +352,13 @@ public class GpuResourceManager {
      * Call during engine shutdown.
      */
     public void shutdown() {
-        // Flush both queues immediately
-        for (var action : deletionQueue) action.run();
-        deletionQueue.clear();
-        for (var action : pendingQueue) action.run();
-        pendingQueue.clear();
+        // Flush the active deletion queue
+        Runnable action;
+        while ((action = deletionQueue.poll()) != null) action.run();
+        // Flush all ring slots
+        for (var queue : deferralRing) {
+            while ((action = queue.poll()) != null) action.run();
+        }
 
         int leaks = totalLiveResources();
         if (leaks > 0) {
