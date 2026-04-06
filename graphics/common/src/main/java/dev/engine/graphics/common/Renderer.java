@@ -85,7 +85,7 @@ public class Renderer implements AutoCloseable {
         globalParams.register(GlobalParamNames.OBJECT, dev.engine.graphics.shader.params.ObjectParams.class, 2);
 
         this.uniformManager = new UniformManager(gpu, globalParams);
-        this.shaderManager = new ShaderManager(device, globalParams, compiler);
+        this.shaderManager = new ShaderManager(device, gpu, globalParams, compiler);
     }
 
     public static Renderer createHeadless() {
@@ -352,6 +352,7 @@ public class Renderer implements AutoCloseable {
     @Override
     public void close() {
         meshManager.close();
+        shaderManager.close();
         uniformManager.close();
         textureManager.close();
         renderTargetManager.close();

@@ -48,8 +48,11 @@ public class ShaderManager {
     /** Returns the texture binding offset for the current backend (e.g. 16 for Vulkan, 0 for OpenGL). */
     public int textureBindingOffset() { return textureBindingOffset; }
 
-    public ShaderManager(RenderDevice device, GlobalParamsRegistry globalParams, ShaderCompiler compiler) {
+    private final GpuResourceManager gpu;
+
+    public ShaderManager(RenderDevice device, GpuResourceManager gpu, GlobalParamsRegistry globalParams, ShaderCompiler compiler) {
         this.device = device;
+        this.gpu = gpu;
         this.globalParams = globalParams;
         this.compiler = compiler;
 
@@ -135,7 +138,7 @@ public class ShaderManager {
 
     public void invalidate(String key) {
         var old = shaderCache.remove(key);
-        if (old != null) device.destroyPipeline(old.pipeline());
+        if (old != null) gpu.destroyPipeline(old.pipeline());
     }
 
     /**
@@ -197,10 +200,15 @@ public class ShaderManager {
     }
 
     public void invalidateAll() {
-        for (var entry : shaderCache.values()) device.destroyPipeline(entry.pipeline());
+        for (var entry : shaderCache.values()) gpu.destroyPipeline(entry.pipeline());
         shaderCache.clear();
         resolvedShaders.clear();
         entityShaders.clear();
+    }
+
+    /** Destroys all cached pipelines. Call on shutdown. */
+    public void close() {
+        invalidateAll();
     }
 
     // --- Internal ---
@@ -258,7 +266,7 @@ public class ShaderManager {
     private Handle<PipelineResource> createPipelineFromResult(ShaderCompiler.CompileResult result, VertexFormat vertexFormat) {
         var format = vertexFormat != null ? vertexFormat : dev.engine.graphics.common.mesh.PrimitiveMeshes.STANDARD_FORMAT;
         if (slangTarget == ShaderCompiler.TARGET_SPIRV) {
-            return device.createPipeline(PipelineDescriptor.ofSpirv(
+            return gpu.createPipeline(PipelineDescriptor.ofSpirv(
                     new ShaderBinary(ShaderStage.VERTEX, result.codeBytes(0)),
                     new ShaderBinary(ShaderStage.FRAGMENT, result.codeBytes(1)))
                     .withVertexFormat(format));
@@ -267,7 +275,7 @@ public class ShaderManager {
             // For GLSL, Slang always renames to "main". Pass the correct names so backends can use them.
             String vsEntry = (slangTarget == ShaderCompiler.TARGET_WGSL) ? "vertexMain" : "main";
             String fsEntry = (slangTarget == ShaderCompiler.TARGET_WGSL) ? "fragmentMain" : "main";
-            return device.createPipeline(PipelineDescriptor.of(
+            return gpu.createPipeline(PipelineDescriptor.of(
                     new ShaderSource(ShaderStage.VERTEX, result.code(0), vsEntry),
                     new ShaderSource(ShaderStage.FRAGMENT, result.code(1), fsEntry))
                     .withVertexFormat(format));

@@ -87,7 +87,7 @@ public class Engine {
         NkFont uiFont = new NkBuiltinFont(2);
         this.debugUi = new NkContext(uiFont);
         this.debugUiOverlay = new DebugUiOverlay(device);
-        this.debugUiOverlay.init(uiFont, this.renderer.shaderManager());
+        this.debugUiOverlay.init(uiFont, this.renderer.shaderManager(), this.renderer.gpu());
 
         // Register the overlay to render after the scene
         this.renderer.addPostSceneCallback(() -> {

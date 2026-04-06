@@ -46,6 +46,7 @@ public class DebugUiOverlay implements AutoCloseable {
     );
 
     private final RenderDevice device;
+    private GpuResourceManager gpu;
     private boolean flipScissorY; // OpenGL uses bottom-left scissor origin
     private Handle<PipelineResource> pipeline;
     private Handle<TextureResource> fontTexture;
@@ -73,8 +74,11 @@ public class DebugUiOverlay implements AutoCloseable {
      *
      * @param font the font to use for text rendering
      * @param shaderManager compiles the Slang shader to the correct backend target
+     * @param gpu the GPU resource manager for tracked resource creation/destruction
      */
-    public void init(NkFont font, ShaderManager shaderManager) {
+    public void init(NkFont font, ShaderManager shaderManager, GpuResourceManager gpu) {
+        this.gpu = gpu;
+
         // Load and compile the Slang shader via ShaderManager.
         // Inject the correct texture binding offset so SPIRV bindings match the descriptor layout.
         int texOffset = shaderManager.textureBindingOffset();
@@ -101,28 +105,37 @@ public class DebugUiOverlay implements AutoCloseable {
                 font.atlasWidth(), font.atlasHeight(), 1, 1,
                 dev.engine.graphics.texture.TextureFormat.RGBA8,
                 dev.engine.graphics.texture.MipMode.NONE);
-        fontTexture = device.createTexture(texDesc);
+        fontTexture = gpu.createTexture(texDesc);
         // Use a direct buffer for the upload — some GL drivers require it for DSA functions
         byte[] atlasBytes = font.atlasData();
         ByteBuffer directAtlas = ByteBuffer.allocateDirect(atlasBytes.length).order(java.nio.ByteOrder.nativeOrder());
         directAtlas.put(atlasBytes).flip();
-        device.uploadTexture(fontTexture, directAtlas);
+        gpu.uploadTexture(fontTexture, directAtlas);
 
         // Create sampler (nearest for pixel-perfect font rendering)
-        fontSampler = device.createSampler(SamplerDescriptor.nearest());
+        fontSampler = gpu.createSampler(SamplerDescriptor.nearest());
 
         // Create vertex input
-        vertexInput = device.createVertexInput(VERTEX_FORMAT);
+        vertexInput = gpu.createVertexInput(VERTEX_FORMAT);
 
         // Initial buffers (will be resized as needed)
         currentVbSize = 64 * 1024;
         currentIbSize = 32 * 1024;
-        vertexBuffer = device.createBuffer(new BufferDescriptor(currentVbSize, BufferUsage.VERTEX, AccessPattern.STREAM));
-        indexBuffer = device.createBuffer(new BufferDescriptor(currentIbSize, BufferUsage.INDEX, AccessPattern.STREAM));
+        vertexBuffer = gpu.createBuffer(new BufferDescriptor(currentVbSize, BufferUsage.VERTEX, AccessPattern.STREAM));
+        indexBuffer = gpu.createBuffer(new BufferDescriptor(currentIbSize, BufferUsage.INDEX, AccessPattern.STREAM));
         // WebGPU requires 16-byte minimum uniform buffer binding size
-        uniformBuffer = device.createBuffer(new BufferDescriptor(16, BufferUsage.UNIFORM, AccessPattern.STREAM));
+        uniformBuffer = gpu.createBuffer(new BufferDescriptor(16, BufferUsage.UNIFORM, AccessPattern.STREAM));
 
         initialized = true;
+    }
+
+    /**
+     * Legacy init without GpuResourceManager — creates an unmanaged instance.
+     * @deprecated Use {@link #init(NkFont, ShaderManager, GpuResourceManager)} instead.
+     */
+    @Deprecated
+    public void init(NkFont font, ShaderManager shaderManager) {
+        init(font, shaderManager, new GpuResourceManager(device));
     }
 
     private static String loadShaderResource(String path) {
@@ -154,18 +167,18 @@ public class DebugUiOverlay implements AutoCloseable {
 
         // Resize buffers if needed
         if (vData.remaining() > currentVbSize) {
-            device.destroyBuffer(vertexBuffer);
+            gpu.destroyBuffer(vertexBuffer);
             currentVbSize = vData.remaining() * 2;
-            vertexBuffer = device.createBuffer(new BufferDescriptor(currentVbSize, BufferUsage.VERTEX, AccessPattern.STREAM));
+            vertexBuffer = gpu.createBuffer(new BufferDescriptor(currentVbSize, BufferUsage.VERTEX, AccessPattern.STREAM));
         }
         if (iData.remaining() > currentIbSize) {
-            device.destroyBuffer(indexBuffer);
+            gpu.destroyBuffer(indexBuffer);
             currentIbSize = iData.remaining() * 2;
-            indexBuffer = device.createBuffer(new BufferDescriptor(currentIbSize, BufferUsage.INDEX, AccessPattern.STREAM));
+            indexBuffer = gpu.createBuffer(new BufferDescriptor(currentIbSize, BufferUsage.INDEX, AccessPattern.STREAM));
         }
 
         // Upload vertex data
-        try (var writer = device.writeBuffer(vertexBuffer, 0, vData.remaining())) {
+        try (var writer = gpu.writeBuffer(vertexBuffer, 0, vData.remaining())) {
             var mem = writer.memory();
             for (long i = 0; i < vData.remaining(); i++) {
                 mem.putByte(i, vData.get(vData.position() + (int) i));
@@ -173,7 +186,7 @@ public class DebugUiOverlay implements AutoCloseable {
         }
 
         // Upload index data
-        try (var writer = device.writeBuffer(indexBuffer, 0, iData.remaining())) {
+        try (var writer = gpu.writeBuffer(indexBuffer, 0, iData.remaining())) {
             var mem = writer.memory();
             for (long i = 0; i < iData.remaining(); i++) {
                 mem.putByte(i, iData.get(iData.position() + (int) i));
@@ -181,7 +194,7 @@ public class DebugUiOverlay implements AutoCloseable {
         }
 
         // Upload screen size to uniform buffer (16 bytes for WebGPU alignment)
-        try (var writer = device.writeBuffer(uniformBuffer, 0, 16)) {
+        try (var writer = gpu.writeBuffer(uniformBuffer, 0, 16)) {
             var mem = writer.memory();
             mem.putFloat(0, viewportWidth);
             mem.putFloat(4, viewportHeight);
@@ -232,13 +245,13 @@ public class DebugUiOverlay implements AutoCloseable {
     @Override
     public void close() {
         if (!initialized) return;
-        if (vertexBuffer != null) device.destroyBuffer(vertexBuffer);
-        if (indexBuffer != null) device.destroyBuffer(indexBuffer);
-        if (uniformBuffer != null) device.destroyBuffer(uniformBuffer);
-        if (fontTexture != null) device.destroyTexture(fontTexture);
-        if (fontSampler != null) device.destroySampler(fontSampler);
-        if (vertexInput != null) device.destroyVertexInput(vertexInput);
-        // Pipeline is owned by ShaderManager — don't destroy it here
+        if (vertexBuffer != null) gpu.destroyBuffer(vertexBuffer);
+        if (indexBuffer != null) gpu.destroyBuffer(indexBuffer);
+        if (uniformBuffer != null) gpu.destroyBuffer(uniformBuffer);
+        if (fontTexture != null) gpu.destroyTexture(fontTexture);
+        if (fontSampler != null) gpu.destroySampler(fontSampler);
+        if (vertexInput != null) gpu.destroyVertexInput(vertexInput);
+        // Pipeline is owned by ShaderManager — destroyed in ShaderManager.close()
         initialized = false;
     }
 }
