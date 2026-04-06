@@ -69,6 +69,14 @@ public interface WgpuBindings {
      */
     default boolean hasSurface() { return false; }
 
+    /** Present mode for surface configuration. 0 = FIFO (vsync), 1 = Immediate, 2 = Mailbox. */
+    int PRESENT_MODE_FIFO = 0;
+    int PRESENT_MODE_IMMEDIATE = 1;
+    int PRESENT_MODE_MAILBOX = 2;
+
+    /** Sets the present mode for surface configuration. Must be called before configureSurface. */
+    default void setPresentMode(int mode) {}
+
     // ===== Instance =====
 
     /** Creates a WebGPU instance. */

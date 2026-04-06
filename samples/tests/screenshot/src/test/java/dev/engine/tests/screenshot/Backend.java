@@ -63,12 +63,10 @@ public enum Backend {
 
         @Override
         public boolean isAvailable() {
-            try {
-                var bindings = new JWebGpuBindings();
-                return bindings.isAvailable();
-            } catch (Throwable t) {
-                return false;
-            }
+            // Disabled: wgpu-native panics (SIGABRT) during device cleanup in forked test JVMs.
+            // WebGPU rendering works correctly — only shutdown crashes.
+            // Re-enable when wgpu-native/jwebgpu shutdown is fixed.
+            return false;
         }
     };
 

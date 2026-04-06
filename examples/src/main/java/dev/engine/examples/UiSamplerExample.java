@@ -513,8 +513,11 @@ public class UiSamplerExample extends BaseApplication {
                     }
                 }, new LwjglVkBindings(), VkBindings.VK_PRESENT_MODE_IMMEDIATE_KHR);
             }
-            case "webgpu" -> WebGpuBackend.factory(toolkit,
-                    new dev.engine.graphics.webgpu.TracingWgpuBindings(new JWebGpuBindings()));
+            case "webgpu" -> {
+                var wgpu = new JWebGpuBindings();
+                wgpu.setPresentMode(dev.engine.graphics.webgpu.WgpuBindings.PRESENT_MODE_IMMEDIATE);
+                yield WebGpuBackend.factory(toolkit, wgpu);
+            }
             default -> OpenGlBackend.factory(toolkit,
                     new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
         };

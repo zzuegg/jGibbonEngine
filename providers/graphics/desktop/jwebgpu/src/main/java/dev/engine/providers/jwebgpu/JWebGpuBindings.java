@@ -27,6 +27,7 @@ public class JWebGpuBindings implements WgpuBindings {
     // Handle tracking — maps long handle IDs to jWebGPU objects
     private final AtomicLong nextHandle = new AtomicLong(1);
     private final Map<Long, Object> objects = new ConcurrentHashMap<>();
+    private int presentMode = PRESENT_MODE_FIFO;
 
     private long assignHandle(Object obj) {
         long h = nextHandle.getAndIncrement();
@@ -82,6 +83,10 @@ public class JWebGpuBindings implements WgpuBindings {
     public boolean hasSurface() { return surfaceConfigured; }
 
     @Override
+    public void setPresentMode(int mode) {
+        this.presentMode = mode;
+    }
+
     public long configureSurface(long instance, long device, dev.engine.graphics.window.WindowHandle window) {
         var inst = get(instance, WGPUInstance.class);
         var dev = get(device, WGPUDevice.class);
@@ -118,7 +123,11 @@ public class JWebGpuBindings implements WgpuBindings {
         config.setFormat(WGPUTextureFormat.BGRA8Unorm);
         config.setWidth(window.width());
         config.setHeight(window.height());
-        config.setPresentMode(WGPUPresentMode.Fifo);
+        config.setPresentMode(switch (presentMode) {
+            case PRESENT_MODE_IMMEDIATE -> WGPUPresentMode.Immediate;
+            case PRESENT_MODE_MAILBOX -> WGPUPresentMode.Mailbox;
+            default -> WGPUPresentMode.Fifo;
+        });
         config.setAlphaMode(WGPUCompositeAlphaMode.Auto);
         config.setUsage(WGPUTextureUsage.RenderAttachment);
 

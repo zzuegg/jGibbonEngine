@@ -70,6 +70,16 @@ public class TracingWgpuBindings implements WgpuBindings {
     @Override public int surfaceFormat() { return delegate.surfaceFormat(); }
     @Override public boolean hasSurface() { return delegate.hasSurface(); }
 
+    @Override public void setPresentMode(int mode) {
+        String name = switch (mode) {
+            case PRESENT_MODE_IMMEDIATE -> "IMMEDIATE";
+            case PRESENT_MODE_MAILBOX -> "MAILBOX";
+            default -> "FIFO";
+        };
+        log.trace("wgpu: setPresentMode({})", name);
+        delegate.setPresentMode(mode);
+    }
+
     // ===== Instance =====
 
     @Override public long createInstance() {
