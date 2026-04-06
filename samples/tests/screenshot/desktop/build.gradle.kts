@@ -80,10 +80,13 @@ tasks.register<JavaExec>("generateReport") {
     description = "Generates the HTML screenshot report from existing test results"
     classpath = sourceSets.test.get().runtimeClasspath
     mainClass = "dev.engine.tests.screenshot.desktop.ScreenshotReportGenerator"
+    val webScreenshotDir = project(":samples:tests:screenshot:web")
+        .layout.buildDirectory.dir("screenshots").get().asFile.absolutePath
     args = listOf(
         layout.buildDirectory.dir("screenshots").get().asFile.absolutePath,
         layout.buildDirectory.dir("test-results/test").get().asFile.absolutePath,
-        layout.buildDirectory.dir("screenshots/report.html").get().asFile.absolutePath
+        layout.buildDirectory.dir("screenshots/report.html").get().asFile.absolutePath,
+        webScreenshotDir
     )
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     doLast {

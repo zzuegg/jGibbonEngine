@@ -22,10 +22,16 @@ public class ScreenshotReportGenerator {
         var screenshotDir = args.length > 0 ? args[0] : "samples/tests/screenshot/build/screenshots";
         var testResultDir = args.length > 1 ? args[1] : "samples/tests/screenshot/build/test-results/test";
         var outputFile = args.length > 2 ? args[2] : "samples/tests/screenshot/build/screenshots/report.html";
+        var webScreenshotDir = args.length > 3 ? args[3] : null;
 
         var failures = parseFailures(Path.of(testResultDir));
         var scenes = discoverScreenshots(new File(screenshotDir));
         var diffs = parseDiffs(Path.of(screenshotDir, "diffs.json"));
+
+        // Merge web (browser) screenshots if the directory exists
+        if (webScreenshotDir != null) {
+            mergeWebScreenshots(scenes, new File(webScreenshotDir));
+        }
 
         var html = generateReport(scenes, failures, diffs, screenshotDir);
         Files.writeString(Path.of(outputFile), html);
@@ -34,9 +40,40 @@ public class ScreenshotReportGenerator {
 
     record SceneResult(String name, String category, Map<String, String> backendImages) {}
 
+    /**
+     * Merges web (browser) screenshots into the scene list by copying them into the
+     * desktop screenshot directory under webgpu-browser/.
+     */
+    static void mergeWebScreenshots(List<SceneResult> scenes, File webDir) {
+        var browserDir = new File(webDir, "webgpu-browser");
+        if (!browserDir.exists()) return;
+        var files = browserDir.listFiles((d, name) -> name.endsWith(".png"));
+        if (files == null) return;
+
+        // Build a lookup by scene name
+        var sceneMap = new LinkedHashMap<String, SceneResult>();
+        for (var s : scenes) sceneMap.put(s.name(), s);
+
+        for (var file : files) {
+            var sceneName = file.getName().replace(".png", "");
+            var existing = sceneMap.get(sceneName);
+            if (existing != null) {
+                // Add browser image path (relative to the report HTML location)
+                existing.backendImages().put("webgpu-browser",
+                        file.getAbsolutePath());
+            } else {
+                // Scene only exists in web — create a new entry
+                var images = new LinkedHashMap<String, String>();
+                images.put("webgpu-browser", file.getAbsolutePath());
+                var result = new SceneResult(sceneName, "Web-Only", images);
+                scenes.add(result);
+            }
+        }
+    }
+
     static List<SceneResult> discoverScreenshots(File dir) {
         var scenes = new LinkedHashMap<String, Map<String, String>>();
-        var backends = new String[]{"opengl", "vulkan", "webgpu"};
+        var backends = new String[]{"opengl", "vulkan", "webgpu", "webgpu-browser"};
 
         for (var backend : backends) {
             var backendDir = new File(dir, backend);
@@ -215,7 +252,7 @@ public class ScreenshotReportGenerator {
         if (failCount > 0) {
             sb.append("<div><span class=\"count fail\">").append(failCount).append("</span> failed</div>");
         }
-        sb.append("<div>").append(total).append(" scenes &times; 3 backends</div>");
+        sb.append("<div>").append(total).append(" scenes &times; 4 backends</div>");
         sb.append("</div>");
 
         // Filter bar
@@ -254,9 +291,9 @@ public class ScreenshotReportGenerator {
 
         // Badges — vertical, full names
         sb.append("<div class=\"badges\">");
-        var backendNames = Map.of("opengl", "OpenGL", "vulkan", "Vulkan", "webgpu", "WebGPU");
+        var backendNames = Map.of("opengl", "OpenGL", "vulkan", "Vulkan", "webgpu", "WebGPU", "webgpu-browser", "WebGPU-Browser");
         var sceneDiffs = diffs.getOrDefault(scene.name, Map.of());
-        for (var backend : new String[]{"opengl", "vulkan", "webgpu"}) {
+        for (var backend : new String[]{"opengl", "vulkan", "webgpu", "webgpu-browser"}) {
             var label = backendNames.get(backend);
             boolean hasImage = scene.backendImages.containsKey(backend);
             boolean backendFailed = failures.contains(scene.name + "[" + backend + "]")
