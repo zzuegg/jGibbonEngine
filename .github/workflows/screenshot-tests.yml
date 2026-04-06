@@ -37,7 +37,18 @@ jobs:
         run: ./gradlew :samples:tests:screenshot:scenes:compileJava --no-daemon --stacktrace
 
       - name: Compile web module (Java)
-        run: ./gradlew :samples:tests:screenshot:web:compileJava --no-daemon --stacktrace
+        run: |
+          ./gradlew :samples:tests:screenshot:web:compileJava --no-daemon --stacktrace 2>&1 | tee compile-web.log
+          echo "=== COMPILE EXIT CODE: $? ==="
+
+      - name: Upload compile log on failure
+        if: failure()
+        run: |
+          echo "::group::Compile web module log"
+          cat compile-web.log || true
+          echo "::endgroup::"
+          echo "--- Last 50 lines ---"
+          tail -50 compile-web.log || true
 
       - name: Generate JavaScript (TeaVM)
         run: ./gradlew :samples:tests:screenshot:web:generateJavaScript --no-daemon --stacktrace 2>&1 | tee build-teavm.log || true
