@@ -72,6 +72,54 @@ tasks.register<JavaExec>("saveReferences") {
     jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
+tasks.register("generateReport") {
+    group = "verification"
+    description = "Generates an HTML report comparing captured vs reference screenshots"
+    doLast {
+        val captureDir = file("build/screenshots/webgpu-browser")
+        val refDir = file("src/test/resources/reference-screenshots/webgpu-browser")
+        val report = file("build/screenshots/report.html")
+        report.parentFile.mkdirs()
+
+        val captures = captureDir.listFiles { f -> f.extension == "png" }
+            ?.sortedBy { it.name } ?: emptyList()
+
+        val html = buildString {
+            appendLine("""<!DOCTYPE html><html><head><meta charset="utf-8">
+            <title>Web Screenshot Report</title>
+            <style>
+                body { font-family: system-ui; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+                h1 { border-bottom: 2px solid #333; padding-bottom: 10px; }
+                .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+                .card { background: #16213e; border-radius: 8px; padding: 12px; }
+                .card h3 { margin: 0 0 8px; font-size: 0.9em; }
+                .images { display: flex; gap: 8px; }
+                .images div { text-align: center; }
+                .images img { width: 128px; height: 128px; border: 1px solid #333; border-radius: 4px; background: #0a0a1a; }
+                .label { font-size: 0.7em; color: #888; }
+                .pass { color: #4ade80; } .fail { color: #f87171; } .skip { color: #888; }
+            </style></head><body>
+            <h1>Web Screenshot Report (${captures.size} scenes)</h1><div class="grid">""")
+
+            for (cap in captures) {
+                val name = cap.nameWithoutExtension
+                val refFile = File(refDir, cap.name)
+                val hasRef = refFile.exists()
+                appendLine("""<div class="card"><h3>${name} <span class="${if (hasRef) "pass" else "skip"}">${if (hasRef) "✓ ref" else "○ no ref"}</span></h3>""")
+                appendLine("""<div class="images">""")
+                appendLine("""<div><img src="webgpu-browser/${cap.name}"><div class="label">Captured</div></div>""")
+                if (hasRef) {
+                    appendLine("""<div><img src="file://${refFile.absolutePath}"><div class="label">Reference</div></div>""")
+                }
+                appendLine("</div></div>")
+            }
+            appendLine("</div></body></html>")
+        }
+        report.writeText(html)
+        println("Report: file://${report.absolutePath}")
+    }
+}
+
 tasks.test {
     // Ensure the TeaVM app is built before running tests
     dependsOn("assembleWebTest")
