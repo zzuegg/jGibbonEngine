@@ -1088,11 +1088,15 @@ public class JWebGpuBindings implements WgpuBindings {
 
     private static WGPUVertexFormat mapVertexFormat(int format) {
         return switch (format) {
+            case VERTEX_FORMAT_UNORM8X4 -> WGPUVertexFormat.Unorm8x4;
             case VERTEX_FORMAT_FLOAT32 -> WGPUVertexFormat.Float32;
             case VERTEX_FORMAT_FLOAT32X2 -> WGPUVertexFormat.Float32x2;
             case VERTEX_FORMAT_FLOAT32X3 -> WGPUVertexFormat.Float32x3;
             case VERTEX_FORMAT_FLOAT32X4 -> WGPUVertexFormat.Float32x4;
-            default -> WGPUVertexFormat.Float32x4;
+            default -> {
+                log.warn("Unsupported vertex format 0x{} — falling back to Float32x4", Integer.toHexString(format));
+                yield WGPUVertexFormat.Float32x4;
+            }
         };
     }
 

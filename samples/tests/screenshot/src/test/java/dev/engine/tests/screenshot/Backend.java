@@ -63,9 +63,12 @@ public enum Backend {
 
         @Override
         public boolean isAvailable() {
-            // Disabled: wgpu-native crashes (SIGABRT) during device cleanup.
-            // Re-enable when jwebgpu/wgpu-native shutdown is fixed.
-            return false;
+            try {
+                var bindings = new JWebGpuBindings();
+                return bindings.isAvailable();
+            } catch (Throwable t) {
+                return false;
+            }
         }
     };
 
