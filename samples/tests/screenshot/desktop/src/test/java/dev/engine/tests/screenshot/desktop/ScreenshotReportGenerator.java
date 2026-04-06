@@ -34,8 +34,10 @@ public class ScreenshotReportGenerator {
         }
 
         var html = generateReport(scenes, failures, diffs, screenshotDir);
-        Files.writeString(Path.of(outputFile), html);
-        System.out.println("Report: file://" + Path.of(outputFile).toAbsolutePath());
+        var outputPath = Path.of(outputFile);
+        Files.createDirectories(outputPath.getParent());
+        Files.writeString(outputPath, html);
+        System.out.println("Report: file://" + outputPath.toAbsolutePath());
     }
 
     record SceneResult(String name, String category, Map<String, String> backendImages) {}
