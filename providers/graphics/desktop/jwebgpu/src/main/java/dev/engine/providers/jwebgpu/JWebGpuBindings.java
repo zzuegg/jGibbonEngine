@@ -118,16 +118,22 @@ public class JWebGpuBindings implements WgpuBindings {
             return 0;
         }
 
+        // Resolve present mode: Immediate/Mailbox both try Mailbox first (Immediate
+        // is unavailable on Wayland), then fall back to Fifo.
+        var resolvedMode = switch (presentMode) {
+            case PRESENT_MODE_IMMEDIATE, PRESENT_MODE_MAILBOX -> WGPUPresentMode.Mailbox;
+            default -> WGPUPresentMode.Fifo;
+        };
+        if (presentMode == PRESENT_MODE_IMMEDIATE) {
+            log.info("WebGPU: Immediate mode requested — using Mailbox (Immediate unavailable on most Wayland compositors)");
+        }
+
         var config = WGPUSurfaceConfiguration.obtain();
         config.setDevice(dev);
         config.setFormat(WGPUTextureFormat.BGRA8Unorm);
         config.setWidth(window.width());
         config.setHeight(window.height());
-        config.setPresentMode(switch (presentMode) {
-            case PRESENT_MODE_IMMEDIATE -> WGPUPresentMode.Immediate;
-            case PRESENT_MODE_MAILBOX -> WGPUPresentMode.Mailbox;
-            default -> WGPUPresentMode.Fifo;
-        });
+        config.setPresentMode(resolvedMode);
         config.setAlphaMode(WGPUCompositeAlphaMode.Auto);
         config.setUsage(WGPUTextureUsage.RenderAttachment);
 
