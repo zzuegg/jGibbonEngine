@@ -7,6 +7,7 @@ import dev.engine.core.property.PropertyKey;
 import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.core.scene.MeshTag;
 import dev.engine.core.scene.camera.Camera;
+import dev.engine.graphics.shader.GlobalParamNames;
 import dev.engine.graphics.shader.GlobalParamsRegistry;
 import dev.engine.graphics.shader.params.CameraParams;
 import dev.engine.graphics.shader.params.EngineParams;
@@ -79,9 +80,9 @@ public class Renderer implements AutoCloseable {
         this.samplerManager = new SamplerManager(gpu);
 
         var globalParams = new GlobalParamsRegistry();
-        globalParams.register("Engine", EngineParams.class, 0);
-        globalParams.register("Camera", CameraParams.class, 1);
-        globalParams.register("Object", dev.engine.graphics.shader.params.ObjectParams.class, 2);
+        globalParams.register(GlobalParamNames.ENGINE, EngineParams.class, 0);
+        globalParams.register(GlobalParamNames.CAMERA, CameraParams.class, 1);
+        globalParams.register(GlobalParamNames.OBJECT, dev.engine.graphics.shader.params.ObjectParams.class, 2);
 
         this.uniformManager = new UniformManager(gpu, globalParams);
         this.shaderManager = new ShaderManager(device, globalParams, compiler);
@@ -234,12 +235,12 @@ public class Renderer implements AutoCloseable {
         device.submit(setup.finish());
 
         // Update engine params
-        uniformManager.updateGlobalParams("Engine", new EngineParams(engineTime, lastDeltaTime,
+        uniformManager.updateGlobalParams(GlobalParamNames.ENGINE, new EngineParams(engineTime, lastDeltaTime,
                 new Vec2(viewport.width(), viewport.height()), frameCount));
 
         // Upload camera params
         if (activeCamera != null) {
-            uniformManager.updateGlobalParams("Camera", new CameraParams(
+            uniformManager.updateGlobalParams(GlobalParamNames.CAMERA, new CameraParams(
                     activeCamera.viewProjectionMatrix(),
                     activeCamera.viewMatrix(),
                     activeCamera.projectionMatrix(),
@@ -259,6 +260,7 @@ public class Renderer implements AutoCloseable {
 
                 var draw = new CommandRecorder();
                 draw.bindPipeline(cmd.renderable().pipeline());
+                renderStats.recordPipelineBind();
                 resources.recordUse(GpuResourceManager.PIPELINE);
 
                 var mat = meshRenderer.getMaterialData(cmd.entity());
@@ -273,12 +275,14 @@ public class Renderer implements AutoCloseable {
                             uniformManager.globalParams().nextBinding());
                     uniformManager.uploadAndBindMaterial(mat, cmd.entity(), draw, materialSlot);
                     resources.recordUse(GpuResourceManager.BUFFER_UNIFORM); // material UBO
+                    renderStats.recordBufferBind();
 
                     var compiled = shaderManager.getEntityShader(cmd.entity());
                     if (compiled != null) {
                         textureManager.bindMaterialTextures(mat, compiled, samplerManager, draw);
                         resources.recordUse(GpuResourceManager.TEXTURE);
                         resources.recordUse(GpuResourceManager.SAMPLER);
+                        renderStats.recordTextureBind();
                     }
                 }
 
@@ -289,8 +293,10 @@ public class Renderer implements AutoCloseable {
                     draw.bindIndexBuffer(cmd.renderable().indexBuffer());
                     resources.recordUse(GpuResourceManager.BUFFER_INDEX);
                     draw.drawIndexed(cmd.renderable().indexCount(), 0);
+                    renderStats.recordDrawCall(cmd.renderable().vertexCount(), cmd.renderable().indexCount());
                 } else {
                     draw.draw(cmd.renderable().vertexCount(), 0);
+                    renderStats.recordDrawCall(cmd.renderable().vertexCount(), 0);
                 }
                 device.submit(draw.finish());
             }
@@ -345,6 +351,7 @@ public class Renderer implements AutoCloseable {
 
     @Override
     public void close() {
+        meshManager.close();
         uniformManager.close();
         textureManager.close();
         renderTargetManager.close();

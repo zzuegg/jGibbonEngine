@@ -5,11 +5,13 @@ Full code review performed 2026-04-05 across all 467 source files.
 ## Critical Bugs
 
 - [ ] **Thread safety: Engine.run() race condition** — `Engine.java:152`. Render thread drains TransactionBuffer while logic thread writes concurrently. TransactionBuffer has no synchronization. Use TransactionBus (which has per-subscriber locks) or add synchronization.
-- [ ] **Profiler.lastFrame() returns currentFrame** — `Profiler.java:29`. Method named `lastFrame()` returns `currentFrame` (in-progress). `previousFrame()` returns `lastFrame`. Either rename or fix return values.
+- [x] **Profiler.lastFrame() returns currentFrame** — Fixed: `lastFrame()` now returns `lastFrame`, added `currentFrame()` for in-progress data. Tests updated.
 - [ ] **GPU buffer leak: per-entity UBOs never cleaned up** — `UniformManager.java:79`. Creates objectUBOs ("obj_N") and materialUBOs ("mat_N") per entity. Never removed on EntityRemoved. Leaks GPU buffers for every entity that ever existed.
+- [x] **MeshRenderer leaks entity maps on EntityRemoved** — Fixed: `meshDataAssignments`, `meshAssignments`, `materialAssignments` now removed on entity removal.
+- [x] **DrawCommand.materialData raw unchecked generic** — Fixed: changed to `PropertyMap<MaterialData>`.
 - [ ] **Stale shader binding after entity reuse** — `ShaderManager.java:168`. entityShaders keyed by handle index only, no generation check. After entity destroy+recreate at same index, old shader persists.
-- [ ] **Engine.shutdown() doesn't shut down AssetManager** — `Engine.java:187`. FileWatcher thread keeps running. Add `assets.shutdown()` to teardown.
-- [ ] **Renderer.close() doesn't clean up MeshManager** — `Renderer.java:314`. MeshManager holds GPU resources (VBOs, IBOs, VAOs) via meshDataCache that are never released on shutdown.
+- [x] **Engine.shutdown() doesn't shut down AssetManager** — Fixed: added `assets.shutdown()` to `Engine.shutdown()`.
+- [x] **Renderer.close() doesn't clean up MeshManager** — Fixed: added `MeshManager.close()` and wired into `Renderer.close()`.
 
 ## Hardcoded Values (should be configurable/dynamic)
 
@@ -19,7 +21,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [ ] **Texture/sampler array sizes: magic numbers** — GL: boundTextures[32], boundSamplers[32]. Vk: currentTextures[8], pendingUboBuffers[16], pendingSsboBuffers[8]. Should be queried from DeviceCapability or configurable.
 - [ ] **MAX_FRAMES_IN_FLIGHT=2 hardcoded** — `VkRenderDevice.java:47`. Should be configurable through VulkanConfig.
 - [ ] **MAX_SETS_PER_FRAME=256 hardcoded** — `VkDescriptorManager.java:17`. Could be insufficient for complex scenes. Should auto-grow or be configurable.
-- [ ] **Global param bindings hardcoded** — `Renderer.java:79-81`. "Engine"=0, "Camera"=1, "Object"=2 are string literals scattered throughout. Define as constants, centralize binding assignment.
+- [x] **Global param bindings hardcoded** — Fixed: extracted `GlobalParamNames` constants class (`ENGINE`, `CAMERA`, `OBJECT`). Used in `Renderer` and `UniformManager`.
 - [ ] **Blend function hardcoded to SRC_ALPHA/ONE_MINUS_SRC_ALPHA** — `GlRenderDevice.java:623`. BlendMode exists but only supports NONE vs one hardcoded alpha blend. Need configurable src/dst factors, blend equation.
 - [ ] **All shaders forced to STANDARD_FORMAT vertex layout** — `ShaderManager.java:255`. Uses PrimitiveMeshes.STANDARD_FORMAT for ALL pipelines. Custom vertex formats (tangents, colors, bone weights) won't work.
 - [ ] **Shader entry points hardcoded ("vertexMain"/"fragmentMain")** — `ShaderManager.java:227`. Should be configurable per shader for custom entry points.
@@ -65,12 +67,12 @@ Full code review performed 2026-04-05 across all 467 source files.
 
 - [ ] **No lighting system** — LightData/LightType exist in core but Renderer has zero light handling. No light buffer upload, no light culling. MeshRenderer ignores LightData components.
 - [ ] **No shadow mapping** — Extensively designed in NOTES.md. No shadow pass, no shadow maps, no light-space matrices. LightData.CASTS_SHADOWS exists but nothing reads it.
-- [ ] **RenderStats never populated** — `RenderStats.java`. Tracks draws, vertices, binds but nothing calls recordDrawCall() etc. All counters always zero.
+- [x] **RenderStats never populated** — Fixed: `Renderer.renderFrame()` now records draw calls, pipeline binds, buffer binds, and texture binds. `Engine.renderStats()` delegates to `renderer.renderStats()`.
 
 ## Architectural Cleanup
 
 - [ ] **Deprecated APIs to remove** — GraphicsBackendFactory, GraphicsConfigLegacy, EngineConfig.graphicsBackend field, GlfwWindowToolkit in graphics:opengl, deprecated SetDepthTest/SetBlending/SetCullFace/SetWireframe commands. New APIs (GraphicsConfig, SetRenderState) are in place.
-- [ ] **ResourceCleaner.register() package-private** — Can't be used outside core.resource. Make public or provide public API for Cleaner safety net.
+- [x] **ResourceCleaner.register() package-private** — Fixed: made `public`.
 - [ ] **NativeResource not used by GPU resources** — Interface exists but no GPU resource implements it. No Cleaner safety net for dropped handles.
 - [ ] **GpuResourceManager deferred deletion delay doesn't match frames-in-flight** — `GpuResourceManager.java:175`. Double-buffer swap means N+2 deletion. If Vulkan uses 3 frames-in-flight, resources freed while still in use. Tie to actual fence/frame count.
 
@@ -213,15 +215,15 @@ Cross-backend audit performed 2026-04-06. ✅ = implemented, ⚠️ = partial/fa
 | MAX_ANISOTROPY | ✅ queried | ❌ | ⚠️ hardcoded 16 | VK should query from physical device |
 | MAX_UNIFORM_BUFFER_SIZE | ✅ queried | ❌ | ⚠️ hardcoded 65536 | |
 | MAX_STORAGE_BUFFER_SIZE | ✅ queried | ❌ | ⚠️ hardcoded 128MB | |
-| COMPUTE_SHADERS | ✅ true | ❌ | false | VK should report true |
-| GEOMETRY_SHADERS | ✅ true | ❌ | false | |
-| TESSELLATION | ✅ true | ❌ | false | GL: declared but no commands implemented |
-| ANISOTROPIC_FILTERING | ✅ | ❌ | ✅ | |
+| COMPUTE_SHADERS | ✅ true | ✅ true | false | VK added 2026-04-06 |
+| GEOMETRY_SHADERS | ✅ true | ✅ true | false | VK added 2026-04-06 |
+| TESSELLATION | ✅ true | ✅ true | false | GL: declared but no commands implemented. VK added 2026-04-06 |
+| ANISOTROPIC_FILTERING | ✅ | ✅ true | ✅ | VK added 2026-04-06 |
 | BINDLESS_TEXTURES | ✅ ext check | ❌ | false | |
 | BACKEND_NAME | ✅ | ✅ | ✅ | |
 | SHADER_TARGET | ✅ GLSL | ✅ SPIRV | ✅ WGSL | |
 | DEVICE_NAME | ✅ queried | ✅ queried | ⚠️ hardcoded | |
-| API_VERSION | ✅ queried | ❌ | ⚠️ hardcoded | |
+| API_VERSION | ✅ queried | ✅ queried | ⚠️ hardcoded | VK added 2026-04-06 |
 
 ### Cross-Backend Gaps (prioritized)
 
@@ -231,7 +233,7 @@ Cross-backend audit performed 2026-04-06. ✅ = implemented, ⚠️ = partial/fa
 - [ ] **WebGPU: no PushConstants** — Could be emulated via UBO (like GL does at binding 15).
 - [ ] **Vulkan: CopyTexture/BlitTexture stubs** — Requires pausing the render pass. GL fully implements both.
 - [ ] **Vulkan: no BindImage** — Blocks compute shaders that write to textures. Needs storage image descriptor pool.
-- [ ] **Vulkan: missing DeviceCapability queries** — MAX_ANISOTROPY, buffer sizes, COMPUTE_SHADERS, GEOMETRY_SHADERS, API_VERSION all queryable but not wired.
+- [x] **Vulkan: missing DeviceCapability queries** — Added COMPUTE_SHADERS, GEOMETRY_SHADERS, TESSELLATION, ANISOTROPIC_FILTERING, API_VERSION. Still missing: MAX_ANISOTROPY, MAX_UNIFORM/STORAGE_BUFFER_SIZE (need new VkBindings methods).
 - [ ] **All backends: primitive topology hardcoded** — Cannot draw lines, points, or triangle strips. Should be part of PipelineDescriptor.
 - [ ] **All backends: UINT16 index buffers unsupported** — Wastes memory for small meshes. VK has constant defined but unused.
 - [ ] **GL: buffer CPU readback** — glMapNamedBufferRange declared in GlBindings but never called. No staging readback path.

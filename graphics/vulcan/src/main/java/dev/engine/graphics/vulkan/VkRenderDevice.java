@@ -1213,6 +1213,14 @@ public class VkRenderDevice implements RenderDevice {
             case "DEVICE_NAME" -> (T) vk.getDeviceName(instance, physicalDevice);
             case "TEXTURE_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.TEXTURE_BINDING_OFFSET);
             case "SSBO_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.SSBO_BINDING_OFFSET);
+            case "COMPUTE_SHADERS" -> (T) Boolean.TRUE;
+            case "GEOMETRY_SHADERS" -> (T) Boolean.TRUE;
+            case "TESSELLATION" -> (T) Boolean.TRUE;
+            case "ANISOTROPIC_FILTERING" -> (T) Boolean.TRUE;
+            case "API_VERSION" -> {
+                int[] ver = vk.getApiVersion(instance, physicalDevice);
+                yield (T) (ver[0] + "." + ver[1] + "." + ver[2]);
+            }
             default -> null;
         };
     }
