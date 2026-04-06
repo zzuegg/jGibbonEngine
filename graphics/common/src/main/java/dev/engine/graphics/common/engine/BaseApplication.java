@@ -131,8 +131,10 @@ public abstract class BaseApplication {
                 engine.renderer().setViewport(window.width(), window.height());
                 engine.setInputEvents(inputEvents);
 
-                // Feed input to debug UI
-                NkInputBridge.feedEvents(engine.debugUi().input(), inputEvents);
+                // Feed input to debug UI (if available)
+                if (engine.debugUi() != null) {
+                    NkInputBridge.feedEvents(engine.debugUi().input(), inputEvents);
+                }
 
                 update((float) delta, inputEvents);
                 engine.tick(delta);

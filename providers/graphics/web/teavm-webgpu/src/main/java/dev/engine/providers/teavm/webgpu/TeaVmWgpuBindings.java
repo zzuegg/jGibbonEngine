@@ -282,8 +282,24 @@ public class TeaVmWgpuBindings implements WgpuBindings {
     @Override
     public void queueWriteTexture(long queue, long texture, int width, int height,
                                   int depthOrLayers, int bytesPerRow, ByteBuffer data) {
-        throw unsupported("queueWriteTexture — not yet implemented for browser");
+        byte[] bytes = new byte[data.remaining()];
+        data.duplicate().get(bytes);
+        queueWriteTextureJS((int) queue, (int) texture, width, height, depthOrLayers, bytesPerRow, bytes);
     }
+
+    @JSBody(params = {"queueId", "textureId", "width", "height", "depthOrLayers", "bytesPerRow", "bytes"}, script = """
+        var queue = window._wgpu[queueId];
+        var texture = window._wgpu[textureId];
+        var u8 = new Uint8Array(bytes);
+        queue.writeTexture(
+            { texture: texture },
+            u8,
+            { bytesPerRow: bytesPerRow, rowsPerImage: height },
+            { width: width, height: height, depthOrArrayLayers: depthOrLayers }
+        );
+    """)
+    private static native void queueWriteTextureJS(int queueId, int textureId,
+            int width, int height, int depthOrLayers, int bytesPerRow, byte[] bytes);
 
     // ===== Sampler =====
 

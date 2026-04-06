@@ -390,12 +390,17 @@ public class ShaderManager {
         return null;
     }
 
-    private String loadShaderFile(String path) {
+    public String loadShaderFile(String path) {
         if (assetManager != null) {
             try {
                 return assetManager.loadSync(path, SlangShaderSource.class).source();
             } catch (Exception ignored) {}
         }
+        // Classpath fallback (works on all platforms including desktop JARs)
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
+            if (is != null) return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException ignored) {}
+        // Filesystem fallback (works for absolute/relative paths during development)
         try (var reader = new java.io.BufferedReader(new java.io.FileReader(path))) {
             var sb = new StringBuilder();
             char[] buf = new char[4096];

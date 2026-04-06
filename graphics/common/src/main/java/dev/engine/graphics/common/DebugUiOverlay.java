@@ -75,11 +75,21 @@ public class DebugUiOverlay implements AutoCloseable {
      * @param shaderManager compiles the Slang shader to the correct backend target
      */
     public void init(NkFont font, ShaderManager shaderManager) {
-        // Load and compile the Slang shader via ShaderManager.
-        // Inject the correct texture binding offset so SPIRV bindings match the descriptor layout.
+        // Load and compile the Slang shader via ShaderManager (uses AssetManager,
+        // which works on all platforms including TeaVM/web via FetchAssetSource).
         int texOffset = shaderManager.textureBindingOffset();
-        String slangSource = loadShaderResource("shaders/debug_ui.slang")
-                .replace("TEXTURE_BINDING", String.valueOf(texOffset));
+        String slangSource;
+        try {
+            slangSource = shaderManager.loadShaderFile("shaders/debug_ui.slang");
+        } catch (Exception e) {
+            log.warn("Debug UI shader not available — overlay disabled: {}", e.getMessage());
+            return;
+        }
+        if (slangSource == null) {
+            log.warn("Debug UI shader not found — overlay disabled");
+            return;
+        }
+        slangSource = slangSource.replace("TEXTURE_BINDING", String.valueOf(texOffset));
         CompiledShader compiled;
         try {
             compiled = shaderManager.compileSlangSource(slangSource, "debug_ui", VERTEX_FORMAT);
@@ -125,14 +135,6 @@ public class DebugUiOverlay implements AutoCloseable {
         initialized = true;
     }
 
-    private static String loadShaderResource(String path) {
-        try (InputStream is = DebugUiOverlay.class.getClassLoader().getResourceAsStream(path)) {
-            if (is != null) return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("Failed to load UI shader: {}", path, e);
-        }
-        throw new RuntimeException("Debug UI shader not found on classpath: " + path);
-    }
 
     /**
      * Renders the UI overlay for the current frame.

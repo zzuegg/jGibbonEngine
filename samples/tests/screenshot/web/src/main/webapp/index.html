@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Screenshot Test Runner</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<canvas id="canvas" width="256" height="256"></canvas>
+<script>
+    // Capture errors and console output for test debugging
+    window._consoleLogs = [];
+    window._lastError = null;
+    var origLog = console.log;
+    var origErr = console.error;
+    var origWarn = console.warn;
+    console.log = function() { window._consoleLogs.push('[LOG] ' + Array.from(arguments).join(' ')); origLog.apply(console, arguments); };
+    console.error = function() { window._consoleLogs.push('[ERR] ' + Array.from(arguments).join(' ')); window._lastError = Array.from(arguments).join(' '); origErr.apply(console, arguments); };
+    console.warn = function() { window._consoleLogs.push('[WARN] ' + Array.from(arguments).join(' ')); origWarn.apply(console, arguments); };
+    window.onerror = function(msg, source, lineno, colno, error) {
+        var detail = msg + ' at ' + source + ':' + lineno + ':' + colno;
+        if (error && error.stack) detail += '\n' + error.stack;
+        window._lastError = detail;
+        window._consoleLogs.push('[ONERROR] ' + detail);
+    };
+    window.onunhandledrejection = function(e) {
+        var detail = e.reason && e.reason.stack ? e.reason.stack : String(e.reason);
+        window._lastError = detail;
+        window._consoleLogs.push('[UNHANDLED] ' + detail);
+    };
+</script>
+<script>
+    // Pre-init: check WebGPU support
+    if (!navigator.gpu) {
+        window._testStatus = 'error: WebGPU not supported';
+        window._testsDone = true;
+        document.body.innerText = 'WebGPU not supported in this browser.';
+    }
+</script>
+<script>
+    // Load Slang WASM if available
+    window._slangModule = null;
+    async function loadSlang() {
+        try {
+            const mod = await import('./slang/slang-wasm.mjs');
+            const slang = await mod.default();
+            window._slangModule = slang;
+            console.log('[WebTest] Slang WASM loaded');
+        } catch (e) {
+            console.warn('[WebTest] Slang WASM not available, shader compilation may fail:', e);
+        }
+    }
+
+    async function startApp() {
+        await loadSlang();
+        // Load TeaVM-compiled test app
+        const script = document.createElement('script');
+        script.src = 'js/web-test.js';
+        script.onload = function() {
+            if (typeof main === 'function') main();
+        };
+        document.head.appendChild(script);
+    }
+    startApp();
+</script>
+</body>
+</html>

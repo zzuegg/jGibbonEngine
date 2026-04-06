@@ -85,18 +85,28 @@ public class Engine {
         // Module manager — synchronous executor for cross-platform compatibility
         this.modules = new ModuleManager<>(new VariableTimestep<>(Time::new), Runnable::run);
 
-        // Debug UI
-        NkFont uiFont = new NkBuiltinFont(2);
-        this.debugUi = new NkContext(uiFont);
-        this.debugUiOverlay = new DebugUiOverlay(device);
-        this.debugUiOverlay.init(uiFont, this.renderer.shaderManager());
+        // Debug UI — gracefully disabled on platforms where resources aren't available (e.g., TeaVM)
+        NkContext tempUi = null;
+        DebugUiOverlay tempOverlay = null;
+        try {
+            NkFont uiFont = new NkBuiltinFont(2);
+            tempUi = new NkContext(uiFont);
+            tempOverlay = new DebugUiOverlay(device);
+            tempOverlay.init(uiFont, this.renderer.shaderManager());
+        } catch (Exception e) {
+            log.warn("Debug UI initialization failed — disabled: {}", e.getMessage());
+        }
+        this.debugUi = tempUi;
+        this.debugUiOverlay = tempOverlay;
 
-        // Register the overlay to render after the scene
-        this.renderer.addPostSceneCallback(() -> {
-            var vp = this.renderer.viewport();
-            debugUiOverlay.render(debugUi, vp.width(), vp.height());
-            debugUi.clear();
-        });
+        // Register the overlay to render after the scene (if available)
+        if (debugUiOverlay != null && debugUi != null) {
+            this.renderer.addPostSceneCallback(() -> {
+                var vp = this.renderer.viewport();
+                debugUiOverlay.render(debugUi, vp.width(), vp.height());
+                debugUi.clear();
+            });
+        }
 
         log.info("Engine initialized (headless={}, threaded={})", config.headless(), config.threaded());
     }
