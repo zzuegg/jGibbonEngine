@@ -186,8 +186,14 @@ public class VkRenderDevice implements RenderDevice {
 
         this.descriptorManager = new VkDescriptorManager(vk, device, physicalDevice, MAX_FRAMES_IN_FLIGHT);
 
-        log.info("Vulkan render device initialized (swapchain: {}x{}, {} images)",
-                swapchain.width(), swapchain.height(), swapchain.imageCount());
+        String presentModeName = switch (preferredPresentMode) {
+            case VkBindings.VK_PRESENT_MODE_IMMEDIATE_KHR -> "IMMEDIATE (no vsync)";
+            case VkBindings.VK_PRESENT_MODE_MAILBOX_KHR -> "MAILBOX (triple-buffered)";
+            case VkBindings.VK_PRESENT_MODE_FIFO_KHR -> "FIFO (vsync)";
+            default -> "mode=" + preferredPresentMode;
+        };
+        log.info("Vulkan render device initialized (swapchain: {}x{}, {} images, {})",
+                swapchain.width(), swapchain.height(), swapchain.imageCount(), presentModeName);
     }
 
     // --- Buffer operations ---
