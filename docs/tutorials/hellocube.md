@@ -104,8 +104,7 @@ This is the entry point. We configure the engine and launch the app.
 ```java
 public static void main(String[] args) {
         var config = EngineConfig.builder()
-                .windowTitle("Tutorial 01 — Hello Cube")
-                .windowSize(1280, 720)
+                .window(WindowDescriptor.builder("Tutorial 01 — Hello Cube").size(1280, 720).build())
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(OpenGlBackend.factory(
                         new dev.engine.windowing.glfw.GlfwWindowToolkit(dev.engine.windowing.glfw.GlfwWindowToolkit.OPENGL_HINTS),

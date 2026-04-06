@@ -120,8 +120,7 @@ metallicSphere.update(Transform.class, tr ->
 
     public static void main(String[] args) {
         var config = EngineConfig.builder()
-                .windowTitle("Tutorial 02 — Materials and Lighting")
-                .windowSize(1280, 720)
+                .window(WindowDescriptor.builder("Tutorial 02 — Materials and Lighting").size(1280, 720).build())
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(OpenGlBackend.factory(
                         new dev.engine.windowing.glfw.GlfwWindowToolkit(dev.engine.windowing.glfw.GlfwWindowToolkit.OPENGL_HINTS),

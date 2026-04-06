@@ -142,8 +142,7 @@ The launcher is the same as any engine application:
 public static void main(String[] args) {
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var config = EngineConfig.builder()
-                .windowTitle("Debug UI Tutorial")
-                .windowSize(800, 600)
+                .window(WindowDescriptor.builder("Debug UI Tutorial").size(800, 600).build())
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(OpenGlBackend.factory(toolkit,
                         new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()))
