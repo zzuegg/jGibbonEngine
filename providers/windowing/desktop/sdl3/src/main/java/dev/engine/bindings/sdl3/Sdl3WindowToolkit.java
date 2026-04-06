@@ -9,6 +9,7 @@ import org.lwjgl.sdl.SDLEvents;
 import org.lwjgl.sdl.SDLInit;
 import org.lwjgl.sdl.SDLProperties;
 import org.lwjgl.sdl.SDLVideo;
+import org.lwjgl.sdl.SDLVulkan;
 import org.lwjgl.system.MemoryUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,12 +26,18 @@ public class Sdl3WindowToolkit implements WindowToolkit {
 
     private final List<Sdl3WindowHandle> windows = new ArrayList<>();
     private final boolean opengl;
+    private final boolean vulkan;
     private boolean initialized;
     private Sdl3InputProvider inputProvider;
 
     /** Creates a plain SDL3 toolkit (no graphics API). */
     public Sdl3WindowToolkit() {
         this(false, 4, 5);
+    }
+
+    /** Creates an SDL3 toolkit for Vulkan (no OpenGL context). */
+    public static Sdl3WindowToolkit forVulkan() {
+        return new Sdl3WindowToolkit(false, true, 4, 5);
     }
 
     /**
@@ -48,7 +55,12 @@ public class Sdl3WindowToolkit implements WindowToolkit {
      * @param glMinor OpenGL minor version (e.g., 5)
      */
     public Sdl3WindowToolkit(boolean opengl, int glMajor, int glMinor) {
+        this(opengl, false, glMajor, glMinor);
+    }
+
+    private Sdl3WindowToolkit(boolean opengl, boolean vulkan, int glMajor, int glMinor) {
         this.opengl = opengl;
+        this.vulkan = vulkan;
         if (!SDL_Init(SDL_INIT_VIDEO)) {
             throw new RuntimeException("Failed to initialize SDL3");
         }
@@ -71,6 +83,7 @@ public class Sdl3WindowToolkit implements WindowToolkit {
     public WindowHandle createWindow(WindowDescriptor descriptor) {
         long flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
         if (opengl) flags |= SDL_WINDOW_OPENGL;
+        if (vulkan) flags |= SDL_WINDOW_VULKAN;
 
         long ptr = SDL_CreateWindow(descriptor.title(), descriptor.width(), descriptor.height(), flags);
         if (ptr == 0) {
@@ -120,6 +133,30 @@ public class Sdl3WindowToolkit implements WindowToolkit {
         var provider = new Sdl3InputProvider();
         this.inputProvider = provider;
         return provider;
+    }
+
+    /** Returns the Vulkan instance extensions required by SDL3. */
+    public static String[] getRequiredVulkanExtensions() {
+        var extensions = SDLVulkan.SDL_Vulkan_GetInstanceExtensions();
+        if (extensions == null) return new String[0];
+        var result = new String[extensions.remaining()];
+        for (int i = 0; i < result.length; i++) {
+            result[i] = extensions.getStringUTF8(i);
+        }
+        return result;
+    }
+
+    /** Creates a Vulkan surface for the given SDL3 window. */
+    public static long createVulkanSurface(long vkInstance, long windowHandle) {
+        var surfaceBuf = MemoryUtil.memAllocLong(1);
+        try {
+            if (!SDLVulkan.nSDL_Vulkan_CreateSurface(windowHandle, vkInstance, 0, MemoryUtil.memAddress(surfaceBuf))) {
+                throw new RuntimeException("Failed to create Vulkan surface via SDL3");
+            }
+            return surfaceBuf.get(0);
+        } finally {
+            MemoryUtil.memFree(surfaceBuf);
+        }
     }
 
     @Override
@@ -223,6 +260,20 @@ public class Sdl3WindowToolkit implements WindowToolkit {
         }
 
         @Override public String title() { return descriptor.title(); }
+
+        @Override
+        public <T> void set(dev.engine.core.property.PropertyKey<dev.engine.graphics.window.WindowHandle, T> key, T value) {
+            if (key == dev.engine.graphics.window.WindowProperty.VSYNC) {
+                if (glContext != 0) {
+                    SDL_GL_SetSwapInterval((Boolean) value ? 1 : 0);
+                }
+                // For Vulkan, vsync is controlled by present mode — ignore silently
+            } else if (key == dev.engine.graphics.window.WindowProperty.TITLE) {
+                if (ptr != 0) SDLVideo.SDL_SetWindowTitle(ptr, (String) value);
+            } else {
+                log.warn("SDL3 window property not supported: {}", key.name());
+            }
+        }
 
         @Override
         public void show() {

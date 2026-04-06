@@ -10,6 +10,10 @@ import dev.engine.graphics.GraphicsBackendFactory;
 import dev.engine.graphics.opengl.OpenGlBackend;
 import dev.engine.graphics.vulkan.VkBindings;
 import dev.engine.graphics.vulkan.VulkanBackend;
+import dev.engine.graphics.webgpu.WebGpuBackend;
+import dev.engine.providers.jwebgpu.JWebGpuBindings;
+import dev.engine.bindings.sdl3.Sdl3WindowToolkit;
+import dev.engine.graphics.window.WindowToolkit;
 import dev.engine.platform.desktop.DesktopPlatform;
 import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
@@ -479,26 +483,43 @@ public class UiSamplerExample extends BaseApplication {
 
     public static void main(String[] args) {
         String backend = System.getProperty("engine.backend", "opengl");
-        var hints = "opengl".equals(backend)
-                ? GlfwWindowToolkit.OPENGL_HINTS
-                : GlfwWindowToolkit.NO_API_HINTS;
-        var toolkit = new GlfwWindowToolkit(hints);
+        String windowing = System.getProperty("engine.windowing", "glfw");
+
+        WindowToolkit toolkit;
+        if ("sdl3".equals(windowing)) {
+            toolkit = "vulkan".equals(backend)
+                    ? Sdl3WindowToolkit.forVulkan()
+                    : new Sdl3WindowToolkit("opengl".equals(backend));
+        } else {
+            var hints = "opengl".equals(backend)
+                    ? GlfwWindowToolkit.OPENGL_HINTS
+                    : GlfwWindowToolkit.NO_API_HINTS;
+            toolkit = new GlfwWindowToolkit(hints);
+        }
 
         GraphicsBackendFactory graphicsBackend = switch (backend) {
-            case "vulkan" -> VulkanBackend.factory(toolkit, new VulkanBackend.SurfaceCreator() {
-                public String[] requiredInstanceExtensions() {
-                    return GlfwWindowToolkit.getRequiredVulkanExtensions();
-                }
-                public long createSurface(long instance, long windowHandle) {
-                    return GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
-                }
-            }, new LwjglVkBindings(), VkBindings.VK_PRESENT_MODE_IMMEDIATE_KHR);
+            case "vulkan" -> {
+                boolean useSdl = "sdl3".equals(windowing);
+                yield VulkanBackend.factory(toolkit, new VulkanBackend.SurfaceCreator() {
+                    public String[] requiredInstanceExtensions() {
+                        return useSdl
+                                ? Sdl3WindowToolkit.getRequiredVulkanExtensions()
+                                : GlfwWindowToolkit.getRequiredVulkanExtensions();
+                    }
+                    public long createSurface(long instance, long windowHandle) {
+                        return useSdl
+                                ? Sdl3WindowToolkit.createVulkanSurface(instance, windowHandle)
+                                : GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
+                    }
+                }, new LwjglVkBindings(), VkBindings.VK_PRESENT_MODE_IMMEDIATE_KHR);
+            }
+            case "webgpu" -> WebGpuBackend.factory(toolkit, new JWebGpuBindings());
             default -> OpenGlBackend.factory(toolkit,
                     new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
         };
 
         var config = EngineConfig.builder()
-                .windowTitle("UI Sampler — Debug UI Showcase (" + backend + ")")
+                .windowTitle("UI Sampler — Debug UI Showcase (" + windowing + "/" + backend + ")")
                 .windowSize(1120, 680)
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(graphicsBackend)
