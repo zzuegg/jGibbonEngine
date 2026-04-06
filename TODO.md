@@ -32,7 +32,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 
 - [ ] **EngineConfig missing common options** — Missing: FPS cap, VSync toggle, MSAA sample count, anisotropic filtering, gamma/sRGB mode, fullscreen mode, monitor selection, cursor visibility, debug overlay toggle.
 - [ ] **GraphicsConfig missing graphics settings** — Only has headless and validation. Missing: MSAA, VSync mode, sRGB framebuffer, aniso level, GPU selection, shader cache directory, max texture size override.
-- [ ] **WindowDescriptor too minimal** — Only title/width/height. Missing: resizable, fullscreen, decorated, transparent, always-on-top, min/max size, initial position, high-DPI flag, cursor mode.
+- [x] **WindowDescriptor too minimal** — Added resizable, decorated, fullscreen, highDpi fields with builder pattern. Backward-compatible 3-arg constructor preserved.
 
 ## Designed but Not Implemented (from NOTES.md)
 
@@ -78,7 +78,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 
 ## Presentation / VSync
 
-- [ ] **Present mode configurable via GraphicsConfig** — Currently each backend and example hardcodes present mode. Add `presentMode(PresentMode)` to GraphicsConfig/EngineConfig so it flows through to Vulkan, WebGPU, and OpenGL (swap interval). Enum: FIFO (vsync), IMMEDIATE (no vsync), MAILBOX (triple-buffered).
+- [x] **Present mode configurable via GraphicsConfig** — Added `PresentMode` enum (FIFO/IMMEDIATE/MAILBOX) to `GraphicsConfig`. VulkanConfig uses it for swapchain creation. VulkanConfig.PresentMode removed in favor of shared enum.
 - [ ] **WebGPU: use Immediate on X11, Mailbox on Wayland** — Currently always falls back to Mailbox. Should detect the surface type and use Immediate when supported (X11/XWayland).
 - [ ] **Wayland Vulkan vsync cap** — On native Wayland, `vkQueuePresentKHR` blocks to refresh rate regardless of present mode. Documented limitation, no engine-side fix.
 

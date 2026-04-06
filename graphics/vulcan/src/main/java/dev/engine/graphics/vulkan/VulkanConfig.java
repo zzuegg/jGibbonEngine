@@ -1,6 +1,7 @@
 package dev.engine.graphics.vulkan;
 
 import dev.engine.graphics.GraphicsConfig;
+import dev.engine.graphics.PresentMode;
 import dev.engine.graphics.RenderDevice;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
@@ -10,25 +11,12 @@ import dev.engine.graphics.window.WindowToolkit;
  *
  * <pre>{@code
  * var gfx = VulkanConfig.builder(toolkit, vkBindings, surfaceCreator)
- *     .presentMode(VulkanConfig.PresentMode.MAILBOX)
+ *     .presentMode(PresentMode.MAILBOX)
  *     .validation(true)
  *     .build();
  * }</pre>
  */
 public final class VulkanConfig extends GraphicsConfig {
-
-    /** Vulkan present modes. */
-    public enum PresentMode {
-        /** V-sync, guaranteed available. */
-        FIFO(VkBindings.VK_PRESENT_MODE_FIFO_KHR),
-        /** Triple-buffered, low latency. Falls back to FIFO if unavailable. */
-        MAILBOX(VkBindings.VK_PRESENT_MODE_MAILBOX_KHR),
-        /** No sync, tearing possible. Falls back to FIFO if unavailable. */
-        IMMEDIATE(VkBindings.VK_PRESENT_MODE_IMMEDIATE_KHR);
-
-        final int vkValue;
-        PresentMode(int vkValue) { this.vkValue = vkValue; }
-    }
 
     /** Preferred swapchain surface format. */
     public enum SurfaceFormat {
@@ -43,20 +31,18 @@ public final class VulkanConfig extends GraphicsConfig {
 
     private final VkBindings vk;
     private final VulkanBackend.SurfaceCreator surfaceCreator;
-    private final PresentMode presentMode;
     private final SurfaceFormat surfaceFormat;
 
     private VulkanConfig(Builder builder) {
         super(builder.toolkit);
         this.vk = builder.vk;
         this.surfaceCreator = builder.surfaceCreator;
-        this.presentMode = builder.presentMode;
         this.surfaceFormat = builder.surfaceFormat;
         headless(builder.headless);
         validation(builder.validation);
+        presentMode(builder.presentMode);
     }
 
-    public PresentMode presentMode() { return presentMode; }
     public SurfaceFormat surfaceFormat() { return surfaceFormat; }
     public VkBindings bindings() { return vk; }
 
@@ -64,10 +50,15 @@ public final class VulkanConfig extends GraphicsConfig {
     protected RenderDevice createDevice(WindowHandle window) {
         long windowHandle = window.nativeHandle();
         var extensions = surfaceCreator.requiredInstanceExtensions();
+        int vkPresentMode = switch (presentMode()) {
+            case IMMEDIATE -> VkBindings.VK_PRESENT_MODE_IMMEDIATE_KHR;
+            case MAILBOX -> VkBindings.VK_PRESENT_MODE_MAILBOX_KHR;
+            case FIFO -> VkBindings.VK_PRESENT_MODE_FIFO_KHR;
+        };
         return new VkRenderDevice(vk, extensions,
                 instance -> surfaceCreator.createSurface(instance, windowHandle),
                 window.width(), window.height(),
-                surfaceFormat.vkValue, presentMode.vkValue);
+                surfaceFormat.vkValue, vkPresentMode);
     }
 
     public static Builder builder(WindowToolkit toolkit, VkBindings vk, VulkanBackend.SurfaceCreator surfaceCreator) {

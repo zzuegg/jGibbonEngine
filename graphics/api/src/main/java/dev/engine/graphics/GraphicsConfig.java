@@ -27,6 +27,7 @@ public abstract class GraphicsConfig {
     private final WindowToolkit toolkit;
     private boolean headless;
     private boolean validation;
+    private PresentMode presentMode = PresentMode.FIFO;
 
     protected GraphicsConfig(WindowToolkit toolkit) {
         this.toolkit = toolkit;
@@ -41,8 +42,12 @@ public abstract class GraphicsConfig {
     /** Whether to enable backend validation layers (Vulkan validation, WebGPU error reporting). */
     public boolean validation() { return validation; }
 
+    /** The present mode (vsync behavior). */
+    public PresentMode presentMode() { return presentMode; }
+
     public GraphicsConfig headless(boolean headless) { this.headless = headless; return this; }
     public GraphicsConfig validation(boolean validation) { this.validation = validation; return this; }
+    public GraphicsConfig presentMode(PresentMode presentMode) { this.presentMode = presentMode; return this; }
 
     /**
      * Creates the complete backend infrastructure: window + render device.
