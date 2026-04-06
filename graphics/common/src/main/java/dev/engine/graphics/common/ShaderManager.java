@@ -38,7 +38,7 @@ public class ShaderManager {
     private final RenderDevice device;
     private final Map<String, CompiledShader> shaderCache = new ConcurrentHashMap<>();
     private final Map<String, CompiledShader> resolvedShaders = new HashMap<>();
-    private final Map<Integer, CompiledShader> entityShaders = new HashMap<>();
+    private final Map<dev.engine.core.handle.Handle<?>, CompiledShader> entityShaders = new java.util.WeakHashMap<>();
     private final GlobalParamsRegistry globalParams;
     private final int slangTarget; // ShaderCompiler.TARGET_GLSL / TARGET_SPIRV / TARGET_WGSL
     private AssetManager assetManager;
@@ -173,14 +173,19 @@ public class ShaderManager {
         });
 
         if (compiled != null) {
-            entityShaders.put(entity.index(), compiled);
+            entityShaders.put(entity, compiled);
         }
         return compiled;
     }
 
     /** Returns the compiled shader previously resolved for an entity, or null. */
     public CompiledShader getEntityShader(dev.engine.core.handle.Handle<?> entity) {
-        return entityShaders.get(entity.index());
+        return entityShaders.get(entity);
+    }
+
+    /** Removes the cached shader for a destroyed entity. */
+    public void removeEntityShader(dev.engine.core.handle.Handle<?> entity) {
+        entityShaders.remove(entity);
     }
 
     /**

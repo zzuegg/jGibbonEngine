@@ -195,6 +195,13 @@ public class Renderer implements AutoCloseable {
         // Process transactions
         meshRenderer.processTransactions(transactions);
 
+        // Clean up shader cache for removed entities
+        for (var txn : transactions) {
+            if (txn instanceof dev.engine.core.transaction.Transaction.EntityRemoved removed) {
+                shaderManager.removeEntityShader(removed.entity());
+            }
+        }
+
         // Resolve mesh/material assignments → renderables
         for (var entity : meshRenderer.getEntities()) {
             if (meshRenderer.getRenderable(entity) != null) continue;

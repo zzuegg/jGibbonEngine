@@ -9,7 +9,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [x] **GPU buffer leak: per-entity UBOs never cleaned up** — Mitigated: Cleaner safety net now automatically destroys unreachable UBO handles. Explicit cleanup on EntityRemoved still recommended for deterministic resource release.
 - [x] **MeshRenderer leaks entity maps on EntityRemoved** — Fixed: `meshDataAssignments`, `meshAssignments`, `materialAssignments` now removed on entity removal.
 - [x] **DrawCommand.materialData raw unchecked generic** — Fixed: changed to `PropertyMap<MaterialData>`.
-- [ ] **Stale shader binding after entity reuse** — `ShaderManager.java:168`. entityShaders keyed by handle index only, no generation check. After entity destroy+recreate at same index, old shader persists.
+- [x] **Stale shader binding after entity reuse** — Fixed: entityShaders now keyed by Handle<?> (includes generation). WeakHashMap prevents blocking GC. Renderer clears entity shader on EntityRemoved.
 - [x] **Engine.shutdown() doesn't shut down AssetManager** — Fixed: added `assets.shutdown()` to `Engine.shutdown()`.
 - [x] **Renderer.close() doesn't clean up MeshManager** — Fixed: added `MeshManager.close()` and wired into `Renderer.close()`.
 
