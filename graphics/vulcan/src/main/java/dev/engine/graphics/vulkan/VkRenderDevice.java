@@ -1011,7 +1011,7 @@ public class VkRenderDevice implements RenderDevice {
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.BindImage bi -> {
-                    log.debug("BindImage not yet implemented for Vulkan (needs storage image descriptors)");
+                    log.warn("BindImage not yet implemented for Vulkan (needs storage image descriptors) — command ignored");
                 }
                 case dev.engine.graphics.command.RenderCommand.SetDepthTest sdt -> {
                     vk.cmdSetDepthTestEnable(cmd, sdt.enabled());
@@ -1145,12 +1145,12 @@ public class VkRenderDevice implements RenderDevice {
                     }
                 }
                 case dev.engine.graphics.command.RenderCommand.CopyTexture(var src, var dst, int sx, int sy, int dx, int dy, int w, int h, int srcMip, int dstMip) -> {
-                    log.debug("CopyTexture: requires render pass pause — not yet implemented inside render pass");
+                    log.warn("CopyTexture not yet implemented for Vulkan (requires render pass pause) — command ignored");
                 }
                 case dev.engine.graphics.command.RenderCommand.BlitTexture(var src, var dst,
                         int sx0, int sy0, int sx1, int sy1,
                         int dx0, int dy0, int dx1, int dy1, boolean linear) -> {
-                    log.debug("BlitTexture: requires render pass pause — not yet implemented inside render pass");
+                    log.warn("BlitTexture not yet implemented for Vulkan (requires render pass pause) — command ignored");
                 }
                 case dev.engine.graphics.command.RenderCommand.MemoryBarrier(var scope) -> {
                     int srcStage, dstStage, srcAccess, dstAccess;
@@ -1389,7 +1389,11 @@ public class VkRenderDevice implements RenderDevice {
             case "R32I" -> VkBindings.VK_FORMAT_R32_SINT;
             case "DEPTH24_STENCIL8" -> VkBindings.VK_FORMAT_D24_UNORM_S8_UINT;
             case "DEPTH32F_STENCIL8" -> VkBindings.VK_FORMAT_D32_SFLOAT_S8_UINT;
-            default -> VkBindings.VK_FORMAT_R8G8B8A8_UNORM;
+            case "BGRA8" -> VkBindings.VK_FORMAT_B8G8R8A8_UNORM;
+            default -> {
+                log.warn("Unsupported texture format '{}' — falling back to VK_FORMAT_R8G8B8A8_UNORM", format.name());
+                yield VkBindings.VK_FORMAT_R8G8B8A8_UNORM;
+            }
         };
     }
 

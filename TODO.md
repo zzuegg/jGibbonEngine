@@ -83,3 +83,158 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [ ] **Async buffer mapping for TeaVM WebGPU** — Browser can't do synchronous mapping. Needs promise wrapper or skip readback on web.
 - [ ] **Slang generic specialization parsing robustness** — `SlangCompilerNative.java:245-276`. Current regex works. Revisit when it breaks.
 - [ ] **WGSL binding extraction regex** — `WgpuRenderDevice.java:623-625`. Works for current shaders. Revisit on Slang output changes.
+
+## Backend Feature Parity Matrix
+
+Cross-backend audit performed 2026-04-06. ✅ = implemented, ⚠️ = partial/fallback, ❌ = missing.
+
+### Texture Formats (16 defined in TextureFormat)
+
+| Format | OpenGL | Vulkan | WebGPU | Notes |
+|---|---|---|---|---|
+| RGBA8 | ✅ | ✅ | ✅ | |
+| RGB8 | ✅ | ✅ | ⚠️ → RGBA8 | WebGPU lacks native RGB8; logged |
+| BGRA8 | ⚠️ → RGBA8 | ✅ | ✅ | GL lacks native BGRA internal format; logged |
+| R8 | ✅ | ✅ | ✅ | |
+| RGBA16F | ✅ | ✅ | ✅ | GL added 2026-04-06 |
+| RGBA32F | ✅ | ✅ | ✅ | GL added 2026-04-06 |
+| RG16F | ✅ | ✅ | ✅ | GL added 2026-04-06 |
+| RG32F | ✅ | ✅ | ✅ | GL added 2026-04-06 |
+| R16F | ✅ | ✅ | ✅ | GL added 2026-04-06 |
+| R32F | ✅ | ✅ | ✅ | GL added 2026-04-06 |
+| R32UI | ✅ | ✅ | ✅ | GL added 2026-04-06 |
+| R32I | ✅ | ✅ | ✅ | GL added 2026-04-06 |
+| DEPTH24 | ✅ | ✅ | ✅ | |
+| DEPTH32F | ✅ | ✅ | ✅ | |
+| DEPTH24_STENCIL8 | ✅ | ✅ | ✅ | |
+| DEPTH32F_STENCIL8 | ✅ | ✅ | ⚠️ → D24S8 | WebGPU lacks this; falls back with warning |
+
+### RenderCommand Support
+
+| Command | GL | VK | WebGPU | Notes |
+|---|---|---|---|---|
+| BindPipeline | ✅ | ✅ | ✅ | |
+| BindVertexBuffer | ✅ | ✅ | ✅ | |
+| BindIndexBuffer | ✅ | ✅ | ✅ | UINT32 only on all backends |
+| BindUniformBuffer | ✅ | ✅ | ✅ | |
+| BindTexture | ✅ | ✅ | ✅ | |
+| BindSampler | ✅ | ✅ | ✅ | |
+| BindStorageBuffer | ✅ | ✅ | ✅ | |
+| BindImage | ✅ | ❌ warn | ❌ warn | VK needs storage image descriptors |
+| Draw | ✅ | ✅ | ✅ | |
+| DrawIndexed | ✅ | ✅ | ✅ | |
+| DrawInstanced | ✅ | ✅ | ✅ | |
+| DrawIndexedInstanced | ✅ | ✅ | ✅ | |
+| DrawIndirect | ✅ | ✅ | ❌ warn | |
+| DrawIndexedIndirect | ✅ | ✅ | ❌ warn | |
+| BindRenderTarget | ✅ | ✅ | ✅ | |
+| SetRenderState | ✅ | ✅ | ✅ | |
+| PushConstants | ✅ UBO@15 | ✅ native | ❌ warn | |
+| BindComputePipeline | ✅ | ✅ | ❌ warn | |
+| Dispatch | ✅ | ✅ | ❌ warn | |
+| MemoryBarrier | ✅ | ✅ | ⚠️ implicit | WebGPU handles automatically |
+| CopyBuffer | ✅ | ✅ | ✅ | |
+| CopyTexture | ✅ | ❌ warn | ❌ warn | VK needs render pass pause |
+| BlitTexture | ✅ | ❌ warn | ❌ warn | VK needs render pass pause |
+| Clear | ✅ | ✅ | ✅ | |
+| Viewport | ✅ | ✅ | ✅ | |
+| Scissor | ✅ | ✅ | ✅ | |
+
+### Render State Properties (16 defined)
+
+| Property | GL | VK | WebGPU | Notes |
+|---|---|---|---|---|
+| DEPTH_TEST | ✅ | ✅ dynamic | ✅ pipeline | |
+| DEPTH_WRITE | ✅ | ✅ dynamic | ✅ pipeline | |
+| DEPTH_FUNC | ✅ | ✅ dynamic | ✅ pipeline | All 8 CompareFuncs mapped on all backends |
+| BLEND_MODE | ✅ | ✅ variant | ✅ pipeline | |
+| CULL_MODE | ✅ | ✅ dynamic | ✅ pipeline | |
+| FRONT_FACE | ✅ | ✅ dynamic | ✅ pipeline | |
+| WIREFRAME | ✅ | ✅ variant | ❌ warn | WebGPU API limitation |
+| LINE_WIDTH | ✅ | ❌ | ❌ | GL-only |
+| SCISSOR_TEST | ✅ | ❌ | ❌ | GL-only |
+| STENCIL_TEST | ✅ | ✅ dynamic | ✅ pipeline | |
+| STENCIL_FUNC | ✅ | ✅ dynamic | ✅ pipeline | |
+| STENCIL_REF | ✅ | ✅ dynamic | ✅ pipeline | |
+| STENCIL_MASK | ✅ | ✅ dynamic | ✅ pipeline | |
+| STENCIL_FAIL | ✅ | ✅ dynamic | ✅ pipeline | All 8 StencilOps mapped on all backends |
+| STENCIL_DEPTH_FAIL | ✅ | ✅ dynamic | ✅ pipeline | |
+| STENCIL_PASS | ✅ | ✅ dynamic | ✅ pipeline | |
+
+### Vertex Attribute Types
+
+| Type | GL | VK | WebGPU | Notes |
+|---|---|---|---|---|
+| FLOAT (1-4) | ✅ | ✅ | ✅ | |
+| INT (1-4) | ✅ | ✅ | ❌ warn→FLOAT32X4 | |
+| BYTE | ✅ | ⚠️ normalized | ❌ warn→FLOAT32X4 | |
+| UNSIGNED_BYTE | ✅ | ⚠️ normalized | ⚠️ 4-comp normalized only | |
+
+### Sampler Features
+
+| Feature | GL | VK | WebGPU | Notes |
+|---|---|---|---|---|
+| Wrap: Repeat/Clamp/Mirror | ✅ | ✅ | ✅ | |
+| Wrap: Clamp to Border | ✅ | ✅ | ❌ | WebGPU API limitation |
+| Min/Mag/Mipmap Filters | ✅ | ✅ | ✅ | |
+| Anisotropy | ✅ | ✅ | ✅ | |
+| Compare Function | ✅ | ✅ | ✅ | |
+| LOD Min/Max | ✅ | ✅ | ✅ | |
+| LOD Bias | ✅ | ✅ | ❌ | WebGPU API limitation |
+| Border Color | ✅ | ✅ | ❌ | WebGPU API limitation |
+| Mipmap Generation | ✅ lazy | ✅ lazy blit | ❌ | WebGPU has no runtime mipmap gen |
+
+### Compute Shaders
+
+| Feature | GL | VK | WebGPU | Notes |
+|---|---|---|---|---|
+| Pipeline creation | ✅ GLSL | ✅ SPIRV | ❌ | COMPUTE_SHADERS capability now returns false on WebGPU |
+| Dispatch | ✅ | ✅ | ❌ warn | |
+| BindImage (storage) | ✅ | ❌ warn | ❌ warn | VK needs descriptor type support |
+| Memory Barriers | ✅ | ✅ | implicit | |
+
+### Buffer & Draw Infrastructure
+
+| Feature | GL | VK | WebGPU | Notes |
+|---|---|---|---|---|
+| Index UINT32 | ✅ | ✅ | ✅ | |
+| Index UINT16 | ❌ | ❌ (defined) | ❌ | Hardcoded UINT32 on all backends |
+| Primitive topology | ❌ triangles | ❌ triangles | ❌ triangles | Hardcoded on all backends |
+| Buffer CPU readback | ❌ (API unused) | ✅ staging | ✅ async map | GL has glMapNamedBufferRange declared but unused |
+| Indirect draw | ✅ + multi-draw | ✅ | ❌ warn | |
+| readFramebuffer | ✅ Y-flip | ✅ BGRA→RGBA | ✅ 256-align | |
+
+### DeviceCapability Queries
+
+| Capability | GL | VK | WebGPU | Notes |
+|---|---|---|---|---|
+| MAX_TEXTURE_SIZE | ✅ queried | ✅ queried | ⚠️ hardcoded 8192 | WebGPU device limits broken (jwebgpu) |
+| MAX_FRAMEBUFFER_W/H | ✅ queried | ✅ queried | ⚠️ hardcoded 8192 | |
+| MAX_ANISOTROPY | ✅ queried | ❌ | ⚠️ hardcoded 16 | VK should query from physical device |
+| MAX_UNIFORM_BUFFER_SIZE | ✅ queried | ❌ | ⚠️ hardcoded 65536 | |
+| MAX_STORAGE_BUFFER_SIZE | ✅ queried | ❌ | ⚠️ hardcoded 128MB | |
+| COMPUTE_SHADERS | ✅ true | ❌ | false | VK should report true |
+| GEOMETRY_SHADERS | ✅ true | ❌ | false | |
+| TESSELLATION | ✅ true | ❌ | false | GL: declared but no commands implemented |
+| ANISOTROPIC_FILTERING | ✅ | ❌ | ✅ | |
+| BINDLESS_TEXTURES | ✅ ext check | ❌ | false | |
+| BACKEND_NAME | ✅ | ✅ | ✅ | |
+| SHADER_TARGET | ✅ GLSL | ✅ SPIRV | ✅ WGSL | |
+| DEVICE_NAME | ✅ queried | ✅ queried | ⚠️ hardcoded | |
+| API_VERSION | ✅ queried | ❌ | ⚠️ hardcoded | |
+
+### Cross-Backend Gaps (prioritized)
+
+- [ ] **WebGPU: no mipmap generation** — Textures with mipmap samplers sample only mip 0. Need compute or blit-based mipmap generation.
+- [ ] **WebGPU: no compute pipeline** — COMPUTE_SHADERS now correctly returns false. Implement when jwebgpu supports compute.
+- [ ] **WebGPU: no indirect draw** — DrawIndirect/DrawIndexedIndirect logged as warnings.
+- [ ] **WebGPU: no PushConstants** — Could be emulated via UBO (like GL does at binding 15).
+- [ ] **Vulkan: CopyTexture/BlitTexture stubs** — Requires pausing the render pass. GL fully implements both.
+- [ ] **Vulkan: no BindImage** — Blocks compute shaders that write to textures. Needs storage image descriptor pool.
+- [ ] **Vulkan: missing DeviceCapability queries** — MAX_ANISOTROPY, buffer sizes, COMPUTE_SHADERS, GEOMETRY_SHADERS, API_VERSION all queryable but not wired.
+- [ ] **All backends: primitive topology hardcoded** — Cannot draw lines, points, or triangle strips. Should be part of PipelineDescriptor.
+- [ ] **All backends: UINT16 index buffers unsupported** — Wastes memory for small meshes. VK has constant defined but unused.
+- [ ] **GL: buffer CPU readback** — glMapNamedBufferRange declared in GlBindings but never called. No staging readback path.
+- [ ] **VK/WebGPU: LINE_WIDTH and SCISSOR_TEST not handled** — GL-only render states.
+- [ ] **WebGPU: vertex INT type unsupported** — Falls back to FLOAT32X4 with warning.
+- [ ] **WebGPU: sampler border color / LOD bias unsupported** — API limitation.
