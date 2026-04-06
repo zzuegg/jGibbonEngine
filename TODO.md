@@ -76,6 +76,13 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [x] **NativeResource not used by GPU resources** — Fixed: Handle<T> now supports Cleaner registration. GpuResourceManager registers cleanup actions on all created handles. Leaked handles are automatically cleaned by GC with warn-level logging.
 - [x] **GpuResourceManager deferred deletion delay doesn't match frames-in-flight** — Fixed: replaced double-buffer with ring of N+1 queues (N = FRAMES_IN_FLIGHT). Vulkan reports MAX_FRAMES_IN_FLIGHT=2, so resources are deferred 3 frames. Added DeviceCapability.FRAMES_IN_FLIGHT.
 
+## API Tracing / Debugging
+
+- [x] **WebGPU API tracing** — Implemented: `TracingWgpuBindings` decorator logs every WebGPU API call at TRACE level with full parameters.
+- [ ] **Vulkan API tracing** — Add `TracingVkBindings` decorator for VkBindings, same pattern as WebGPU.
+- [ ] **OpenGL API tracing** — Add `TracingGlBindings` decorator for GlBindings, same pattern as WebGPU.
+- [ ] **GraphicsConfig logging flag** — Add a `traceApi(boolean)` option to GraphicsConfig that automatically wraps the backend bindings with the tracing decorator.
+
 ## Previously Identified (from 2026-04-04 review)
 
 - [ ] **WebGPU compute shader support** — `WgpuRenderDevice.java`. Push constants, compute pipeline, dispatch, storage images, texture copy/blit unimplemented.
