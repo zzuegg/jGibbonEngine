@@ -162,11 +162,11 @@ public class ChromeDevTools implements AutoCloseable {
      */
     public void navigate(String url) throws Exception {
         send("Page.enable", null);
-        send("Runtime.enable", null);
-        // Use JS navigation which is more reliable in headless Chrome
-        evaluate("window.location.href = '" + url + "'");
-        // Wait for navigation and page load
+        send("Page.navigate", "{\"url\":\"" + url + "\"}");
+        // Wait for page to load and scripts to execute
         Thread.sleep(3000);
+        // Re-enable Runtime after navigation (context resets on new page)
+        send("Runtime.enable", null);
     }
 
     /**
