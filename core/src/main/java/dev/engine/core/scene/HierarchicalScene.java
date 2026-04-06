@@ -5,6 +5,7 @@ import dev.engine.core.handle.HandlePool;
 import dev.engine.core.math.Mat4;
 import dev.engine.core.scene.component.Hierarchy;
 import dev.engine.core.scene.component.Transform;
+import dev.engine.core.transaction.Transaction;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,7 +18,7 @@ public class HierarchicalScene extends AbstractScene {
     @Override
     public Entity createEntity() {
         var handle = pool.allocate();
-        transactions.added(handle);
+        transactions.emit(new Transaction.EntityAdded(handle));
         var entity = new Entity(handle, this);
         entityMap.put(handle, entity);
         return entity;
@@ -33,7 +34,7 @@ public class HierarchicalScene extends AbstractScene {
             }
         }
         entityMap.remove(handle);
-        transactions.removed(handle);
+        transactions.emit(new Transaction.EntityRemoved(handle));
         pool.release(handle);
     }
 

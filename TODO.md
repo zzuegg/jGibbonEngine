@@ -4,7 +4,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 
 ## Critical Bugs
 
-- [ ] **Thread safety: Engine.run() race condition** — `Engine.java:152`. Render thread drains TransactionBuffer while logic thread writes concurrently. TransactionBuffer has no synchronization. Use TransactionBus (which has per-subscriber locks) or add synchronization.
+- [x] **Thread safety: Engine.run() race condition** — Fixed: switched AbstractScene from TransactionBuffer to TransactionBus. Per-subscriber synchronized double-buffer swap ensures emit() and drain() never access the write buffer concurrently.
 - [x] **Profiler.lastFrame() returns currentFrame** — Fixed: `lastFrame()` now returns `lastFrame`, added `currentFrame()` for in-progress data. Tests updated.
 - [x] **GPU buffer leak: per-entity UBOs never cleaned up** — Mitigated: Cleaner safety net now automatically destroys unreachable UBO handles. Explicit cleanup on EntityRemoved still recommended for deterministic resource release.
 - [x] **MeshRenderer leaks entity maps on EntityRemoved** — Fixed: `meshDataAssignments`, `meshAssignments`, `materialAssignments` now removed on entity removal.
