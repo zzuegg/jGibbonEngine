@@ -390,7 +390,7 @@ public class ShaderManager {
         return null;
     }
 
-    private String loadShaderFile(String path) {
+    public String loadShaderFile(String path) {
         if (assetManager != null) {
             try {
                 return assetManager.loadSync(path, SlangShaderSource.class).source();

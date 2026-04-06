@@ -195,7 +195,7 @@ class WebScreenshotTest {
             // Save screenshot
             saveScreenshot(pixels, "webgpu-browser", sceneName + suffix);
 
-            // Compare against reference if one exists
+            // Compare against browser reference (regression check)
             var reference = loadReference("webgpu-browser", sceneName + suffix);
             if (reference != null) {
                 var tolerance = discovered.tolerance();
@@ -206,6 +206,20 @@ class WebScreenshotTest {
                                 + "' regressed: " + String.format("%.2f%%", diff)
                                 + " diff (max " + tolerance.maxDiffPercent() + "%)."
                                 + " Screenshot: build/screenshots/webgpu-browser/" + sceneName + suffix + ".png");
+            }
+
+            // Cross-check: compare browser WebGPU against desktop WebGPU-native reference
+            // Recorded as diff data for the report; not a hard failure since browser and
+            // native WebGPU implementations can differ significantly.
+            var desktopRef = loadReference("webgpu", sceneName + suffix);
+            if (desktopRef != null) {
+                var crossTolerance = Tolerance.crossPlatform();
+                double crossDiff = ScreenshotHelper.diffPercentage(pixels, desktopRef, crossTolerance.maxChannelDiff());
+                TestResults.instance().recordDiff(sceneName, "browser_vs_native", crossDiff);
+                if (crossDiff >= crossTolerance.maxDiffPercent()) {
+                    System.out.println("[WebTest] WARNING: Browser↔Native '" + sceneName + suffix
+                            + "' differ by " + String.format("%.2f%%", crossDiff));
+                }
             }
         });
     }

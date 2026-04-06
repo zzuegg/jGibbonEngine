@@ -33,6 +33,11 @@ dependencies {
     testRuntimeOnly("ch.qos.logback:logback-classic:1.5.6")
 }
 
+// Include desktop WebGPU-native references for cross-backend comparison
+sourceSets.test {
+    resources.srcDir(project(":samples:tests:screenshot:screenshot-desktop").file("src/test/resources"))
+}
+
 teavm {
     js {
         mainClass = "dev.engine.tests.screenshot.web.WebTestApp"

@@ -19,4 +19,7 @@ public record Tolerance(int maxChannelDiff, double maxDiffPercent) {
 
     /** Wide — for known cross-backend differences (blend mode rasterization). */
     public static Tolerance wide() { return new Tolerance(3, 0.5); }
+
+    /** Cross-platform — for browser vs native WebGPU comparison (different GPU paths). */
+    public static Tolerance crossPlatform() { return new Tolerance(5, 15.0); }
 }
