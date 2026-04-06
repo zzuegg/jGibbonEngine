@@ -104,7 +104,7 @@ public abstract class BaseApplication {
         try {
             init();
 
-            log.info("Application started: {}", config.windowTitle());
+            log.info("Application started: {}", config.window().title());
             long lastTime = System.nanoTime();
             long frameCount = 0;
 

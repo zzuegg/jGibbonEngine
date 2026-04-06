@@ -4,6 +4,7 @@ import dev.engine.bindings.slang.SlangShaderCompiler;
 import dev.engine.graphics.ScreenshotHelper;
 import dev.engine.graphics.common.engine.Engine;
 import dev.engine.graphics.common.engine.EngineConfig;
+import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.platform.desktop.DesktopPlatform;
 
 import javax.imageio.ImageIO;
@@ -37,8 +38,7 @@ public class ScreenshotTestHarness {
      */
     public Map<Integer, byte[]> render(RenderTestScene testScene, Backend backend) {
         var config = EngineConfig.builder()
-                .windowTitle(backend.name() + " Test")
-                .windowSize(width, height)
+                .window(WindowDescriptor.builder(backend.name() + " Test").size(width, height).build())
                 .headless(false)
                 .platform(DesktopPlatform.builder()
                         .shaderCompiler(new SlangShaderCompiler())
@@ -47,8 +47,7 @@ public class ScreenshotTestHarness {
                 .maxFrames(0)
                 .build();
 
-        var windowDesc = new dev.engine.graphics.window.WindowDescriptor(
-                config.windowTitle(), config.windowSize().x(), config.windowSize().y());
+        var windowDesc = config.window();
         var gfxConfig = new dev.engine.graphics.GraphicsConfigLegacy(config.headless());
         var graphicsBackend = config.graphicsBackend().create(windowDesc, gfxConfig);
         var engine = new Engine(config, config.platform(), graphicsBackend.device());

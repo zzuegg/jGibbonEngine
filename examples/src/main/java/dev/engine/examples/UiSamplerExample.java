@@ -13,6 +13,7 @@ import dev.engine.graphics.vulkan.VulkanBackend;
 import dev.engine.graphics.webgpu.WebGpuBackend;
 import dev.engine.providers.jwebgpu.JWebGpuBindings;
 import dev.engine.bindings.sdl3.Sdl3WindowToolkit;
+import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowToolkit;
 import dev.engine.platform.desktop.DesktopPlatform;
 import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
@@ -523,8 +524,7 @@ public class UiSamplerExample extends BaseApplication {
         };
 
         var config = EngineConfig.builder()
-                .windowTitle("UI Sampler — Debug UI Showcase (" + windowing + "/" + backend + ")")
-                .windowSize(1120, 680)
+                .window(WindowDescriptor.builder("UI Sampler — Debug UI Showcase (" + windowing + "/" + backend + ")").size(1120, 680).build())
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(graphicsBackend)
                 .build();

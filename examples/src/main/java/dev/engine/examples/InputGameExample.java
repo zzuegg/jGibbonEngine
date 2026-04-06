@@ -13,6 +13,7 @@ import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.opengl.OpenGlBackend;
 import dev.engine.graphics.vulkan.VulkanBackend;
 import dev.engine.graphics.webgpu.WebGpuBackend;
+import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowToolkit;
 import dev.engine.platform.desktop.DesktopPlatform;
 import dev.engine.providers.jwebgpu.JWebGpuBindings;
@@ -224,8 +225,7 @@ public class InputGameExample extends BaseApplication {
         };
 
         var config = EngineConfig.builder()
-                .windowTitle("Input Game (" + windowing + "/" + backend + ") - WASD move, Space shoot, Scroll color, Click spawn")
-                .windowSize(1280, 720)
+                .window(WindowDescriptor.builder("Input Game (" + windowing + "/" + backend + ") - WASD move, Space shoot, Scroll color, Click spawn").size(1280, 720).build())
                 .maxFrames(0)
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(graphicsBackend)

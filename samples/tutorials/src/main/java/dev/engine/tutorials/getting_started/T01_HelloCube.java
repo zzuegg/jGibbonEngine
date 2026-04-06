@@ -8,6 +8,7 @@ import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.opengl.OpenGlBackend;
+import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.platform.desktop.DesktopPlatform;
 
 /*
@@ -106,8 +107,7 @@ public class T01_HelloCube extends BaseApplication {
      */
     public static void main(String[] args) {
         var config = EngineConfig.builder()
-                .windowTitle("Tutorial 01 — Hello Cube")
-                .windowSize(1280, 720)
+                .window(WindowDescriptor.builder("Tutorial 01 — Hello Cube").size(1280, 720).build())
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(OpenGlBackend.factory(
                         new dev.engine.windowing.glfw.GlfwWindowToolkit(dev.engine.windowing.glfw.GlfwWindowToolkit.OPENGL_HINTS),

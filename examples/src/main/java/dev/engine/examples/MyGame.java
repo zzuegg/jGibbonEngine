@@ -13,6 +13,7 @@ import dev.engine.graphics.GraphicsBackendFactory;
 import dev.engine.graphics.opengl.OpenGlBackend;
 import dev.engine.graphics.vulkan.VulkanBackend;
 import dev.engine.graphics.webgpu.WebGpuBackend;
+import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowToolkit;
 import dev.engine.platform.desktop.DesktopPlatform;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
@@ -109,8 +110,7 @@ public class MyGame extends BaseApplication {
         };
 
         var config = EngineConfig.builder()
-                .windowTitle("My Game (" + windowing + "/" + backend + ")")
-                .windowSize(1280, 720)
+                .window(WindowDescriptor.builder("My Game (" + windowing + "/" + backend + ")").size(1280, 720).build())
                 .maxFrames(Integer.getInteger("engine.maxFrames", 0))
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(graphicsBackend)

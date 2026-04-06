@@ -9,6 +9,7 @@ import dev.engine.graphics.common.engine.BaseApplication;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.opengl.OpenGlBackend;
+import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.platform.desktop.DesktopPlatform;
 import dev.engine.windowing.glfw.GlfwWindowToolkit;
 import dev.engine.ui.NkColor;
@@ -163,8 +164,7 @@ public class T01_DebugUI extends BaseApplication {
     public static void main(String[] args) {
         var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.OPENGL_HINTS);
         var config = EngineConfig.builder()
-                .windowTitle("Debug UI Tutorial")
-                .windowSize(800, 600)
+                .window(WindowDescriptor.builder("Debug UI Tutorial").size(800, 600).build())
                 .platform(DesktopPlatform.builder().build())
                 .graphicsBackend(OpenGlBackend.factory(toolkit,
                         new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings()))
