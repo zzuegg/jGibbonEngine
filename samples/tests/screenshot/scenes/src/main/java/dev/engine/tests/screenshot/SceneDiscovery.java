@@ -1,14 +1,19 @@
 package dev.engine.tests.screenshot;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.net.JarURLConnection;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.jar.JarFile;
 
 /**
  * Discovers test scenes and comparison tests by scanning for static final fields
  * in classes under the {@code scenes} package.
+ *
+ * <p>Supports both file-system class directories and JAR files on the classpath.
  */
 public class SceneDiscovery {
 
@@ -26,11 +31,9 @@ public class SceneDiscovery {
     public List<DiscoveredComparison> comparisons() { return comparisons; }
 
     private void discover() {
-        // Find all classes in scenes.* packages
         var scenesPackage = "dev.engine.tests.screenshot.scenes";
         var classLoader = getClass().getClassLoader();
 
-        // Scan the classpath for scene classes
         try {
             var packagePath = scenesPackage.replace('.', '/');
             var resources = classLoader.getResources(packagePath);
@@ -38,6 +41,8 @@ public class SceneDiscovery {
                 var url = resources.nextElement();
                 if ("file".equals(url.getProtocol())) {
                     scanDirectory(new File(url.toURI()), scenesPackage);
+                } else if ("jar".equals(url.getProtocol())) {
+                    scanJar(((JarURLConnection) url.openConnection()).getJarFile(), packagePath, scenesPackage);
                 }
             }
         } catch (Exception e) {
@@ -52,6 +57,22 @@ public class SceneDiscovery {
                 scanDirectory(file, packageName + "." + file.getName());
             } else if (file.getName().endsWith(".class")) {
                 var className = packageName + "." + file.getName().replace(".class", "");
+                try {
+                    var clazz = Class.forName(className);
+                    scanClass(clazz, categoryFromPackage(packageName));
+                } catch (ClassNotFoundException ignored) {}
+            }
+        }
+    }
+
+    private void scanJar(JarFile jar, String packagePath, String basePackage) {
+        var entries = jar.entries();
+        while (entries.hasMoreElements()) {
+            var entry = entries.nextElement();
+            var name = entry.getName();
+            if (name.startsWith(packagePath) && name.endsWith(".class") && !name.contains("$")) {
+                var className = name.replace('/', '.').replace(".class", "");
+                var packageName = className.substring(0, className.lastIndexOf('.'));
                 try {
                     var clazz = Class.forName(className);
                     scanClass(clazz, categoryFromPackage(packageName));
