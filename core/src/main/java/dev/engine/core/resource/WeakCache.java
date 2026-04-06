@@ -14,6 +14,8 @@ import java.util.function.Function;
  * When the CPU-side data is garbage collected, the associated GPU resource
  * is queued for cleanup on the next {@link #pollStale(Consumer)} call.
  *
+ * <p>Lookups are O(1) via identity-hashed weak references.
+ *
  * <p>Thread safety: intended for single-thread access (the render thread).
  * The GC may enqueue references from any thread, but {@link #pollStale} is
  * called from the render thread only.
@@ -28,15 +30,15 @@ public class WeakCache<K, V> {
 
     /**
      * Gets or creates a cached value for the given key.
-     * Uses identity (==) comparison, not equals().
+     * Uses identity (==) comparison, not equals(). O(1) lookup via identity hash.
      */
     public synchronized V getOrCreate(K key, Function<K, V> factory) {
-        // Try to find existing entry by identity scan
-        for (var entry : map.entrySet()) {
-            K existing = entry.getKey().get();
-            if (existing == key) return entry.getValue();
-        }
-        // Not found — create and cache
+        // Create a temporary lookup key — same identity hash and equals semantics
+        var lookupRef = new IdentityWeakReference<>(key);
+        var existing = map.get(lookupRef);
+        if (existing != null) return existing;
+
+        // Not found — create and cache with a real weak reference (registered to queue)
         var ref = new IdentityWeakReference<>(key, queue);
         var value = factory.apply(key);
         map.put(ref, value);
@@ -63,6 +65,11 @@ public class WeakCache<K, V> {
         return map.size();
     }
 
+    /** Returns all live values in the cache. */
+    public Iterable<V> values() {
+        return map.values();
+    }
+
     /** Drains all entries, calling cleanup on each value. */
     public void clear(Consumer<V> cleanup) {
         for (var value : map.values()) {
@@ -81,6 +88,13 @@ public class WeakCache<K, V> {
     private static class IdentityWeakReference<T> extends WeakReference<T> {
         private final int hash;
 
+        /** Creates a lookup-only reference (not registered to a queue). */
+        IdentityWeakReference(T referent) {
+            super(referent);
+            this.hash = System.identityHashCode(referent);
+        }
+
+        /** Creates a tracked reference registered to a queue for GC notification. */
         IdentityWeakReference(T referent, ReferenceQueue<? super T> queue) {
             super(referent, queue);
             this.hash = System.identityHashCode(referent);

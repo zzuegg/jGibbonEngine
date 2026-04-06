@@ -58,7 +58,7 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [ ] **No frustum culling** — Renderer draws ALL entities every frame regardless of camera frustum. No spatial data structure (BVH, octree). Critical for non-trivial scenes.
 - [ ] **No draw call sorting** — Entities drawn in arbitrary HashMap order. No sorting by pipeline/material/depth. Causes maximum state thrashing.
 - [ ] **MaterialData.set() copies entire PropertyMap** — `MaterialData.java:72`. O(n) per property change. Consider builder or mutable-then-freeze.
-- [ ] **WeakCache.getOrCreate() linear scan** — `WeakCache.java:35`. Iterates entire map for identity lookup. O(n) per call. Use IdentityHashMap-based index.
+- [x] **WeakCache.getOrCreate() linear scan** — Fixed: O(1) lookup via temporary IdentityWeakReference for HashMap.get() instead of iterating all entries.
 - [ ] **HierarchicalScene.getWorldTransform() recursive, uncached** — Walks parent chain every call. O(depth) per entity per frame. Cache world transforms, invalidate on change.
 - [ ] **AbstractScene.query() linear scan** — Iterates all entities per query. No component index. O(n) per query.
 - [ ] **Entity HashMap for 2-4 components** — HashMap overhead for typical small component counts. Array-based map would be more efficient.

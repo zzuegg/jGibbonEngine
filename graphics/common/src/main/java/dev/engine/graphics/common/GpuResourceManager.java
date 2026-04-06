@@ -58,6 +58,10 @@ public class GpuResourceManager {
     private final java.util.Map<Handle<BufferResource>, String> bufferTypes =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
+    // Set to true after shutdown — Cleaner actions check this to avoid
+    // queueing GPU operations after the device is released.
+    private volatile boolean shuttingDown = false;
+
     // Ring of deferred deletion queues. Resources queued in frame N are deleted
     // after deferralDepth frames, ensuring in-flight GPU frames don't reference freed resources.
     // deferralDepth = framesInFlight + 1 (e.g. 3 queues for 2 frames-in-flight).
@@ -112,6 +116,7 @@ public class GpuResourceManager {
         var gen = handle.generation();
         handle.registerCleanup(() -> {
             log.warn("GPU buffer leak: handle[{},{}] type={} was not explicitly destroyed — cleaned by GC", idx, gen, subType);
+            if (shuttingDown) return;
             deferBufferCleanup(idx, gen, subType);
         });
 
@@ -165,6 +170,7 @@ public class GpuResourceManager {
         var gen = handle.generation();
         handle.registerCleanup(() -> {
             log.warn("GPU texture leak: handle[{},{}] was not explicitly destroyed — cleaned by GC", idx, gen);
+            if (shuttingDown) return;
             deletionQueue.add(() -> {
                 device.destroyTexture(new Handle<>(idx, gen));
                 resourceStats.recordDestroy(TEXTURE);
@@ -197,6 +203,7 @@ public class GpuResourceManager {
         var gen = handle.generation();
         handle.registerCleanup(() -> {
             log.warn("GPU render target leak: handle[{},{}] was not explicitly destroyed — cleaned by GC", idx, gen);
+            if (shuttingDown) return;
             deletionQueue.add(() -> {
                 device.destroyRenderTarget(new Handle<>(idx, gen));
                 resourceStats.recordDestroy(RENDER_TARGET);
@@ -228,6 +235,7 @@ public class GpuResourceManager {
         var gen = handle.generation();
         handle.registerCleanup(() -> {
             log.warn("GPU pipeline leak: handle[{},{}] was not explicitly destroyed — cleaned by GC", idx, gen);
+            if (shuttingDown) return;
             deletionQueue.add(() -> {
                 device.destroyPipeline(new Handle<>(idx, gen));
                 resourceStats.recordDestroy(PIPELINE);
@@ -255,6 +263,7 @@ public class GpuResourceManager {
         var gen = handle.generation();
         handle.registerCleanup(() -> {
             log.warn("GPU sampler leak: handle[{},{}] was not explicitly destroyed — cleaned by GC", idx, gen);
+            if (shuttingDown) return;
             deletionQueue.add(() -> {
                 device.destroySampler(new Handle<>(idx, gen));
                 resourceStats.recordDestroy(SAMPLER);
@@ -282,6 +291,7 @@ public class GpuResourceManager {
         var gen = handle.generation();
         handle.registerCleanup(() -> {
             log.warn("GPU vertex input leak: handle[{},{}] was not explicitly destroyed — cleaned by GC", idx, gen);
+            if (shuttingDown) return;
             deletionQueue.add(() -> {
                 device.destroyVertexInput(new Handle<>(idx, gen));
                 resourceStats.recordDestroy(VERTEX_INPUT);
@@ -352,6 +362,7 @@ public class GpuResourceManager {
      * Call during engine shutdown.
      */
     public void shutdown() {
+        shuttingDown = true;
         // Flush the active deletion queue
         Runnable action;
         while ((action = deletionQueue.poll()) != null) action.run();
