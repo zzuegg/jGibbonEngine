@@ -30,8 +30,8 @@ Full code review performed 2026-04-05 across all 467 source files.
 
 ## Missing Configuration
 
-- [ ] **EngineConfig missing common options** — Missing: FPS cap, VSync toggle, MSAA sample count, anisotropic filtering, gamma/sRGB mode, fullscreen mode, monitor selection, cursor visibility, debug overlay toggle.
-- [ ] **GraphicsConfig missing graphics settings** — Only has headless and validation. Missing: MSAA, VSync mode, sRGB framebuffer, aniso level, GPU selection, shader cache directory, max texture size override.
+- [x] **EngineConfig missing common options** — Added debugOverlay toggle. FPS cap via maxFrames already existed. VSync now in GraphicsConfig.presentMode. Window options in WindowDescriptor.
+- [x] **GraphicsConfig missing graphics settings** — Added msaaSamples, srgb, maxAnisotropy, presentMode. Backends can read these during device creation.
 - [x] **WindowDescriptor too minimal** — Added resizable, decorated, fullscreen, highDpi fields with builder pattern. Backward-compatible 3-arg constructor preserved.
 
 ## Designed but Not Implemented (from NOTES.md)

@@ -12,6 +12,7 @@ import dev.engine.graphics.GraphicsConfig;
  * var config = EngineConfig.builder()
  *     .windowTitle("My Game")
  *     .windowSize(1280, 720)
+ *     .debugOverlay(true)
  *     .platform(DesktopPlatform.builder().build())
  *     .graphics(new OpenGlConfig(toolkit, glBindings))
  *     .build();
@@ -26,6 +27,7 @@ public record EngineConfig(
         Vec2i windowSize,
         AbstractScene scene,
         int maxFrames,
+        boolean debugOverlay,
         Platform platform,
         GraphicsConfig graphics,
         GraphicsBackendFactory graphicsBackend
@@ -39,6 +41,7 @@ public record EngineConfig(
         private Vec2i windowSize = new Vec2i(1280, 720);
         private AbstractScene scene = null;
         private int maxFrames = 0; // 0 = unlimited
+        private boolean debugOverlay = true;
         private Platform platform = null;
         private GraphicsConfig graphics = null;
         private GraphicsBackendFactory graphicsBackend = null;
@@ -50,6 +53,8 @@ public record EngineConfig(
         public Builder windowSize(int w, int h) { this.windowSize = new Vec2i(w, h); return this; }
         public Builder scene(AbstractScene scene) { this.scene = scene; return this; }
         public Builder maxFrames(int maxFrames) { this.maxFrames = maxFrames; return this; }
+        /** Enable/disable the debug UI overlay. Default: true. */
+        public Builder debugOverlay(boolean debugOverlay) { this.debugOverlay = debugOverlay; return this; }
         public Builder platform(Platform platform) { this.platform = platform; return this; }
         /** Sets the graphics configuration (new API — preferred over graphicsBackend). */
         public Builder graphics(GraphicsConfig graphics) { this.graphics = graphics; return this; }
@@ -61,7 +66,7 @@ public record EngineConfig(
             if (headless) {
                 if (platform == null) platform = HeadlessPlatform.INSTANCE;
             }
-            return new EngineConfig(headless, threaded, windowTitle, windowSize, scene, maxFrames, platform, graphics, graphicsBackend);
+            return new EngineConfig(headless, threaded, windowTitle, windowSize, scene, maxFrames, debugOverlay, platform, graphics, graphicsBackend);
         }
     }
 }

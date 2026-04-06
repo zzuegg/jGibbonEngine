@@ -28,6 +28,9 @@ public abstract class GraphicsConfig {
     private boolean headless;
     private boolean validation;
     private PresentMode presentMode = PresentMode.FIFO;
+    private int msaaSamples = 1;
+    private boolean srgb = false;
+    private float maxAnisotropy = 1f;
 
     protected GraphicsConfig(WindowToolkit toolkit) {
         this.toolkit = toolkit;
@@ -45,9 +48,21 @@ public abstract class GraphicsConfig {
     /** The present mode (vsync behavior). */
     public PresentMode presentMode() { return presentMode; }
 
+    /** MSAA sample count (1 = disabled, 2/4/8 = multisampled). */
+    public int msaaSamples() { return msaaSamples; }
+
+    /** Whether to use sRGB framebuffer. */
+    public boolean srgb() { return srgb; }
+
+    /** Maximum anisotropic filtering level (1 = disabled). */
+    public float maxAnisotropy() { return maxAnisotropy; }
+
     public GraphicsConfig headless(boolean headless) { this.headless = headless; return this; }
     public GraphicsConfig validation(boolean validation) { this.validation = validation; return this; }
     public GraphicsConfig presentMode(PresentMode presentMode) { this.presentMode = presentMode; return this; }
+    public GraphicsConfig msaaSamples(int samples) { this.msaaSamples = samples; return this; }
+    public GraphicsConfig srgb(boolean srgb) { this.srgb = srgb; return this; }
+    public GraphicsConfig maxAnisotropy(float aniso) { this.maxAnisotropy = aniso; return this; }
 
     /**
      * Creates the complete backend infrastructure: window + render device.

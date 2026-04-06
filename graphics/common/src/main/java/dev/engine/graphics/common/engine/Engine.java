@@ -83,20 +83,25 @@ public class Engine {
         // Module manager — synchronous executor for cross-platform compatibility
         this.modules = new ModuleManager<>(new VariableTimestep<>(Time::new), Runnable::run);
 
-        // Debug UI
-        NkFont uiFont = new NkBuiltinFont(2);
-        this.debugUi = new NkContext(uiFont);
-        this.debugUiOverlay = new DebugUiOverlay(device);
-        this.debugUiOverlay.init(uiFont, this.renderer.shaderManager(), this.renderer.gpu());
+        // Debug UI (skip if disabled)
+        if (config.debugOverlay()) {
+            NkFont uiFont = new NkBuiltinFont(2);
+            this.debugUi = new NkContext(uiFont);
+            this.debugUiOverlay = new DebugUiOverlay(device);
+            this.debugUiOverlay.init(uiFont, this.renderer.shaderManager(), this.renderer.gpu());
 
-        // Register the overlay to render after the scene
-        this.renderer.addPostSceneCallback(() -> {
-            var vp = this.renderer.viewport();
-            debugUiOverlay.render(debugUi, vp.width(), vp.height());
-            debugUi.clear();
-        });
+            this.renderer.addPostSceneCallback(() -> {
+                var vp = this.renderer.viewport();
+                debugUiOverlay.render(debugUi, vp.width(), vp.height());
+                debugUi.clear();
+            });
+        } else {
+            this.debugUi = null;
+            this.debugUiOverlay = new DebugUiOverlay(device); // no-op overlay (not initialized)
+        }
 
-        log.info("Engine initialized (headless={}, threaded={})", config.headless(), config.threaded());
+        log.info("Engine initialized (headless={}, threaded={}, debugOverlay={})",
+                config.headless(), config.threaded(), config.debugOverlay());
     }
 
     // --- Accessors ---
