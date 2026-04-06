@@ -46,7 +46,13 @@ public class ChromeDevTools implements AutoCloseable {
      *
      * @param chromeBinary path to chrome/chromium binary (e.g., "google-chrome", "chromium-browser")
      */
-    public static ChromeDevTools launch(String chromeBinary) throws Exception {
+    /**
+     * Launches headless Chrome with WebGPU and connects via CDP.
+     *
+     * @param chromeBinary path to chrome/chromium binary
+     * @param initialUrl   URL to load on startup (use "about:blank" for no page)
+     */
+    public static ChromeDevTools launch(String chromeBinary, String initialUrl) throws Exception {
         var userDataDir = Files.createTempDirectory("chrome-cdp-");
 
         var args = new ArrayList<>(List.of(
@@ -63,25 +69,31 @@ public class ChromeDevTools implements AutoCloseable {
                 "--disable-extensions",
                 "--disable-background-networking",
                 "--no-first-run",
-                "about:blank"
+                initialUrl
         ));
 
         var pb = new ProcessBuilder(args)
                 .redirectErrorStream(true);
         var process = pb.start();
 
-        // Wait for CDP to become available
+        // Wait for CDP to become available, then find the page target matching our URL
+        // (not the browser target or extension background pages)
         var client = HttpClient.newHttpClient();
         String wsUrl = null;
         for (int attempt = 0; attempt < 50; attempt++) {
             try {
                 Thread.sleep(200);
                 var req = HttpRequest.newBuilder()
-                        .uri(URI.create("http://127.0.0.1:" + CDP_PORT + "/json/version"))
+                        .uri(URI.create("http://127.0.0.1:" + CDP_PORT + "/json"))
                         .GET().build();
                 var resp = client.send(req, HttpResponse.BodyHandlers.ofString());
-                // Extract webSocketDebuggerUrl from JSON
-                wsUrl = extractJsonString(resp.body(), "webSocketDebuggerUrl");
+                var body = resp.body();
+                // /json returns a JSON array of targets. Find the "page" type target
+                // matching our URL (not extension background pages).
+                wsUrl = findPageTargetWsUrl(body, initialUrl);
+                if (wsUrl != null) break;
+                // Fallback: try any page type target
+                if (wsUrl == null) wsUrl = findPageTargetWsUrl(body, null);
                 if (wsUrl != null) break;
             } catch (Exception ignored) {
                 // Chrome not ready yet
@@ -93,24 +105,22 @@ public class ChromeDevTools implements AutoCloseable {
             throw new IOException("Chrome CDP did not become available within 10 seconds");
         }
 
-        // Connect WebSocket
-        var responseFuture = new CompletableFuture<ChromeDevTools>();
-        var pendingMap = new ConcurrentHashMap<Integer, CompletableFuture<String>>();
-        var idCounter = new AtomicInteger(1);
-
-        var wsBuilder = client.newWebSocketBuilder();
+        // Create the ChromeDevTools instance first so the WebSocket listener
+        // can reference its pending map directly (avoiding the stale-capture bug).
+        var cdpHolder = new ChromeDevTools[1];
         var messageBuffer = new StringBuilder();
-        var webSocket = wsBuilder.buildAsync(URI.create(wsUrl), new WebSocket.Listener() {
+        var webSocket = client.newWebSocketBuilder()
+                .buildAsync(URI.create(wsUrl), new WebSocket.Listener() {
             @Override
             public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
                 messageBuffer.append(data);
                 if (last) {
                     var message = messageBuffer.toString();
                     messageBuffer.setLength(0);
-                    // Route response to pending future
                     var id = extractJsonInt(message, "id");
-                    if (id != null && pendingMap.containsKey(id)) {
-                        pendingMap.remove(id).complete(message);
+                    if (id != null && cdpHolder[0] != null) {
+                        var future = cdpHolder[0].pending.remove(id);
+                        if (future != null) future.complete(message);
                     }
                 }
                 webSocket.request(1);
@@ -124,8 +134,7 @@ public class ChromeDevTools implements AutoCloseable {
         }).get(10, TimeUnit.SECONDS);
 
         var cdp = new ChromeDevTools(process, webSocket, userDataDir);
-        cdp.pending.putAll(pendingMap);
-        cdp.nextId.set(idCounter.get());
+        cdpHolder[0] = cdp;
         return cdp;
     }
 
@@ -153,8 +162,11 @@ public class ChromeDevTools implements AutoCloseable {
      */
     public void navigate(String url) throws Exception {
         send("Page.enable", null);
-        send("Page.navigate", "{\"url\":\"" + url + "\"}");
-        Thread.sleep(1000); // Allow page to start loading
+        send("Runtime.enable", null);
+        // Use JS navigation which is more reliable in headless Chrome
+        evaluate("window.location.href = '" + url + "'");
+        // Wait for navigation and page load
+        Thread.sleep(3000);
     }
 
     /**
@@ -239,6 +251,43 @@ public class ChromeDevTools implements AutoCloseable {
                         .forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) {} });
             }
         } catch (Exception ignored) {}
+    }
+
+    // --- Target discovery ---
+
+    /**
+     * Parses the /json CDP endpoint response to find a page target.
+     * The response is a JSON array of target objects. We look for targets with
+     * {@code "type":"page"} and optionally match the URL.
+     */
+    static String findPageTargetWsUrl(String jsonArray, String urlPrefix) {
+        // Split the array into individual target objects (simple heuristic)
+        // Each target is a {...} block in the array
+        int depth = 0;
+        int objStart = -1;
+        for (int i = 0; i < jsonArray.length(); i++) {
+            char c = jsonArray.charAt(i);
+            if (c == '{') {
+                if (depth == 0) objStart = i;
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0 && objStart >= 0) {
+                    var obj = jsonArray.substring(objStart, i + 1);
+                    var type = extractJsonString(obj, "type");
+                    if ("page".equals(type)) {
+                        if (urlPrefix == null) {
+                            return extractJsonString(obj, "webSocketDebuggerUrl");
+                        }
+                        var url = extractJsonString(obj, "url");
+                        if (url != null && url.startsWith(urlPrefix)) {
+                            return extractJsonString(obj, "webSocketDebuggerUrl");
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     // --- JSON helpers (minimal, no external deps) ---

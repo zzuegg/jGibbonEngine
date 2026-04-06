@@ -227,8 +227,9 @@ public class ModuleManager<T extends Time> {
                             module.getClass().getSimpleName(), e.getMessage(), e);
                 }
             } else {
-                // Run all modules in parallel, wait for all to complete before next level
-                var latch = new java.util.concurrent.CountDownLatch(updatable.size());
+                // Run all modules in this level via the executor, then wait for completion.
+                // Uses a simple counter instead of CountDownLatch for TeaVM compatibility.
+                int[] remaining = {updatable.size()};
                 for (int i = 0; i < updatable.size(); i++) {
                     Module<T> module = updatable.get(i);
                     log.trace("Updating module {} (parallel)", module.getClass().getSimpleName());
@@ -239,16 +240,23 @@ public class ModuleManager<T extends Time> {
                             log.warn("Exception during update of module {}: {}",
                                     module.getClass().getSimpleName(), e.getMessage(), e);
                         } finally {
-                            latch.countDown();
+                            synchronized (remaining) {
+                                remaining[0]--;
+                                remaining.notifyAll();
+                            }
                         }
                     });
                 }
-                try {
-                    latch.await();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    log.warn("Module update interrupted");
-                    return;
+                synchronized (remaining) {
+                    while (remaining[0] > 0) {
+                        try {
+                            remaining.wait();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            log.warn("Module update interrupted");
+                            return;
+                        }
+                    }
                 }
             }
         }

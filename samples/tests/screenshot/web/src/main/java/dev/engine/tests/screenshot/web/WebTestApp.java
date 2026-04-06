@@ -4,7 +4,6 @@ import dev.engine.graphics.common.engine.Engine;
 import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.webgpu.WgpuRenderDevice;
 import dev.engine.graphics.window.WindowDescriptor;
-import dev.engine.platform.web.WebPlatform;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuBindings;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuInit;
 import dev.engine.providers.teavm.windowing.CanvasWindowToolkit;
@@ -31,6 +30,12 @@ public class WebTestApp {
     public static void main(String[] args) {
         setStatus("initializing");
 
+        // Force-load generated NativeStruct classes — TeaVM can't discover them
+        // via Class.forName() since it doesn't support dynamic class loading.
+        dev.engine.graphics.shader.params.CameraParams_NativeStruct.init();
+        dev.engine.graphics.shader.params.EngineParams_NativeStruct.init();
+        dev.engine.graphics.shader.params.ObjectParams_NativeStruct.init();
+
         // Initialize WebGPU
         int deviceId = TeaVmWgpuInit.initAsync();
         if (deviceId == 0) {
@@ -42,9 +47,9 @@ public class WebTestApp {
         // Discover scenes (explicit registry — TeaVM can't do classpath scanning)
         var scenes = WebSceneRegistry.discoverScenes();
         setSceneCount(scenes.size());
-        setStatus("discovered " + scenes.size() + " scenes");
+        setStatus("ready");
 
-        // Create toolkit and window once
+        // Create toolkit and window once — also used for waiting
         var toolkit = new CanvasWindowToolkit();
         var windowDesc = new WindowDescriptor("WebGPU Test", WIDTH, HEIGHT);
         var window = toolkit.createWindow(windowDesc);
@@ -52,13 +57,19 @@ public class WebTestApp {
         var gpu = new TeaVmWgpuBindings();
         TeaVmWgpuBindings.configureCanvasContext("canvas", deviceId);
 
+        // Wait for the test runner to signal start (avoids race condition where
+        // the app renders scenes before the test is ready to capture them)
+        while (!isStartSignaled()) {
+            toolkit.pollEvents();
+        }
+
         for (var discovered : scenes) {
             var sceneName = discovered.name();
             setStatus("rendering: " + sceneName);
 
             // Create device and engine for this scene
             var device = new WgpuRenderDevice(window, gpu, true);
-            var platform = WebPlatform.builder().build();
+            var platform = new TestWebPlatform();
             var config = EngineConfig.builder()
                     .windowTitle("WebGPU Test")
                     .windowSize(WIDTH, HEIGHT)
@@ -84,6 +95,8 @@ public class WebTestApp {
                             java.util.List.of());
                     engine.setInputEvents(frameEvents);
                     engine.tick(1.0 / 60.0);
+                    // Yield to browser event loop between frames so WebGPU can present
+                    toolkit.pollEvents();
 
                     // After the last capture frame, signal ready and wait
                     if (frame == lastCaptureFrame) {
@@ -97,6 +110,10 @@ public class WebTestApp {
                 }
             } catch (Exception e) {
                 logError("Scene " + sceneName + " failed: " + e.getMessage());
+                // Signal the test runner that this scene failed so it can skip
+                signalCaptureReady("ERROR:" + sceneName);
+                toolkit.pollEvents();
+                waitForAck(toolkit);
             } finally {
                 engine.shutdown();
             }
@@ -133,6 +150,9 @@ public class WebTestApp {
 
     @JSBody(script = "window._captureAck = false; window._captureReady = null;")
     private static native void clearAck();
+
+    @JSBody(script = "return !!window._startRendering;")
+    private static native boolean isStartSignaled();
 
     @JSBody(script = "window._testsDone = true;")
     private static native void markDone();

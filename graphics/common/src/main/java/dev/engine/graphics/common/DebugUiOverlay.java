@@ -78,8 +78,14 @@ public class DebugUiOverlay implements AutoCloseable {
         // Load and compile the Slang shader via ShaderManager.
         // Inject the correct texture binding offset so SPIRV bindings match the descriptor layout.
         int texOffset = shaderManager.textureBindingOffset();
-        String slangSource = loadShaderResource("shaders/debug_ui.slang")
-                .replace("TEXTURE_BINDING", String.valueOf(texOffset));
+        String slangSource;
+        try {
+            slangSource = loadShaderResource("shaders/debug_ui.slang");
+        } catch (Exception e) {
+            log.warn("Debug UI shader not available — overlay disabled: {}", e.getMessage());
+            return;
+        }
+        slangSource = slangSource.replace("TEXTURE_BINDING", String.valueOf(texOffset));
         CompiledShader compiled;
         try {
             compiled = shaderManager.compileSlangSource(slangSource, "debug_ui", VERTEX_FORMAT);

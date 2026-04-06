@@ -37,7 +37,7 @@ jobs:
           chrome-version: stable
         id: setup-chrome
 
-      - name: Compile and build web test app
+      - name: Build web test app
         id: build
         run: |
           set +e
@@ -84,3 +84,29 @@ jobs:
           path: samples/tests/screenshot/web/build/screenshots/
           retention-days: 30
           if-no-files-found: ignore
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-test-results
+          path: samples/tests/screenshot/web/build/test-results/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Test summary
+        if: always()
+        run: |
+          if [ -f samples/tests/screenshot/web/build/test-results/test/TEST-dev.engine.tests.screenshot.web.WebScreenshotTest.xml ]; then
+            echo "## Web Screenshot Test Results" >> $GITHUB_STEP_SUMMARY
+            # Parse JUnit XML for summary
+            TESTS=$(grep -oP 'tests="\K[^"]+' samples/tests/screenshot/web/build/test-results/test/TEST-dev.engine.tests.screenshot.web.WebScreenshotTest.xml | head -1)
+            SKIPPED=$(grep -oP 'skipped="\K[^"]+' samples/tests/screenshot/web/build/test-results/test/TEST-dev.engine.tests.screenshot.web.WebScreenshotTest.xml | head -1)
+            FAILURES=$(grep -oP 'failures="\K[^"]+' samples/tests/screenshot/web/build/test-results/test/TEST-dev.engine.tests.screenshot.web.WebScreenshotTest.xml | head -1)
+            echo "- Tests: $TESTS" >> $GITHUB_STEP_SUMMARY
+            echo "- Skipped: $SKIPPED" >> $GITHUB_STEP_SUMMARY
+            echo "- Failures: $FAILURES" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## Web Screenshot Tests" >> $GITHUB_STEP_SUMMARY
+            echo "No test results found (tests may have been skipped due to WebGPU unavailability)" >> $GITHUB_STEP_SUMMARY
+          fi

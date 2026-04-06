@@ -48,9 +48,9 @@ public class GpuResourceManager {
     private final AtomicInteger liveSamplers = new AtomicInteger();
     private final AtomicInteger liveVertexInputs = new AtomicInteger();
 
-    // Deferred deletion queues (thread-safe for concurrent destroy calls)
-    private volatile java.util.Queue<Runnable> deletionQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
-    private volatile java.util.Queue<Runnable> pendingQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    // Deferred deletion queues — synchronized for thread safety, ArrayDeque for TeaVM compatibility
+    private java.util.Queue<Runnable> deletionQueue = new java.util.ArrayDeque<>();
+    private java.util.Queue<Runnable> pendingQueue = new java.util.ArrayDeque<>();
 
     public GpuResourceManager(RenderDevice device) {
         this.device = device;
@@ -76,7 +76,7 @@ public class GpuResourceManager {
         return device.writeBuffer(buffer, offset, length);
     }
 
-    public void destroyBuffer(Handle<BufferResource> buffer) {
+    public synchronized void destroyBuffer(Handle<BufferResource> buffer) {
         deletionQueue.add(() -> {
             device.destroyBuffer(buffer);
             liveBuffers.decrementAndGet();
@@ -95,7 +95,7 @@ public class GpuResourceManager {
         device.uploadTexture(texture, pixels);
     }
 
-    public void destroyTexture(Handle<TextureResource> texture) {
+    public synchronized void destroyTexture(Handle<TextureResource> texture) {
         deletionQueue.add(() -> {
             device.destroyTexture(texture);
             liveTextures.decrementAndGet();
@@ -114,7 +114,7 @@ public class GpuResourceManager {
         return device.getRenderTargetColorTexture(rt, index);
     }
 
-    public void destroyRenderTarget(Handle<RenderTargetResource> rt) {
+    public synchronized void destroyRenderTarget(Handle<RenderTargetResource> rt) {
         deletionQueue.add(() -> {
             device.destroyRenderTarget(rt);
             liveRenderTargets.decrementAndGet();
@@ -129,7 +129,7 @@ public class GpuResourceManager {
         return handle;
     }
 
-    public void destroyPipeline(Handle<PipelineResource> pipeline) {
+    public synchronized void destroyPipeline(Handle<PipelineResource> pipeline) {
         deletionQueue.add(() -> {
             device.destroyPipeline(pipeline);
             livePipelines.decrementAndGet();
@@ -144,7 +144,7 @@ public class GpuResourceManager {
         return handle;
     }
 
-    public void destroySampler(Handle<SamplerResource> sampler) {
+    public synchronized void destroySampler(Handle<SamplerResource> sampler) {
         deletionQueue.add(() -> {
             device.destroySampler(sampler);
             liveSamplers.decrementAndGet();
@@ -159,7 +159,7 @@ public class GpuResourceManager {
         return handle;
     }
 
-    public void destroyVertexInput(Handle<VertexInputResource> vertexInput) {
+    public synchronized void destroyVertexInput(Handle<VertexInputResource> vertexInput) {
         deletionQueue.add(() -> {
             device.destroyVertexInput(vertexInput);
             liveVertexInputs.decrementAndGet();
@@ -172,11 +172,11 @@ public class GpuResourceManager {
      * Processes the deferred deletion queue.
      * Call once per frame after GPU submission is complete (after endFrame).
      */
-    public void processDeferred() {
+    public synchronized void processDeferred() {
         // Swap queues — pending from last frame is now safe to delete
         var toDelete = pendingQueue;
         pendingQueue = deletionQueue;
-        deletionQueue = new java.util.concurrent.ConcurrentLinkedQueue<>();
+        deletionQueue = new java.util.ArrayDeque<>();
 
         Runnable action;
         while ((action = toDelete.poll()) != null) {
@@ -204,7 +204,7 @@ public class GpuResourceManager {
      * Reports any leaked resources and destroys everything immediately.
      * Call during engine shutdown.
      */
-    public void shutdown() {
+    public synchronized void shutdown() {
         // Flush both queues immediately
         for (var action : deletionQueue) action.run();
         deletionQueue.clear();

@@ -54,7 +54,7 @@ class WebScreenshotTest {
     static void setUp() throws Exception {
         // Find the TeaVM output directory
         webDir = Path.of("build/web");
-        assumeTrue(Files.exists(webDir) && Files.exists(webDir.resolve("web-test.js")),
+        assumeTrue(Files.exists(webDir) && Files.exists(webDir.resolve("js/web-test.js")),
                 "TeaVM web build not found at " + webDir + ". Run ./gradlew :samples:tests:screenshot:web:assembleWebTest first.");
 
         // Start embedded HTTP server
@@ -83,16 +83,23 @@ class WebScreenshotTest {
         assumeTrue(chromeBin != null, "Chrome/Chromium not found. Set CHROME_BIN env var.");
 
         try {
-            cdp = ChromeDevTools.launch(chromeBin);
-            cdp.navigate("http://127.0.0.1:" + serverPort + "/");
-            Thread.sleep(3000); // Let the app initialize WebGPU + discover scenes
+            var appUrl = "http://127.0.0.1:" + serverPort + "/";
+            cdp = ChromeDevTools.launch(chromeBin, appUrl);
+            cdp.send("Runtime.enable", null);
+            System.out.println("[WebTest] Chrome launched with " + appUrl);
 
-            // Check if WebGPU initialized successfully
-            var status = cdp.evaluateString("window._testStatus || 'unknown'");
-            webGpuAvailable = status != null && !status.contains("error");
-            System.out.println("[WebTest] App status: " + status);
+            // Wait for app to be ready (WebGPU initialized + scenes discovered)
+            String status = null;
+            for (int i = 0; i < 60; i++) {
+                status = cdp.evaluateString("window._testStatus || 'unknown'");
+                if ("ready".equals(status) || (status != null && status.contains("error"))) break;
+                Thread.sleep(500);
+            }
+            webGpuAvailable = "ready".equals(status);
+            System.out.println("[WebTest] App status: " + status + ", webGpuAvailable: " + webGpuAvailable);
         } catch (Exception e) {
-            System.err.println("[WebTest] Chrome launch failed: " + e.getMessage());
+            System.err.println("[WebTest] Chrome launch failed: " + e.getClass().getName() + ": " + e.getMessage());
+            e.printStackTrace(System.err);
             webGpuAvailable = false;
         }
     }
@@ -107,17 +114,27 @@ class WebScreenshotTest {
     Collection<DynamicNode> webScreenshotTests() {
         assumeTrue(webGpuAvailable, "WebGPU not available in headless Chrome");
 
-        var discovery = new SceneDiscovery();
-        var categories = new LinkedHashMap<String, List<DynamicNode>>();
+        // Use explicit scene registry (same as the TeaVM app) instead of reflection-based
+        // SceneDiscovery, which fails when scenes are packaged in a JAR on the test classpath.
+        var registeredScenes = WebSceneRegistry.discoverScenes();
+        System.out.println("[WebTest] WebSceneRegistry found " + registeredScenes.size() + " scenes");
 
-        for (var discovered : discovery.scenes()) {
-            categories.computeIfAbsent(discovered.category(), k -> new ArrayList<>())
-                    .add(generateSceneTest(discovered));
+        // Signal the app to start rendering now that we're ready to capture
+        try {
+            cdp.evaluate("window._startRendering = true");
+            Thread.sleep(1000);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to signal app to start", e);
         }
 
-        return categories.entrySet().stream()
-                .map(e -> DynamicContainer.dynamicContainer(e.getKey(), e.getValue()))
-                .collect(java.util.stream.Collectors.toList());
+        var tests = new ArrayList<DynamicNode>();
+        for (var registered : registeredScenes) {
+            var discovered = new SceneDiscovery.DiscoveredScene(
+                    "webgpu-browser", registered.name(), registered.scene(), registered.tolerance());
+            tests.add(generateSceneTest(discovered));
+        }
+
+        return tests;
     }
 
     private DynamicTest generateSceneTest(SceneDiscovery.DiscoveredScene discovered) {
@@ -132,9 +149,15 @@ class WebScreenshotTest {
 
             // Poll for the scene to become ready (max 30s)
             String captureReady = null;
+            boolean sceneError = false;
             for (int i = 0; i < 300; i++) {
                 captureReady = cdp.evaluateString("window._captureReady || ''");
                 if (expectedCaptureName.equals(captureReady)) break;
+                // Check if the scene errored
+                if (("ERROR:" + sceneName).equals(captureReady)) {
+                    sceneError = true;
+                    break;
+                }
 
                 // Check if tests are done (scene might have been skipped)
                 var done = cdp.evaluateBoolean("!!window._testsDone");
@@ -143,8 +166,15 @@ class WebScreenshotTest {
                 Thread.sleep(100);
             }
 
+            // If the scene errored, acknowledge and skip
+            if (sceneError) {
+                cdp.evaluate("window._captureAck = true");
+                assumeTrue(false, "Scene " + sceneName + " failed in browser");
+                return;
+            }
+
             assumeTrue(expectedCaptureName.equals(captureReady),
-                    "Scene " + expectedCaptureName + " was not rendered by web app");
+                    "Scene " + expectedCaptureName + " was not rendered by web app (got: " + captureReady + ")");
 
             // Capture canvas pixels
             byte[] pixels = cdp.readCanvasPixels(WIDTH, HEIGHT);

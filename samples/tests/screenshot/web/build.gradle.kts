@@ -5,8 +5,8 @@ plugins {
 val teavmVersion = "0.13.1"
 
 // SLF4J is incompatible with TeaVM's classlib — teavm-windowing provides its own shim.
-// Must match the pattern used in platforms/web.
-configurations.all {
+// Only exclude from main (TeaVM-compiled) configurations, not test (JVM) configurations.
+configurations.matching { !it.name.startsWith("test") }.configureEach {
     exclude(group = "org.slf4j", module = "slf4j-api")
 }
 
@@ -19,7 +19,6 @@ dependencies {
     implementation(project(":graphics:webgpu"))
     implementation(project(":providers:teavm-webgpu"))
     implementation(project(":providers:teavm-windowing"))
-    implementation(project(":platforms:web"))
     implementation(project(":ui"))
 
     implementation("org.teavm:teavm-jso:$teavmVersion")
@@ -29,6 +28,9 @@ dependencies {
     // Test source set: JUnit runner with CDP client (runs on JVM)
     testImplementation(project(":samples:tests:screenshot:scenes"))
     testImplementation(project(":graphics:api"))
+    testImplementation(project(":graphics:common"))
+    testRuntimeOnly("org.slf4j:slf4j-api:2.0.16")
+    testRuntimeOnly("ch.qos.logback:logback-classic:1.5.6")
 }
 
 teavm {
@@ -55,9 +57,19 @@ tasks.register<Copy>("assembleWebTest") {
     val webPlatformWebapp = project(":platforms:web").file("src/main/webapp")
     if (webPlatformWebapp.exists()) {
         from(webPlatformWebapp) {
-            include("slang-wasm.mjs", "slang-wasm.wasm")
+            include("slang/**")
         }
     }
+}
+
+tasks.register<JavaExec>("saveReferences") {
+    group = "verification"
+    description = "Captures screenshots from headless Chrome and saves as references"
+    dependsOn("assembleWebTest")
+    classpath = sourceSets.test.get().runtimeClasspath
+    mainClass = "dev.engine.tests.screenshot.web.SaveWebReferences"
+    workingDir = projectDir
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 tasks.test {
@@ -70,4 +82,8 @@ tasks.test {
     outputs.upToDateWhen { false }
     // Set working dir to project dir so build/web is findable
     workingDir = projectDir
+    testLogging {
+        showStandardStreams = true
+        events("passed", "skipped", "failed")
+    }
 }
