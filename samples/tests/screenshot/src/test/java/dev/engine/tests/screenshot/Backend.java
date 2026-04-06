@@ -56,14 +56,16 @@ public enum Backend {
             return (windowDesc, config) -> {
                 var toolkit = new GlfwWindowToolkit(GlfwWindowToolkit.NO_API_HINTS);
                 var window = toolkit.createWindow(windowDesc);
-                var device = new WgpuRenderDevice(window, new dev.engine.providers.wgpu.FfmWgpuBindings());
+                var device = new WgpuRenderDevice(window, new JWebGpuBindings());
                 return new GraphicsBackend(toolkit, window, device);
             };
         }
 
         @Override
         public boolean isAvailable() {
-            return new dev.engine.providers.wgpu.FfmWgpuBindings().isAvailable();
+            // Disabled: wgpu-native crashes (SIGABRT) during device cleanup.
+            // Re-enable when jwebgpu/wgpu-native shutdown is fixed.
+            return false;
         }
     };
 
