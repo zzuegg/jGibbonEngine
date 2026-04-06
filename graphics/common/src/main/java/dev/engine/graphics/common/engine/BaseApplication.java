@@ -67,8 +67,7 @@ public abstract class BaseApplication {
      */
     public void launch(EngineConfig config) {
         try {
-            var windowDesc = new WindowDescriptor(
-                    config.windowTitle(), config.windowSize().x(), config.windowSize().y());
+            var windowDesc = config.window();
             dev.engine.graphics.GraphicsBackend backend;
             if (config.graphics() != null) {
                 backend = config.graphics().create(windowDesc);
