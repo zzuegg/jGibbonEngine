@@ -31,13 +31,29 @@ public final class VulkanBackend {
             WindowToolkit toolkit,
             SurfaceCreator surfaceCreator,
             VkBindings vk) {
+        return factory(toolkit, surfaceCreator, vk, VkBindings.VK_PRESENT_MODE_FIFO_KHR);
+    }
+
+    /**
+     * Creates a Vulkan backend factory with a specific present mode.
+     *
+     * @param presentMode one of {@code VkBindings.VK_PRESENT_MODE_FIFO_KHR} (vsync),
+     *                    {@code VK_PRESENT_MODE_MAILBOX_KHR} (triple-buffered),
+     *                    or {@code VK_PRESENT_MODE_IMMEDIATE_KHR} (no vsync)
+     */
+    public static GraphicsBackendFactory factory(
+            WindowToolkit toolkit,
+            SurfaceCreator surfaceCreator,
+            VkBindings vk,
+            int presentMode) {
         return (windowDesc, config) -> {
             var window = toolkit.createWindow(windowDesc);
             var extensions = surfaceCreator.requiredInstanceExtensions();
             long windowHandle = window.nativeHandle();
             var device = new VkRenderDevice(vk, extensions,
                     instance -> surfaceCreator.createSurface(instance, windowHandle),
-                    window.width(), window.height());
+                    window.width(), window.height(),
+                    VkBindings.VK_FORMAT_B8G8R8A8_UNORM, presentMode);
             return new GraphicsBackend(toolkit, window, device);
         };
     }

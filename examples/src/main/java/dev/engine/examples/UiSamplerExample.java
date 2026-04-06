@@ -8,6 +8,7 @@ import dev.engine.graphics.common.engine.EngineConfig;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.GraphicsBackendFactory;
 import dev.engine.graphics.opengl.OpenGlBackend;
+import dev.engine.graphics.vulkan.VkBindings;
 import dev.engine.graphics.vulkan.VulkanBackend;
 import dev.engine.platform.desktop.DesktopPlatform;
 import dev.engine.providers.lwjgl.graphics.vulkan.LwjglVkBindings;
@@ -491,7 +492,7 @@ public class UiSamplerExample extends BaseApplication {
                 public long createSurface(long instance, long windowHandle) {
                     return GlfwWindowToolkit.createVulkanSurfaceFromHandle(instance, windowHandle);
                 }
-            }, new LwjglVkBindings());
+            }, new LwjglVkBindings(), VkBindings.VK_PRESENT_MODE_IMMEDIATE_KHR);
             default -> OpenGlBackend.factory(toolkit,
                     new dev.engine.providers.lwjgl.graphics.opengl.LwjglGlBindings());
         };
