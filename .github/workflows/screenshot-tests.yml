@@ -10,6 +10,10 @@ concurrency:
   group: screenshot-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   web-screenshot-tests:
     runs-on: ubuntu-latest
@@ -33,43 +37,44 @@ jobs:
           chrome-version: stable
         id: setup-chrome
 
-      - name: Compile scenes module
-        run: ./gradlew :samples:tests:screenshot:scenes:compileJava --no-daemon --stacktrace
-
-      - name: Compile web module (Java)
+      - name: Compile and build web test app
+        id: build
         run: |
-          ./gradlew :samples:tests:screenshot:web:compileJava --no-daemon --stacktrace 2>&1 | tee compile-web.log
-          echo "=== COMPILE EXIT CODE: $? ==="
+          set +e
+          ./gradlew :samples:tests:screenshot:web:assembleWebTest --no-daemon --stacktrace 2>&1 | tee build.log
+          BUILD_EXIT=$?
+          set -e
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "build_failed=true" >> $GITHUB_OUTPUT
+            echo "## Build Failed" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -80 build.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
 
-      - name: Upload compile log on failure
-        if: failure()
-        run: |
-          echo "::group::Compile web module log"
-          cat compile-web.log || true
-          echo "::endgroup::"
-          echo "--- Last 50 lines ---"
-          tail -50 compile-web.log || true
-
-      - name: Generate JavaScript (TeaVM)
-        run: ./gradlew :samples:tests:screenshot:web:generateJavaScript --no-daemon --stacktrace 2>&1 | tee build-teavm.log || true
-
-      - name: Assemble web test app
-        run: ./gradlew :samples:tests:screenshot:web:assembleWebTest --no-daemon --stacktrace
+      - name: Post build error to PR
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const log = fs.readFileSync('build.log', 'utf8');
+            const lines = log.split('\n');
+            const last80 = lines.slice(-80).join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## Build Failed\n\`\`\`\n${last80}\n\`\`\``
+            });
 
       - name: Run web screenshot tests
+        if: success()
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
         run: ./gradlew :samples:tests:screenshot:web:test --no-daemon --stacktrace
         continue-on-error: true
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: build-teavm.log
-          retention-days: 7
-          if-no-files-found: ignore
 
       - name: Upload web screenshots
         if: always()
