@@ -64,3 +64,12 @@ include("samples:tutorials")
 include("samples:examples")
 include("samples:tests:screenshot")
 project(":samples:tests:screenshot").projectDir = file("samples/tests/screenshot")
+
+include("samples:tests:screenshot:scenes")
+project(":samples:tests:screenshot:scenes").projectDir = file("samples/tests/screenshot/scenes")
+
+include("samples:tests:screenshot:desktop")
+project(":samples:tests:screenshot:desktop").projectDir = file("samples/tests/screenshot/desktop")
+
+include("samples:tests:screenshot:web")
+project(":samples:tests:screenshot:web").projectDir = file("samples/tests/screenshot/web")

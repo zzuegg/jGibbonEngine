@@ -1,0 +1,51 @@
+name: Screenshot Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: screenshot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web-screenshot-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Grant Gradle wrapper execute permission
+        run: chmod +x gradlew
+
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+        id: setup-chrome
+
+      - name: Build web test app (TeaVM)
+        run: ./gradlew :samples:tests:screenshot:web:assembleWebTest --no-daemon
+
+      - name: Run web screenshot tests
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: ./gradlew :samples:tests:screenshot:web:test --no-daemon
+        continue-on-error: true  # Don't fail the build until references are established
+
+      - name: Upload web screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-screenshots
+          path: samples/tests/screenshot/web/build/screenshots/
+          retention-days: 30

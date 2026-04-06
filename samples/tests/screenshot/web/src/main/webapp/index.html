@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Screenshot Test Runner</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+<canvas id="canvas" width="256" height="256"></canvas>
+<script>
+    // Pre-init: check WebGPU support
+    if (!navigator.gpu) {
+        window._testStatus = 'error: WebGPU not supported';
+        window._testsDone = true;
+        document.body.innerText = 'WebGPU not supported in this browser.';
+    }
+</script>
+<script>
+    // Load Slang WASM if available
+    window._slangModule = null;
+    async function loadSlang() {
+        try {
+            const mod = await import('./slang-wasm.mjs');
+            const slang = await mod.default();
+            window._slangModule = slang;
+            console.log('[WebTest] Slang WASM loaded');
+        } catch (e) {
+            console.warn('[WebTest] Slang WASM not available, shader compilation may fail:', e);
+        }
+    }
+
+    async function startApp() {
+        await loadSlang();
+        // Load TeaVM-compiled test app
+        const script = document.createElement('script');
+        script.src = 'web-test.js';
+        script.onload = function() {
+            if (typeof main === 'function') main();
+        };
+        document.head.appendChild(script);
+    }
+    startApp();
+</script>
+</body>
+</html>
