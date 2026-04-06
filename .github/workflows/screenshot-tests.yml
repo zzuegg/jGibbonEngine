@@ -41,7 +41,7 @@ jobs:
         id: build
         run: |
           set +e
-          ./gradlew :samples:tests:screenshot:web:assembleWebTest --no-daemon --stacktrace 2>&1 | tee build.log
+          ./gradlew :samples:tests:screenshot:screenshot-web:assembleWebTest --no-daemon --stacktrace 2>&1 | tee build.log
           BUILD_EXIT=$?
           set -e
           if [ $BUILD_EXIT -ne 0 ]; then
@@ -73,7 +73,7 @@ jobs:
         if: success()
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-        run: ./gradlew :samples:tests:screenshot:web:test --no-daemon --stacktrace
+        run: ./gradlew :samples:tests:screenshot:screenshot-web:test --no-daemon --stacktrace
         continue-on-error: true
 
       - name: Upload web screenshots
