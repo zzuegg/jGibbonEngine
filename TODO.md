@@ -76,6 +76,12 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [x] **NativeResource not used by GPU resources** — Fixed: Handle<T> now supports Cleaner registration. GpuResourceManager registers cleanup actions on all created handles. Leaked handles are automatically cleaned by GC with warn-level logging.
 - [x] **GpuResourceManager deferred deletion delay doesn't match frames-in-flight** — Fixed: replaced double-buffer with ring of N+1 queues (N = FRAMES_IN_FLIGHT). Vulkan reports MAX_FRAMES_IN_FLIGHT=2, so resources are deferred 3 frames. Added DeviceCapability.FRAMES_IN_FLIGHT.
 
+## Presentation / VSync
+
+- [ ] **Present mode configurable via GraphicsConfig** — Currently each backend and example hardcodes present mode. Add `presentMode(PresentMode)` to GraphicsConfig/EngineConfig so it flows through to Vulkan, WebGPU, and OpenGL (swap interval). Enum: FIFO (vsync), IMMEDIATE (no vsync), MAILBOX (triple-buffered).
+- [ ] **WebGPU: use Immediate on X11, Mailbox on Wayland** — Currently always falls back to Mailbox. Should detect the surface type and use Immediate when supported (X11/XWayland).
+- [ ] **Wayland Vulkan vsync cap** — On native Wayland, `vkQueuePresentKHR` blocks to refresh rate regardless of present mode. Documented limitation, no engine-side fix.
+
 ## API Tracing / Debugging
 
 - [x] **WebGPU API tracing** — Implemented: `TracingWgpuBindings` decorator logs every WebGPU API call at TRACE level with full parameters.
