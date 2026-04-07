@@ -32,12 +32,25 @@ public final class ReportBuilder {
             byCategory.computeIfAbsent(scene.category, k -> new ArrayList<>()).add(scene);
         }
 
+        // Compute per-scene status: "failed", "partial", "passed"
+        var sceneStatuses = new LinkedHashMap<String, String>();
+        for (var scene : manifest.scenes) {
+            boolean hasFail = manifest.comparisons.stream()
+                    .anyMatch(c -> c.scene.equals(scene.name) && "fail".equals(c.status));
+            boolean hasKnown = manifest.comparisons.stream()
+                    .anyMatch(c -> c.scene.equals(scene.name) && "known_limitation".equals(c.status));
+            boolean hasError = manifest.runs.stream()
+                    .anyMatch(r -> r.scene.equals(scene.name) && !"success".equals(r.status));
+            if (hasFail) sceneStatuses.put(scene.name, "failed");
+            else if (hasKnown || hasError) sceneStatuses.put(scene.name, "partial");
+            else sceneStatuses.put(scene.name, "passed");
+        }
+
         // Count stats
         long totalScenes = manifest.scenes.size();
-        long failCount = manifest.scenes.stream().filter(s ->
-                manifest.comparisons.stream().anyMatch(c ->
-                        c.scene.equals(s.name) && "fail".equals(c.status))).count();
-        long passCount = totalScenes - failCount;
+        long failCount = sceneStatuses.values().stream().filter("failed"::equals).count();
+        long partialCount = sceneStatuses.values().stream().filter("partial"::equals).count();
+        long passCount = sceneStatuses.values().stream().filter("passed"::equals).count();
         long totalRuns = manifest.runs.size();
         long crashes = manifest.runs.stream().filter(r -> "crash".equals(r.status)).count();
 
@@ -87,6 +100,7 @@ public final class ReportBuilder {
         sb.append("    <div class=\"stats-grid\">\n");
         appendStat(sb, String.valueOf(totalScenes), "Scenes");
         appendStat(sb, String.valueOf(passCount), "Passed", "pass");
+        if (partialCount > 0) appendStat(sb, String.valueOf(partialCount), "Partial", "partial");
         if (failCount > 0) appendStat(sb, String.valueOf(failCount), "Failed", "fail");
         appendStat(sb, String.valueOf(totalRuns), "Runs");
         if (crashes > 0) appendStat(sb, String.valueOf(crashes), "Crashes", "fail");
@@ -100,6 +114,9 @@ public final class ReportBuilder {
         sb.append("    <span class=\"filter-label\">Filter</span>\n");
         sb.append("    <button class=\"filter-btn active\" onclick=\"setFilter('all',this)\">All</button>\n");
         sb.append("    <button class=\"filter-btn\" onclick=\"setFilter('passed',this)\">Passed</button>\n");
+        if (partialCount > 0) {
+            sb.append("    <button class=\"filter-btn\" onclick=\"setFilter('partial',this)\">Partial</button>\n");
+        }
         if (failCount > 0) {
             sb.append("    <button class=\"filter-btn\" onclick=\"setFilter('failed',this)\">Failed</button>\n");
         }
@@ -118,7 +135,7 @@ public final class ReportBuilder {
 
             sb.append("    <div class=\"card-grid\">\n");
             for (var scene : entry.getValue()) {
-                appendCard(sb, scene, manifest, allBackends);
+                appendCard(sb, scene, manifest, allBackends, sceneStatuses);
             }
             sb.append("    </div>\n");
             sb.append("  </div>\n");
@@ -143,12 +160,14 @@ public final class ReportBuilder {
     }
 
     private static void appendCard(StringBuilder sb, Manifest.Scene scene,
-                                    Manifest manifest, List<String> allBackends) {
-        boolean failed = manifest.comparisons.stream()
-                .anyMatch(c -> c.scene.equals(scene.name) && "fail".equals(c.status));
-        boolean hasError = manifest.runs.stream()
-                .anyMatch(r -> r.scene.equals(scene.name) && !"success".equals(r.status));
-        var statusClass = failed ? "card-fail" : hasError ? "card-warn" : "card-pass";
+                                    Manifest manifest, List<String> allBackends,
+                                    Map<String, String> sceneStatuses) {
+        var status = sceneStatuses.getOrDefault(scene.name, "passed");
+        var statusClass = switch (status) {
+            case "failed" -> "card-fail";
+            case "partial" -> "card-partial";
+            default -> "card-pass";
+        };
 
         // Find first available screenshot for thumbnail (prefer opengl)
         String thumbnail = null;
@@ -161,7 +180,8 @@ public final class ReportBuilder {
         }
 
         sb.append("      <div class=\"card ").append(statusClass)
-          .append(failed ? " failed" : "").append("\" onclick=\"showDetail('")
+          .append("\" data-status=\"").append(status)
+          .append("\" onclick=\"showDetail('")
           .append(esc(scene.name)).append("')\">\n");
 
         // Thumbnail
@@ -325,6 +345,7 @@ public final class ReportBuilder {
               font-size: 2.25rem; font-weight: 700; color: var(--orange);
             }
             .stat-value.pass { color: var(--green); }
+            .stat-value.partial { color: var(--orange); }
             .stat-value.fail { color: var(--red); }
             .stat-label { font-size: 0.875rem; color: var(--text-muted); }
 
@@ -375,8 +396,10 @@ public final class ReportBuilder {
               border-color: var(--orange); transform: translateY(-2px);
               box-shadow: 0 8px 24px rgba(249,115,22,0.12);
             }
-            .card.failed { border-color: rgba(248,113,113,0.4); }
-            .card.failed:hover { border-color: var(--red); box-shadow: 0 8px 24px rgba(248,113,113,0.15); }
+            .card-fail { border-color: rgba(248,113,113,0.4); }
+            .card-fail:hover { border-color: var(--red); box-shadow: 0 8px 24px rgba(248,113,113,0.15); }
+            .card-partial { border-color: rgba(249,115,22,0.4); }
+            .card-partial:hover { border-color: var(--orange); box-shadow: 0 8px 24px rgba(249,115,22,0.15); }
             .card.hidden { display: none; }
 
             .card-thumbnail {
@@ -499,6 +522,26 @@ public final class ReportBuilder {
             .status-skip { color: var(--text-subtle); }
 
             /* Detail: error block */
+            /* Known limitations callout */
+            .known-limitations-callout {
+              background: var(--orange-dim); border: 1px solid rgba(249,115,22,0.3);
+              border-left: 3px solid var(--orange); border-radius: var(--radius);
+              padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+            }
+            .callout-title {
+              font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem;
+              font-weight: 600; color: var(--orange); margin-bottom: 0.5rem;
+              text-transform: uppercase; letter-spacing: 0.05em;
+            }
+            .callout-item {
+              font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.25rem;
+            }
+            .callout-backend {
+              font-family: 'JetBrains Mono', monospace; font-weight: 600;
+              color: var(--orange-light); background: rgba(249,115,22,0.2);
+              padding: 1px 5px; border-radius: 3px; font-size: 0.8rem;
+            }
+
             .error-block {
               background: var(--bg-elevated); border: 1px solid var(--border-subtle);
               border-left: 3px solid var(--red); border-radius: var(--radius);
@@ -530,9 +573,9 @@ public final class ReportBuilder {
               document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
               btn.classList.add('active');
               document.querySelectorAll('.card').forEach(c => {
+                var status = c.dataset.status;
                 if (mode === 'all') c.classList.remove('hidden');
-                else if (mode === 'failed') c.classList.toggle('hidden', !c.classList.contains('failed'));
-                else if (mode === 'passed') c.classList.toggle('hidden', c.classList.contains('failed'));
+                else c.classList.toggle('hidden', status !== mode);
               });
               document.querySelectorAll('.category').forEach(cat => {
                 var visible = cat.querySelectorAll('.card:not(.hidden)').length;
@@ -578,6 +621,19 @@ public final class ReportBuilder {
             sb.append("</div>\n");
 
             sb.append("<div class=\"detail-body\">\n");
+
+            // Known limitations callout (always shown if any exist)
+            if (!scene.knownLimitations.isEmpty()) {
+                sb.append("<div class=\"known-limitations-callout\">\n");
+                sb.append("  <div class=\"callout-title\">Known Limitations</div>\n");
+                for (var kl : scene.knownLimitations) {
+                    sb.append("  <div class=\"callout-item\">");
+                    sb.append("<span class=\"callout-backend\">").append(esc(kl.backend())).append("</span> ");
+                    sb.append(esc(kl.reason()));
+                    sb.append("</div>\n");
+                }
+                sb.append("</div>\n");
+            }
 
             // Screenshots side by side
             var runs = manifest.runs.stream()
@@ -641,7 +697,7 @@ public final class ReportBuilder {
             if (!crossComps.isEmpty()) {
                 sb.append("<div class=\"detail-section-title\">Cross-Backend Comparison</div>\n");
                 sb.append("<table class=\"detail-table\">\n");
-                sb.append("<tr><th>Backends</th><th>Status</th><th>Diff</th><th>Threshold</th></tr>\n");
+                sb.append("<tr><th>Backends</th><th>Status</th><th>Diff</th><th>Threshold</th><th>Reason</th></tr>\n");
                 for (var comp : crossComps) {
                     var statusClass = switch (comp.status) {
                         case "fail" -> "status-fail";
@@ -657,6 +713,8 @@ public final class ReportBuilder {
                     sb.append("<td class=\"").append(statusClass).append("\">").append(statusLabel).append("</td>");
                     sb.append("<td>").append(String.format("%.4f%%", comp.diffPercent)).append("</td>");
                     sb.append("<td>").append(comp.tolerance != null ? String.format("%.4f%%", comp.tolerance.maxDiffPercent()) : "—").append("</td>");
+                    sb.append("<td class=\"").append(statusClass).append("\">")
+                      .append(comp.reason != null ? esc(comp.reason) : "—").append("</td>");
                     sb.append("</tr>\n");
                 }
                 sb.append("</table>\n");
