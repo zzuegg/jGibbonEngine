@@ -74,7 +74,9 @@ public class WebRunner extends AbstractTestRunner {
                         "Message: " + msg + "\nLogs: " + extractStringValue(logsResult));
             }
 
-            // Dump browser console logs for debugging CI issues
+            // Dump diagnostics for debugging CI issues
+            String testMsg = cdp.evaluateJs("window._testMessage || ''");
+            System.out.println("  Status: " + extractStringValue(testMsg));
             String logs = cdp.evaluateJs(
                     "JSON.stringify((window._allLogs||[]).map(function(l){return l.t+': '+l.m}).slice(-10))");
             System.out.println("  Console: " + extractStringValue(logs));

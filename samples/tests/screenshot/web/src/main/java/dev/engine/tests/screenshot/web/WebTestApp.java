@@ -125,9 +125,12 @@ public class WebTestApp {
                 // drawingBuffer which is only valid before yielding to the browser.
                 // After requestAnimationFrame yields, the buffer is swapped/cleared.
                 String dataUrl = canvasToDataURL("canvas");
+                int dataLen = dataUrl != null ? dataUrl.length() : 0;
+                String gpuInfo = getGpuDiagnostics();
                 setScreenshotData(dataUrl);
-                setTestStatus("done", "Captured frame " + frame);
-                System.out.println("[WebTest] Screenshot captured at frame " + frame);
+                setTestStatus("done", "frame=" + frame + " dataUrl.len=" + dataLen + " gpu=" + gpuInfo);
+                System.out.println("[WebTest] Screenshot captured at frame " + frame
+                        + " dataUrl.len=" + dataLen + " gpu=" + gpuInfo);
                 return;
             }
 
@@ -168,6 +171,20 @@ public class WebTestApp {
         }
     """)
     private static native void waitForGpuFlushJS(VoidCallback callback);
+
+    @JSBody(script = """
+        try {
+            var deviceId = window._wgpuDevice || 0;
+            var device = window._wgpu ? window._wgpu[deviceId] : null;
+            var canvas = document.getElementById('canvas');
+            var ctx = canvas ? canvas.getContext('webgpu') : null;
+            return 'device=' + (device ? 'yes' : 'no')
+                + ' ctx=' + (ctx ? 'yes' : 'no')
+                + ' canvas=' + (canvas ? canvas.width + 'x' + canvas.height : 'null')
+                + ' ctxCanvas=' + (ctx && ctx.canvas ? ctx.canvas.width + 'x' + ctx.canvas.height : 'null');
+        } catch(e) { return 'error:' + e.message; }
+    """)
+    private static native String getGpuDiagnostics();
 
     @JSBody(params = "name", script = """
         var url = new URL(window.location.href);
