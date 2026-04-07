@@ -108,6 +108,8 @@ public class DesktopRunner extends AbstractTestRunner {
 
         var pb = new ProcessBuilder(args);
         pb.redirectErrorStream(false);
+        // Inherit working directory so Slang native library can be found at tools/lib/
+        pb.directory(new File(System.getProperty("user.dir")));
 
         // jemalloc preload to avoid glibc heap corruption with Slang COM objects
         var jemallocPaths = List.of(

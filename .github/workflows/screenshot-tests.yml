@@ -43,6 +43,15 @@ jobs:
             mesa-utils libegl-mesa0 libgl1-mesa-dri libglx-mesa0 \
             libvulkan1 mesa-vulkan-drivers xvfb libjemalloc2
 
+      - name: Download Slang compiler
+        run: |
+          SLANG_VERSION="2026.5.2"
+          SLANG_URL="https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/slang-${SLANG_VERSION}-linux-x86_64.tar.gz"
+          mkdir -p tools/bin tools/lib
+          curl -sL "$SLANG_URL" | tar xz -C tools/ --strip-components=1
+          ls tools/lib/libslang* || echo "Slang lib not found"
+          ls tools/bin/slangc || echo "slangc not found"
+
       - name: Run screenshot pipeline
         continue-on-error: true
         run: |

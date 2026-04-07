@@ -41,7 +41,10 @@ public final class ReportBuilder {
                     .anyMatch(c -> c.scene.equals(scene.name) && "known_limitation".equals(c.status));
             boolean hasError = manifest.runs.stream()
                     .anyMatch(r -> r.scene.equals(scene.name) && !"success".equals(r.status));
-            if (hasFail) sceneStatuses.put(scene.name, "failed");
+            boolean allError = manifest.runs.stream()
+                    .filter(r -> r.scene.equals(scene.name))
+                    .allMatch(r -> !"success".equals(r.status));
+            if (hasFail || (hasError && allError)) sceneStatuses.put(scene.name, "failed");
             else if (hasKnown || hasError) sceneStatuses.put(scene.name, "partial");
             else sceneStatuses.put(scene.name, "passed");
         }
