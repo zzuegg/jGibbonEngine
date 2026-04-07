@@ -1,8 +1,9 @@
 # Engine Code Review TODO
 
 Full code review performed 2026-04-05 across all 467 source files.
+Deep in-depth review performed 2026-04-06 across all 497 source files.
 
-## Critical Bugs
+## Critical Bugs (2026-04-06 review)
 
 - [x] **Thread safety: Engine.run() race condition** — Fixed: switched AbstractScene from TransactionBuffer to TransactionBus. Per-subscriber synchronized double-buffer swap ensures emit() and drain() never access the write buffer concurrently.
 - [x] **Profiler.lastFrame() returns currentFrame** — Fixed: `lastFrame()` now returns `lastFrame`, added `currentFrame()` for in-progress data. Tests updated.
@@ -12,6 +13,42 @@ Full code review performed 2026-04-05 across all 467 source files.
 - [x] **Stale shader binding after entity reuse** — Fixed: entityShaders now keyed by Handle<?> (includes generation). WeakHashMap prevents blocking GC. Renderer clears entity shader on EntityRemoved.
 - [x] **Engine.shutdown() doesn't shut down AssetManager** — Fixed: added `assets.shutdown()` to `Engine.shutdown()`.
 - [x] **Renderer.close() doesn't clean up MeshManager** — Fixed: added `MeshManager.close()` and wired into `Renderer.close()`.
+
+## New Bugs Found (2026-04-06 deep review)
+
+- [ ] **NPE in BaseApplication when debugOverlay=false** — `BaseApplication.java:134` unconditionally calls `engine.debugUi().input()`, but `Engine.debugUi()` returns `null` when `config.debugOverlay()` is false. Crashes any app that disables the debug overlay.
+- [ ] **UniformManager material write loop skips Vec4/Mat4/Vec2 alignment** — `UniformManager.java:145-160`. The UBO size calculation correctly aligns Vec4/Mat4 to 16 and Vec2 to 8 bytes, but the write loop only aligns Vec3. Vec4, Mat4, and Vec2 values are written at wrong offsets, causing GPU data corruption for any material with mixed types.
+- [ ] **TransactionBus.drain() returns list that gets cleared on next swap** — `TransactionBus.SubscriberState.swap()` returns the raw ArrayList and stores it as `readBuffer`. On the next `swap()`, this same list becomes `writeBuffer` and is cleared. If the consumer hasn't finished iterating, the list is mutated under it. Works in practice (single drain per frame) but fragile — should return a copy or use triple buffering.
+- [ ] **Vec2/Vec3/Vec4/Quat normalize() division by zero** — All math types divide by `length()` without checking for zero. Normalizing a zero vector silently produces NaN/Infinity. Should return ZERO or throw, especially since normalize() is called from lookAt(), fromAxisAngle(), Transform.lookingAt().
+- [ ] **Transform.lookingAt() NaN when target == position** — `Transform.java:49`. `target.sub(position).normalize()` divides by zero when target equals position, propagating NaN through the entire transform.
+- [ ] **ZipAssetSource never closes ZipFile** — No `close()` method. The `ZipFile` opened in the constructor is never closed, leaking native file handles. Should implement `AutoCloseable`.
+- [ ] **EventBus.Subscription.unsubscribe() race condition** — `EventBus.java:46`. Uses volatile `active` flag with check-then-act pattern that isn't atomic. Concurrent calls can both pass the `if (active)` check. Should use `AtomicBoolean.compareAndSet()`.
+- [ ] **FileWatcher only watches one directory level** — `FileWatcher.java:38`. `WatchService.register()` only watches the given directory, not subdirectories. Shader files in `shaders/subdir/` won't trigger hot-reload. Need `RECURSIVE` flag or register all subdirectories.
+- [ ] **ResourceStats frame counters not thread-safe** — `ResourceStats.Entry` uses plain `int` for `created`/`destroyed`/`used`/`updated`, but `recordCreate`/`recordDestroy` can be called from the Cleaner thread (via GpuResourceManager cleanup actions) while `newFrame()` runs on the render thread. Only `liveTotal` is atomic. Should use AtomicIntegers or ensure single-thread access.
+- [ ] **Hierarchy mutations don't emit transactions** — `Hierarchy.java` has mutable `setParent()`/`addChild()`/`removeChild()` that bypass the transaction system. Parent/child changes are invisible to the renderer and any other transaction consumers.
+- [ ] **ObjLoader mishandles mixed attribute faces** — `ObjLoader.java`. Global `hasTexCoords`/`hasNormals` flags are set when ANY `vt`/`vn` line exists, but individual faces may omit them (e.g., `f 1//1` has normals but no texcoords). Vertex stride mismatch causes buffer corruption.
+
+## Security / Robustness
+
+- [ ] **FileSystemAssetSource path traversal** — `FileSystemAssetSource.java:19`. `root.resolve(path)` doesn't validate that the resolved path stays within `root`. Paths like `../../etc/passwd` escape the root directory. Should check `resolved.startsWith(root)` after normalization.
+- [ ] **ZipAssetSource suffix search is O(n)** — `ZipAssetSource.findEntry()` iterates all zip entries on every lookup when exact match fails. For large archives, this is slow. Could build a lookup map at construction time.
+- [ ] **AssetManager.sources/loaders are unsynchronized ArrayLists** — `AssetManager.java:21-22`. `addSource()` and `registerLoader()` modify plain ArrayLists that `loadSync()` iterates. Concurrent modification is possible if loading happens while registering new loaders/sources.
+- [ ] **ShaderManager falls back to raw FileReader** — `ShaderManager.java:412`. `loadShaderFile()` falls back to `new FileReader(path)` bypassing the asset source system entirely. Breaks the abstraction and could read arbitrary files.
+
+## Missing Math Functionality
+
+- [ ] **Mat4 missing inverse() method** — No way to compute matrix inverse, which is essential for: unprojection, normal matrix (inverse transpose), inverse view matrix, physics. Users currently cannot perform these operations.
+- [ ] **Mat4 missing orthographic projection** — Camera.java has a private `ortho()` method but Mat4 doesn't expose one. Users can't create orthographic matrices for 2D rendering, shadow mapping, or UI.
+- [ ] **No Mat3 type** — Normal matrix computation requires the 3x3 inverse transpose of the model matrix. No way to extract or use a 3x3 matrix currently. Needed for correct lighting.
+- [ ] **Vec3 missing common operations** — No reflect(), refract(), clamp(), min(), max(), abs(), distance(). These are standard in every shader language and frequently needed for game logic.
+
+## Dead / Redundant Code
+
+- [ ] **MeshRenderer dual material system** — `MeshRenderer.java` maintains both `materials` (MutablePropertyMap) for legacy transactions AND `materialData` (MaterialData) for the Component path. The Renderer only uses `getMaterialData()`. The legacy `materials` map and `collectBatch()` snapshot are effectively dead code. DrawCommand's `materialData` field (from collectBatch) is also unused by the renderer.
+- [ ] **UniformManager.objectUbos never shrinks** — `UniformManager.java:33`. UBO handles keyed by `"obj_" + entity.index()` grow unboundedly. Destroyed entities leave orphaned UBOs. Index reuse means some get overwritten, but the map never shrinks. Same issue with `materialUbos`.
+- [ ] **MeshManager.createMeshFromData() duplicates uploadMeshData()** — `MeshManager.java:57-64` and `MeshManager.java:94-119` contain nearly identical buffer creation and upload code. Should reuse.
+- [ ] **ImageLoader incompatible with TeaVM** — `ImageLoader.java` uses `javax.imageio.ImageIO` and `java.awt.image.BufferedImage`, which don't exist in TeaVM. Web platform needs an alternative image loading path.
+- [ ] **DebugUiOverlay allocated when disabled** — `Engine.java:100`. Creates `new DebugUiOverlay(device)` even when `debugOverlay=false`. Minor waste but confusing intent.
 
 ## Hardcoded Values (should be configurable/dynamic)
 
@@ -256,3 +293,85 @@ Cross-backend audit performed 2026-04-06. ✅ = implemented, ⚠️ = partial/fa
 - [ ] **VK/WebGPU: LINE_WIDTH and SCISSOR_TEST not handled** — GL-only render states.
 - [ ] **WebGPU: vertex INT type unsupported** — Falls back to FLOAT32X4 with warning.
 - [ ] **WebGPU: sampler border color / LOD bias unsupported** — API limitation.
+
+## Architecture / Design Improvements (2026-04-06 deep review)
+
+- [ ] **Renderer should batch all draws into one CommandRecorder** — Currently creates+submits a new CommandRecorder per entity (`Renderer.java:268-308`). This is the single biggest performance issue. Should collect all draw commands into one or few CommandLists, sorted by pipeline/material state to minimize GPU state changes.
+- [ ] **UniformManager material layout should be cached per key-set** — The std140 alignment calculation in `uploadAndBindMaterial()` runs per-entity per-frame. The layout only changes when the material's key set changes. Cache the field offsets and total size keyed by the sorted key-set hash.
+- [ ] **WeakCache lookup allocates temporary IdentityWeakReference** — `WeakCache.getOrCreate()` creates a short-lived `IdentityWeakReference` for every lookup. On hot paths (per-frame mesh/texture resolution), this generates GC pressure. Consider caching the lookup key or using a different map strategy.
+- [ ] **Camera should be a Component** — Camera is currently a standalone mutable object managed by Renderer. Should be a Component on an Entity so it participates in the scene graph, supports multiple cameras naturally, and gets world transforms from the hierarchy.
+- [ ] **LightData should be a Component** — LightData exists but is not a Component and not integrated with the scene or renderer. Should implement Component so lights can be attached to entities and participate in the transaction system.
+- [ ] **Scene.query() should support component indexing** — `AbstractScene.query()` does a linear scan of all entities per query. For scenes with many entities, this is O(n) per query. Maintain per-component-type index maps for O(1) lookup by component type.
+- [ ] **Entity component storage should use array for small counts** — `Entity.java:28`. HashMap for 2-4 components has significant overhead. An array-based map (or even a flat array with linear scan) would be more cache-friendly and use less memory per entity.
+- [ ] **Renderer.renderFrame should separate transaction processing from drawing** — Currently interleaves transaction handling, renderable resolution, and drawing in one method. Separation would allow: transaction processing on logic thread, renderable resolution cached across frames, draw batching/sorting.
+- [ ] **PipelineDescriptor should include primitive topology** — Currently all pipelines are created without topology info, and all backends hardcode TRIANGLES. Add `PrimitiveTopology` (TRIANGLES, LINES, POINTS, TRIANGLE_STRIP, LINE_STRIP) to PipelineDescriptor.
+- [ ] **MaterialData.set() should be O(1) not O(n)** — `MaterialData.java:72-79`. Every `set()` call copies the entire PropertyMap to create a new immutable MaterialData. For materials with many properties being set one at a time, this is O(n²). Consider a builder pattern: `MaterialData.builder().set(...).set(...).build()`.
+- [ ] **AbstractScene should not expose setLocalTransform(Handle)** — The legacy `setLocalTransform(Handle, Mat4)` decomposition to Transform is lossy (ignores rotation/scale from the matrix, hardcodes Quat.IDENTITY). Users should use `entity.add(Transform.at(...))` instead.
+- [ ] **ShaderManager has three separate caches** — `shaderCache`, `resolvedShaders`, and `entityShaders` all cache overlapping shader data. The relationship between them is unclear and `invalidateAll()` has to clear all three. Unify into a single cache with clear ownership semantics.
+
+## Missing Low-Level Backend Features (2026-04-07 deep backend review)
+
+Features that modern game engines require and that each API supports natively, but are not yet exposed.
+
+### Across All Backends
+
+- [ ] **No MSAA (multisample anti-aliasing)** — GraphicsConfig declares `msaaSamples` but no backend reads it. GL needs `glTextureStorage2DMultisample` + `glBlitNamedFramebuffer` resolve. VK needs multisampled images + resolve attachments in render pass. WebGPU needs `multisample` in pipeline descriptor + resolve target. Critical for visual quality.
+- [ ] **No sRGB framebuffer support** — GraphicsConfig declares `srgb` but no backend creates sRGB swapchain/framebuffer formats. GL needs `GL_FRAMEBUFFER_SRGB`. VK needs `VK_FORMAT_B8G8R8A8_SRGB`. WebGPU needs `bgra8unorm-srgb`. Without this, all rendering is in linear space with no gamma correction.
+- [ ] **No occlusion queries** — GL has `GL_SAMPLES_PASSED`, VK has `VK_QUERY_TYPE_OCCLUSION`, WebGPU has `occlusion-query`. Needed for: conditional rendering, visibility-based LOD, GPU-driven culling.
+- [ ] **No timestamp queries / GPU profiling** — GL has `GlGpuTimer` (exists but unused by engine). VK has `VK_QUERY_TYPE_TIMESTAMP`. WebGPU has `timestamp` query set. Needed for: per-pass GPU timing, profiler overlay, performance debugging.
+- [ ] **No texture sub-image upload (mip levels, array layers, 3D slices)** — `uploadTexture()` always writes the full mip 0 level. No API to upload specific mip levels, individual array layers, cube faces independently, or 3D slices. Needed for: streaming textures, dynamic cubemaps, volume textures, manual mip chains.
+- [ ] **No texture readback** — Can read the framebuffer via `readFramebuffer()`, but no way to read an arbitrary texture back to CPU. Needed for: screenshot of offscreen targets, GPU-computed data readback, picking.
+- [ ] **No buffer readback (GL)** — `glMapNamedBufferRange` is declared in GlBindings but never called. VK and WebGPU have staging readback. Needed for: compute shader output, transform feedback, GPU-driven culling results.
+- [ ] **No render pass load/store actions** — Clear always clears color+depth. No ability to specify: LOAD (preserve previous contents), DONT_CARE (discard for performance), or CLEAR per-attachment. VK and WebGPU render passes support this natively. Critical for: multi-pass rendering, tiled GPU optimization.
+- [ ] **No dynamic viewport/scissor array** — Only one viewport/scissor rect supported. GL supports `glViewportArrayv`, VK supports multiple viewports. Needed for: VR stereo rendering, layered rendering, multi-view.
+- [ ] **No tessellation shader support** — All three backends report TESSELLATION capability as true (GL/VK) but no pipeline creation or draw path supports tess control/evaluation shaders. ShaderStage only has VERTEX/FRAGMENT/GEOMETRY/COMPUTE — no TESS_CONTROL or TESS_EVALUATION.
+- [ ] **No geometry shader integration** — GEOMETRY_SHADERS reports true but no pipeline path includes geometry shaders in the compilation/linking flow. GlRenderDevice.mapShaderStage() maps it but PipelineDescriptor only takes vertex+fragment.
+- [ ] **No render target MSAA resolve** — Even if MSAA textures are created, no command exists to resolve multisampled to single-sampled. GL uses `glBlitNamedFramebuffer`, VK uses resolve attachments, WebGPU uses `resolveTarget` in render pass.
+- [ ] **No depth bias / polygon offset** — Needed for shadow mapping to prevent shadow acne. GL has `glPolygonOffset`, VK has `vkCmdSetDepthBias`, WebGPU has `depthBias`/`depthBiasSlopeScale` in pipeline. Not in RenderState or any backend.
+- [ ] **No color write mask** — Can't disable writing to individual color channels (R/G/B/A). GL has `glColorMask`, VK has `colorWriteMask` in blend attachment, WebGPU has `writeMask` in color target. Needed for: deferred rendering G-buffer, selective channel writes.
+- [ ] **No multiple vertex buffer binding** — `BindVertexBuffer` binds exactly one VBO to binding point 0. No support for multiple vertex streams (e.g., position in buffer 0, normals in buffer 1, instance data in buffer 2). GL supports arbitrary binding points, VK/WebGPU support multiple vertex buffer slots.
+- [ ] **No sub-allocation / memory aliasing** — Each buffer/texture gets its own allocation. No suballocator for batching small allocations into larger GPU pages. VK and WebGPU both benefit significantly from this for uniform/staging buffers.
+
+### OpenGL-Specific Missing Features
+
+- [ ] **No persistent mapped buffers** — `writeBuffer()` allocates a staging segment and copies via `glNamedBufferSubData` every time. GL 4.4+ supports persistent mapped buffers via `GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT` which avoids the copy entirely. Critical for streaming uniform/vertex data.
+- [ ] **No buffer storage immutability** — Buffers are created with `glNamedBufferData` (mutable). Should use `glNamedBufferStorage` with `GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT` for buffers that won't be resized. Better driver optimization.
+- [ ] **No conditional rendering** — `glBeginConditionalRender` / `glEndConditionalRender` with occlusion query results. Skips draw calls on GPU without CPU round-trip.
+- [ ] **No transform feedback** — `glBeginTransformFeedback` for capturing vertex shader output to buffers. Useful for GPU particle systems, stream compaction.
+- [ ] **No program pipeline objects (separable shaders)** — Could enable faster shader swapping by separating vertex and fragment stages into independent objects. GL 4.1+.
+- [ ] **No debug labels/markers** — `glPushDebugGroup` / `glPopDebugGroup` / `glObjectLabel` for RenderDoc/NSight integration. Should be wrapped into RenderCommand or context helpers.
+
+### Vulkan-Specific Missing Features
+
+- [ ] **No VMA or sub-allocator** — Every `createBuffer`/`createImage` does a separate `vkAllocateMemory`. Vulkan has a hard limit on total allocations (~4096 on many drivers). A sub-allocator (or VMA-equivalent) is mandatory for non-trivial scenes.
+- [ ] **No pipeline cache** — `VkPipelineCache` is never used. Pipeline compilation is the most expensive operation in Vulkan. A persistent cache eliminates recompilation across runs. Trivial to add.
+- [ ] **No secondary command buffers** — Only one command buffer per frame. Secondary command buffers enable parallel recording from multiple threads — the whole point of Vulkan's explicit model.
+- [ ] **No dynamic rendering (VK_KHR_dynamic_rendering)** — The engine uses VkRenderPass objects which require framebuffer/render-pass compatibility. Dynamic rendering eliminates render pass objects entirely, simplifying multi-pass and reducing state.
+- [ ] **No descriptor set indexing / bindless descriptors** — Uses one descriptor set per draw. `VK_EXT_descriptor_indexing` enables thousands of textures/buffers bound at once. Essential for: asset streaming, virtual texturing, GPU-driven rendering.
+- [ ] **No timeline semaphores** — Using binary semaphores only. Timeline semaphores (`VK_KHR_timeline_semaphore`, core in 1.2) simplify multi-queue synchronization.
+- [ ] **No swapchain recreation on window resize** — `recreateSwapchain()` uses the old dimensions: `swapchain.create(swapchain.width(), swapchain.height())`. Should query the current surface extent or accept new dimensions. Resizing the window will not resize the render output.
+- [ ] **VkFence stub** — `createFence()` returns a no-op stub that always returns "signaled". Real fences are needed for: async compute/transfer, frame pacing, readback synchronization.
+- [ ] **No separate transfer queue** — All operations use the graphics queue. Using a dedicated transfer queue allows overlapping upload with rendering. Most discrete GPUs have dedicated async transfer queues.
+- [ ] **Vulkan validation errors on shutdown are likely** — Destroying device-owned resources after `vkDeviceWaitIdle` but the order of `destroyAll` calls may still hit use-after-free in validation layers if render targets reference textures that were already destroyed in the same batch.
+- [ ] **No push descriptor extension** — `VK_KHR_push_descriptor` avoids descriptor set allocation entirely for frequently updated bindings. Ideal for per-object UBOs.
+
+### WebGPU-Specific Missing Features
+
+- [ ] **No compute pipeline** — `createComputePipeline()` not implemented. WebGPU fully supports compute shaders via `GPUComputePipeline`.
+- [ ] **No mipmap generation** — WebGPU has no built-in mipmap generation. Need compute shader or blit-based solution. Textures with mipmap samplers only use mip 0.
+- [ ] **No indirect drawing** — `DrawIndirect`/`DrawIndexedIndirect` log warnings. WebGPU supports `drawIndirect` and `drawIndexedIndirect` on `GPURenderPassEncoder`.
+- [ ] **No push constants emulation** — `PushConstants` command is ignored. WebGPU has no native push constants — should emulate via a dedicated UBO at a reserved binding (like GL does at binding 15).
+- [ ] **No surface configuration for presentation** — Surface presentation is partially implemented but `presentToSurface` mode has no resize handling, no present mode selection (though FIFO/Mailbox are supported by wgpu-native).
+- [ ] **No device limits queried** — Comment says `deviceGetLimits` is broken in jwebgpu 0.1.15. All limits are hardcoded (8192, 65536, etc.). Should be revisited when jwebgpu is updated.
+- [ ] **No error handling / device lost callback** — WebGPU devices can be "lost" (driver crash, timeout). `GPUDevice.lost` promise should be handled to notify the engine and attempt recovery.
+- [ ] **No render bundle support** — WebGPU's `GPURenderBundle` enables pre-recording draw calls for static geometry. Significant optimization for scenes with many static objects.
+
+### Missing DeviceCapability Queries
+
+- [ ] **Vulkan MAX_ANISOTROPY not queried** — Should query `VkPhysicalDeviceLimits.maxSamplerAnisotropy`.
+- [ ] **Vulkan MAX_UNIFORM_BUFFER_SIZE not queried** — Should query `maxUniformBufferRange`.
+- [ ] **Vulkan MAX_STORAGE_BUFFER_SIZE not queried** — Should query `maxStorageBufferRange`.
+- [ ] **No MAX_COMPUTE_WORK_GROUP_SIZE query** — Needed for compute shader dispatch. All three APIs expose this.
+- [ ] **No MAX_COLOR_ATTACHMENTS query** — GL: `GL_MAX_COLOR_ATTACHMENTS`. VK: `maxColorAttachments`. WebGPU: `maxColorAttachments`. Needed for MRT validation.
+- [ ] **No VRAM usage / budget query** — VK has `VK_EXT_memory_budget`. GL has `NVX_gpu_memory_info` / `ATI_meminfo`. Useful for: streaming budget, LOD decisions, memory pressure detection.
+- [ ] **No supported texture format query** — VK has `vkGetPhysicalDeviceFormatProperties`. WebGPU has feature flags for compressed formats. Currently all formats are assumed supported with fallback warnings.
