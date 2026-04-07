@@ -377,6 +377,28 @@ public class ShaderManager {
         return bindings;
     }
 
+    /**
+     * Loads a shader source from the asset system or classpath.
+     * @param shaderPath the resource path (e.g. "shaders/debug_ui.slang")
+     * @return the shader source, or null if not found
+     */
+    public String loadResource(String shaderPath) {
+        if (assetManager != null) {
+            try {
+                var result = assetManager.loadSync(shaderPath, SlangShaderSource.class);
+                if (result != null) return result.source();
+            } catch (Exception e) {
+                log.debug("AssetManager failed to load {}: {}", shaderPath, e.getMessage());
+            }
+        }
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream(shaderPath)) {
+            if (is != null) return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.debug("Classpath failed to load {}: {}", shaderPath, e.getMessage());
+        }
+        return null;
+    }
+
     private String loadShaderSource(String shaderName) {
         var shaderPath = "shaders/" + shaderName.toLowerCase() + ".slang";
 

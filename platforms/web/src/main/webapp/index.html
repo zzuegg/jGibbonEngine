@@ -42,6 +42,25 @@
             window.addEventListener('resize', resizeCanvas);
         }
     </script>
+    <script>
+        // Capture all console output for programmatic inspection via window._allLogs
+        window._allLogs = [];
+        (function() {
+            var orig = {log: console.log, info: console.info, warn: console.warn, error: console.error};
+            ['log','info','warn','error'].forEach(function(t) {
+                console[t] = function() {
+                    window._allLogs.push({t:t, m: Array.from(arguments).join(' ')});
+                    orig[t].apply(console, arguments);
+                };
+            });
+        })();
+        window.onerror = function(msg, src, line, col, err) {
+            window._allLogs.push({t:'onerror', m: msg + ' at ' + src + ':' + line, stack: err && err.stack});
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+            window._allLogs.push({t:'rejection', m: String(e.reason), stack: e.reason && e.reason.stack});
+        });
+    </script>
     <script src="js/web.js"></script>
     <script type="module">
         // Load Slang WASM compiler, then start Java main

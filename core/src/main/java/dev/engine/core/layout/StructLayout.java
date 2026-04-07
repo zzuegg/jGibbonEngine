@@ -51,10 +51,8 @@ public final class StructLayout {
             var layout = (StructLayout) buildMethod.invoke(null, recordType, mode);
             CACHE.put(key, layout);
             return layout;
-        } catch (ClassNotFoundException e) {
-            // ReflectiveLayoutBuilder not available (e.g., TeaVM)
         } catch (Exception e) {
-            throw new RuntimeException("Failed to build layout for " + recordType.getName(), e);
+            // ReflectiveLayoutBuilder not available or failed (e.g., TeaVM has no MethodHandles)
         }
 
         throw new IllegalStateException(

@@ -54,7 +54,6 @@ The exclusion only affects the `web/` module's classpath.
 Code compiled by TeaVM cannot use:
 
 - **FFM** (Foreign Function & Memory API) — no `MemorySegment`, `Linker`, etc.
-- **`java.lang.ref.Cleaner`** — no destructor callbacks
 - **Complex reflection** — `Class.forName`, `Method.invoke` etc. are limited
 - **Most `java.nio`** — limited `ByteBuffer` support
 - **Threads** — `Thread.start()` is not supported; browser is single-threaded
@@ -66,6 +65,33 @@ Code compiled by TeaVM cannot use:
 Provider modules for TeaVM must avoid these APIs. The `WgpuBindings` interface
 is TeaVM-safe because it uses only primitive types, `String`, `ByteBuffer`,
 arrays, and records.
+
+## JDK Classlib Shims
+
+TeaVM's classlib is missing several JDK classes used by the engine's core
+modules. Shims are provided in `providers/windowing/web/teavm-windowing/`
+following TeaVM's `T`-prefixed naming convention
+(`org.teavm.classlib.java.lang.ref.TCleaner` → maps to `java.lang.ref.Cleaner`).
+
+**Provided shims:**
+
+| JDK Class | Shim | Behavior |
+|-----------|------|----------|
+| `java.lang.ref.Cleaner` | `TCleaner` | Manual `clean()` only — no GC-based auto-trigger in the browser |
+| `java.lang.ref.Cleaner.Cleanable` | `TCleaner.Cleanable` | Runs cleanup action once on `clean()`, then disarms |
+| `java.util.concurrent.ConcurrentLinkedQueue` | `TConcurrentLinkedQueue` | Delegates to `ArrayDeque` (single-threaded browser) |
+| `java.util.concurrent.CountDownLatch` | `TCountDownLatch` | Simple counter; `await()` is a no-op (executor runs inline) |
+
+**Adding new shims:** Create `T`-prefixed classes in
+`org.teavm.classlib.<java.package>` within the `teavm-windowing` module.
+Inner classes keep their original name (only the outer class gets the `T`
+prefix). The `teavm-classlib` dependency is `compileOnly` so shims can extend
+TeaVM base classes like `TAbstractQueue`.
+
+**ConcurrentHashMap.keySet() quirk:** TeaVM's `TConcurrentHashMap.keySet()`
+returns `TSet`, not `ConcurrentHashMap.KeySetView`. Code calling `keySet()`
+on a `ConcurrentHashMap` must cast to `Map` first to avoid the JDK-specific
+return type: `((Map<K,V>) map).keySet()`.
 
 ## Async WebGPU Calls
 

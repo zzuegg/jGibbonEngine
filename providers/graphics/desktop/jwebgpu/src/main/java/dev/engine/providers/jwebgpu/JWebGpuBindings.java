@@ -1162,16 +1162,27 @@ public class JWebGpuBindings implements WgpuBindings {
         return switch (factor) {
             case BLEND_FACTOR_ZERO -> WGPUBlendFactor.Zero;
             case BLEND_FACTOR_ONE -> WGPUBlendFactor.One;
+            case BLEND_FACTOR_SRC -> WGPUBlendFactor.Src;
+            case BLEND_FACTOR_ONE_MINUS_SRC -> WGPUBlendFactor.OneMinusSrc;
             case BLEND_FACTOR_SRC_ALPHA -> WGPUBlendFactor.SrcAlpha;
             case BLEND_FACTOR_ONE_MINUS_SRC_ALPHA -> WGPUBlendFactor.OneMinusSrcAlpha;
             case BLEND_FACTOR_DST -> WGPUBlendFactor.Dst;
+            case BLEND_FACTOR_ONE_MINUS_DST -> WGPUBlendFactor.OneMinusDst;
             case BLEND_FACTOR_DST_ALPHA -> WGPUBlendFactor.DstAlpha;
+            case BLEND_FACTOR_ONE_MINUS_DST_ALPHA -> WGPUBlendFactor.OneMinusDstAlpha;
             default -> WGPUBlendFactor.One;
         };
     }
 
     private static WGPUBlendOperation mapBlendOp(int op) {
-        return WGPUBlendOperation.Add; // only Add is used
+        return switch (op) {
+            case BLEND_OP_ADD -> WGPUBlendOperation.Add;
+            case BLEND_OP_SUBTRACT -> WGPUBlendOperation.Subtract;
+            case BLEND_OP_REVERSE_SUBTRACT -> WGPUBlendOperation.ReverseSubtract;
+            case BLEND_OP_MIN -> WGPUBlendOperation.Min;
+            case BLEND_OP_MAX -> WGPUBlendOperation.Max;
+            default -> WGPUBlendOperation.Add;
+        };
     }
 
     private void configStencilFace(WGPUStencilFaceState face, StencilFaceState state) {

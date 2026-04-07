@@ -194,20 +194,18 @@ public class TeaVmWgpuBindings implements WgpuBindings {
 
     @Override
     public void queueWriteBuffer(long queue, long buffer, int offset, ByteBuffer data, int size) {
-        // TeaVM doesn't support direct ByteBuffer -> JS typed arrays easily.
-        // We extract the float data and pass as a JS array.
-        float[] floats = new float[size / 4];
-        data.asFloatBuffer().get(floats);
-        queueWriteBufferFloats((int) queue, (int) buffer, offset, floats);
+        byte[] bytes = new byte[size];
+        data.get(bytes);
+        queueWriteBufferBytes((int) queue, (int) buffer, offset, bytes);
     }
 
-    @JSBody(params = {"queueId", "bufferId", "offset", "floats"}, script = """
+    @JSBody(params = {"queueId", "bufferId", "offset", "bytes"}, script = """
         var queue = window._wgpu[queueId];
         var buf = window._wgpu[bufferId];
-        var f32 = new Float32Array(floats);
-        queue.writeBuffer(buf, offset, f32);
+        var u8 = new Uint8Array(bytes);
+        queue.writeBuffer(buf, offset, u8);
     """)
-    private static native void queueWriteBufferFloats(int queueId, int bufferId, int offset, float[] floats);
+    private static native void queueWriteBufferBytes(int queueId, int bufferId, int offset, byte[] bytes);
 
     @Override
     public void bufferMapReadSync(long instance, long buffer, int size, int maxPolls) {
@@ -282,8 +280,24 @@ public class TeaVmWgpuBindings implements WgpuBindings {
     @Override
     public void queueWriteTexture(long queue, long texture, int width, int height,
                                   int depthOrLayers, int bytesPerRow, ByteBuffer data) {
-        throw unsupported("queueWriteTexture — not yet implemented for browser");
+        byte[] bytes = new byte[data.remaining()];
+        data.duplicate().get(bytes);
+        queueWriteTextureJS((int) queue, (int) texture, width, height, depthOrLayers, bytesPerRow, bytes);
     }
+
+    @JSBody(params = {"queueId", "textureId", "width", "height", "depthOrLayers", "bytesPerRow", "bytes"}, script = """
+        var queue = window._wgpu[queueId];
+        var texture = window._wgpu[textureId];
+        var u8 = new Uint8Array(bytes);
+        queue.writeTexture(
+            { texture: texture },
+            u8,
+            { bytesPerRow: bytesPerRow, rowsPerImage: height },
+            { width: width, height: height, depthOrArrayLayers: depthOrLayers }
+        );
+    """)
+    private static native void queueWriteTextureJS(int queueId, int textureId, int width, int height,
+                                                    int depthOrLayers, int bytesPerRow, byte[] bytes);
 
     // ===== Sampler =====
 
@@ -456,14 +470,22 @@ public class TeaVmWgpuBindings implements WgpuBindings {
                 topology, cullMode,
                 colorFormat, depthFormat,
                 desc.depthWriteEnabled() == OPTIONAL_BOOL_TRUE,
-                compareString(desc.depthCompare())
+                compareString(desc.depthCompare()),
+                blendFactorString(desc.blendColorSrcFactor()),
+                blendFactorString(desc.blendColorDstFactor()),
+                blendOpString(desc.blendColorOperation()),
+                blendFactorString(desc.blendAlphaSrcFactor()),
+                blendFactorString(desc.blendAlphaDstFactor()),
+                blendOpString(desc.blendAlphaOperation())
         );
     }
 
     @JSBody(params = {"deviceId", "layoutId", "vsModId", "vsEntry",
             "fsModId", "fsEntry", "stride", "attrsJson",
             "topology", "cullMode", "colorFormat", "depthFormat",
-            "depthWrite", "depthCompare"}, script = """
+            "depthWrite", "depthCompare",
+            "blendColorSrc", "blendColorDst", "blendColorOp",
+            "blendAlphaSrc", "blendAlphaDst", "blendAlphaOp"}, script = """
         var device = window._wgpu[deviceId];
         var desc = {
             layout: layoutId > 0 ? window._wgpu[layoutId] : 'auto',
@@ -485,7 +507,13 @@ public class TeaVmWgpuBindings implements WgpuBindings {
             desc.fragment = {
                 module: window._wgpu[fsModId],
                 entryPoint: fsEntry,
-                targets: [{ format: colorFormat }]
+                targets: [{
+                    format: colorFormat,
+                    blend: {
+                        color: { srcFactor: blendColorSrc, dstFactor: blendColorDst, operation: blendColorOp },
+                        alpha: { srcFactor: blendAlphaSrc, dstFactor: blendAlphaDst, operation: blendAlphaOp }
+                    }
+                }]
             };
         }
         if (depthFormat && depthFormat.length > 0) {
@@ -504,7 +532,9 @@ public class TeaVmWgpuBindings implements WgpuBindings {
             int deviceId, int layoutId, int vsModId, String vsEntry,
             int fsModId, String fsEntry, int stride, String attrsJson,
             String topology, String cullMode, String colorFormat, String depthFormat,
-            boolean depthWrite, String depthCompare);
+            boolean depthWrite, String depthCompare,
+            String blendColorSrc, String blendColorDst, String blendColorOp,
+            String blendAlphaSrc, String blendAlphaDst, String blendAlphaOp);
 
     @Override
     public void renderPipelineRelease(long renderPipeline) {
@@ -887,6 +917,7 @@ public class TeaVmWgpuBindings implements WgpuBindings {
 
     private static String vertexFormatString(int format) {
         return switch (format) {
+            case VERTEX_FORMAT_UNORM8X4 -> "unorm8x4";
             case VERTEX_FORMAT_FLOAT32 -> "float32";
             case VERTEX_FORMAT_FLOAT32X2 -> "float32x2";
             case VERTEX_FORMAT_FLOAT32X3 -> "float32x3";
@@ -921,6 +952,33 @@ public class TeaVmWgpuBindings implements WgpuBindings {
             case COMPARE_GREATER_EQUAL -> "greater-equal";
             case COMPARE_ALWAYS -> "always";
             default -> "always";
+        };
+    }
+
+    private static String blendFactorString(int factor) {
+        return switch (factor) {
+            case BLEND_FACTOR_ZERO -> "zero";
+            case BLEND_FACTOR_ONE -> "one";
+            case BLEND_FACTOR_SRC -> "src";
+            case BLEND_FACTOR_ONE_MINUS_SRC -> "one-minus-src";
+            case BLEND_FACTOR_SRC_ALPHA -> "src-alpha";
+            case BLEND_FACTOR_ONE_MINUS_SRC_ALPHA -> "one-minus-src-alpha";
+            case BLEND_FACTOR_DST -> "dst";
+            case BLEND_FACTOR_ONE_MINUS_DST -> "one-minus-dst";
+            case BLEND_FACTOR_DST_ALPHA -> "dst-alpha";
+            case BLEND_FACTOR_ONE_MINUS_DST_ALPHA -> "one-minus-dst-alpha";
+            default -> "zero";
+        };
+    }
+
+    private static String blendOpString(int op) {
+        return switch (op) {
+            case BLEND_OP_ADD -> "add";
+            case BLEND_OP_SUBTRACT -> "subtract";
+            case BLEND_OP_REVERSE_SUBTRACT -> "reverse-subtract";
+            case BLEND_OP_MIN -> "min";
+            case BLEND_OP_MAX -> "max";
+            default -> "add";
         };
     }
 

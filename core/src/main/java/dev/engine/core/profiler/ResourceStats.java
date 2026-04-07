@@ -91,7 +91,9 @@ public class ResourceStats {
 
     /** Returns an unmodifiable view of all tracked resource type names. */
     public Set<String> resourceTypes() {
-        return Collections.unmodifiableSet(entries.keySet());
+        // Cast to Map to avoid ConcurrentHashMap.keySet() returning KeySetView,
+        // which is not available in TeaVM's classlib.
+        return Collections.unmodifiableSet(((java.util.Map<String, Entry>) entries).keySet());
     }
 
     // --- Record operations (call during the frame) ---

@@ -58,7 +58,9 @@ public class CanvasWindowToolkit implements WindowToolkit {
         waitForAnimationFrameJS(raf);
     }
 
-    @JSBody(params = "callback", script = "requestAnimationFrame(function() { callback(); });")
+    @JSBody(params = "callback", script =
+            "if (document.hidden) { setTimeout(function() { callback(); }, 16); }"
+          + "else { requestAnimationFrame(function() { callback(); }); }")
     private static native void waitForAnimationFrameJS(RafCallback callback);
 
     // ------------------------------------------------------------------

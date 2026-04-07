@@ -328,6 +328,7 @@ public class WgpuRenderDevice implements RenderDevice {
             public void close() {
                 if (nativeAvailable && buf != null && buf.nativeBuffer() != 0) {
                     // Bulk copy from NativeMemory to direct ByteBuffer for upload
+                    // (native wgpu requires a stable pointer — heap buffers may SIGABRT)
                     ByteBuffer upload = ByteBuffer.allocateDirect((int) length).order(java.nio.ByteOrder.LITTLE_ENDIAN);
                     for (int i = 0; i < (int) length / 4; i++) {
                         upload.putFloat(i * 4, gpuMemory.getFloat(i * 4L));
@@ -421,7 +422,8 @@ public class WgpuRenderDevice implements RenderDevice {
         else if (desc.type() == TextureType.TEXTURE_2D_ARRAY) depthOrLayers = desc.layers();
         else if (desc.type() == TextureType.TEXTURE_CUBE) depthOrLayers = 6;
 
-        // Ensure we have a direct ByteBuffer
+        // Ensure we have a direct ByteBuffer for native wgpu (heap buffers may SIGABRT).
+        // The TeaVM bindings extract byte[] internally, so this is a no-op cost on web.
         ByteBuffer direct;
         if (pixels.isDirect()) {
             direct = pixels;

@@ -21,11 +21,7 @@ import dev.engine.ui.NkFont;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 
 /**
  * Renders the debug UI overlay using the engine's graphics API.
@@ -82,8 +78,12 @@ public class DebugUiOverlay implements AutoCloseable {
         // Load and compile the Slang shader via ShaderManager.
         // Inject the correct texture binding offset so SPIRV bindings match the descriptor layout.
         int texOffset = shaderManager.textureBindingOffset();
-        String slangSource = loadShaderResource("shaders/debug_ui.slang")
-                .replace("TEXTURE_BINDING", String.valueOf(texOffset));
+        String slangSource = shaderManager.loadResource("shaders/debug_ui.slang");
+        if (slangSource == null) {
+            log.warn("Debug UI shader not found — overlay disabled");
+            return;
+        }
+        slangSource = slangSource.replace("TEXTURE_BINDING", String.valueOf(texOffset));
         CompiledShader compiled;
         try {
             compiled = shaderManager.compileSlangSource(slangSource, "debug_ui", VERTEX_FORMAT);
@@ -93,9 +93,15 @@ public class DebugUiOverlay implements AutoCloseable {
         }
         pipeline = compiled.pipeline();
 
-        // Get binding indices from shader reflection
+        // Get binding indices from shader reflection.
+        // Fall back to defaults when reflection is unavailable (e.g. Slang WASM compiler).
         uboBinding = compiled.bindingIndex("ScreenData");
         textureBinding = compiled.bindingIndex("fontAtlas");
+        // Texture binding is a sequential unit index (0 = first texture), so 0 is correct.
+        // UBO binding is the actual bind group slot. When reflection is unavailable,
+        // use the texOffset hint: the UBO sits right after the combined texture+sampler slots.
+        if (textureBinding < 0) textureBinding = 0;
+        if (uboBinding < 0) uboBinding = texOffset + 2; // texture + sampler + UBO
         flipScissorY = "OpenGL".equals(device.queryCapability(dev.engine.graphics.DeviceCapability.BACKEND_NAME));
         log.debug("DebugUI shader bindings: UBO={}, texture={}, texOffset={}, flipScissorY={}", uboBinding, textureBinding, texOffset, flipScissorY);
 
@@ -106,11 +112,8 @@ public class DebugUiOverlay implements AutoCloseable {
                 dev.engine.graphics.texture.TextureFormat.RGBA8,
                 dev.engine.graphics.texture.MipMode.NONE);
         fontTexture = gpu.createTexture(texDesc);
-        // Use a direct buffer for the upload — some GL drivers require it for DSA functions
-        byte[] atlasBytes = font.atlasData();
-        ByteBuffer directAtlas = ByteBuffer.allocateDirect(atlasBytes.length).order(java.nio.ByteOrder.nativeOrder());
-        directAtlas.put(atlasBytes).flip();
-        gpu.uploadTexture(fontTexture, directAtlas);
+        // Wrap the atlas bytes — the backend will convert to direct buffer if needed (e.g. OpenGL DSA)
+        gpu.uploadTexture(fontTexture, ByteBuffer.wrap(font.atlasData()));
 
         // Create sampler (nearest for pixel-perfect font rendering)
         fontSampler = gpu.createSampler(SamplerDescriptor.nearest());
@@ -127,15 +130,6 @@ public class DebugUiOverlay implements AutoCloseable {
         uniformBuffer = gpu.createBuffer(new BufferDescriptor(16, BufferUsage.UNIFORM, AccessPattern.STREAM));
 
         initialized = true;
-    }
-
-    private static String loadShaderResource(String path) {
-        try (InputStream is = DebugUiOverlay.class.getClassLoader().getResourceAsStream(path)) {
-            if (is != null) return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("Failed to load UI shader: {}", path, e);
-        }
-        throw new RuntimeException("Debug UI shader not found on classpath: " + path);
     }
 
     /**

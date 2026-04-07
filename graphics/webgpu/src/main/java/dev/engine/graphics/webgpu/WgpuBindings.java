@@ -537,16 +537,24 @@ public interface WgpuBindings {
     int OPTIONAL_BOOL_FALSE = 0;
     int OPTIONAL_BOOL_TRUE  = 1;
 
-    // --- Blend factor ---
+    // --- Blend factor (wgpu-native WGPUBlendFactor) ---
     int BLEND_FACTOR_ZERO                = 1;
     int BLEND_FACTOR_ONE                 = 2;
+    int BLEND_FACTOR_SRC                 = 3;
+    int BLEND_FACTOR_ONE_MINUS_SRC       = 4;
     int BLEND_FACTOR_SRC_ALPHA           = 5;
     int BLEND_FACTOR_ONE_MINUS_SRC_ALPHA = 6;
     int BLEND_FACTOR_DST                 = 7;
+    int BLEND_FACTOR_ONE_MINUS_DST       = 8;
     int BLEND_FACTOR_DST_ALPHA           = 9;
+    int BLEND_FACTOR_ONE_MINUS_DST_ALPHA = 10;
 
-    // --- Blend operation ---
-    int BLEND_OP_ADD = 1;
+    // --- Blend operation (wgpu-native WGPUBlendOperation) ---
+    int BLEND_OP_ADD              = 1;
+    int BLEND_OP_SUBTRACT         = 2;
+    int BLEND_OP_REVERSE_SUBTRACT = 3;
+    int BLEND_OP_MIN              = 4;
+    int BLEND_OP_MAX              = 5;
 
     // --- Texture format ---
     int TEXTURE_FORMAT_R8_UNORM              = 0x01;
