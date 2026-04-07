@@ -70,8 +70,8 @@ project(":samples:tests:screenshot:scenes").projectDir = file("samples/tests/scr
 include("samples:tests:screenshot:runner")
 project(":samples:tests:screenshot:runner").projectDir = file("samples/tests/screenshot/runner")
 
-include("samples:tests:screenshot:desktop")
-project(":samples:tests:screenshot:desktop").projectDir = file("samples/tests/screenshot/desktop")
+include("samples:tests:screenshot:desktop-runner")
+project(":samples:tests:screenshot:desktop-runner").projectDir = file("samples/tests/screenshot/desktop")
 
 include("samples:tests:screenshot:analysis")
 project(":samples:tests:screenshot:analysis").projectDir = file("samples/tests/screenshot/analysis")

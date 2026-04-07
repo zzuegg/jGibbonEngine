@@ -16,11 +16,8 @@ dependencies {
     implementation(project(":providers:slang"))
     implementation(project(":providers:lwjgl-glfw"))
     implementation(project(":platforms:desktop"))
-    implementation(platform(libs.lwjgl.bom))
-    implementation(libs.lwjgl.opengl)
-    implementation(libs.lwjgl.vulkan)
-    implementation(libs.lwjgl.glfw)
 
+    runtimeOnly(platform(libs.lwjgl.bom))
     runtimeOnly(libs.lwjgl.core.natives) { artifact { classifier = lwjglNatives } }
     runtimeOnly(libs.lwjgl.opengl.natives) { artifact { classifier = lwjglNatives } }
     runtimeOnly(libs.lwjgl.glfw.natives) { artifact { classifier = lwjglNatives } }
