@@ -52,27 +52,6 @@ tasks.test {
     }
 }
 
-// Always rerun screenshot tests to get fresh screenshots when generating reports
-tasks.test { outputs.upToDateWhen { false } }
-
-tasks.register<JavaExec>("screenshotReport") {
-    group = "verification"
-    description = "Runs screenshot tests and generates an HTML comparison report"
-    dependsOn("test")
-    classpath = sourceSets.test.get().runtimeClasspath
-    mainClass = "dev.engine.examples.ScreenshotReportGenerator"
-    args = listOf(
-        layout.buildDirectory.dir("screenshots").get().asFile.absolutePath,
-        layout.buildDirectory.dir("test-results/test").get().asFile.absolutePath,
-        layout.buildDirectory.dir("screenshots/report.html").get().asFile.absolutePath
-    )
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
-    doLast {
-        val report = layout.buildDirectory.file("screenshots/report.html").get().asFile
-        println("Open: file://${report.absolutePath}")
-    }
-}
-
 application {
     mainClass = providers.gradleProperty("mainClass").orElse("dev.engine.examples.TriangleExample")
     applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")

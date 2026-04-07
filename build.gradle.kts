@@ -105,3 +105,18 @@ subprojects {
         options.encoding = "UTF-8"
     }
 }
+
+// ── Screenshot tests: ./gradlew screenshotTest ──────────────────────
+tasks.register("screenshotTest") {
+    group = "verification"
+    description = "Runs the full screenshot regression test pipeline"
+    dependsOn(":samples:tests:screenshot:analysis:screenshotTest")
+}
+
+// ── testAll: unit tests + screenshot tests ──────────────────────────
+tasks.register("testAll") {
+    group = "verification"
+    description = "Runs all unit tests and screenshot regression tests"
+    dependsOn(subprojects.mapNotNull { it.tasks.findByName("test") })
+    dependsOn("screenshotTest")
+}

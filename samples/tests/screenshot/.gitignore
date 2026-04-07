@@ -1,0 +1,5 @@
+# Local reference screenshots (real GPU, not committed)
+references/local/
+
+# JVM crash logs
+hs_err_pid*.log

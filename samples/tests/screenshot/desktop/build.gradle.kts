@@ -24,3 +24,67 @@ dependencies {
     runtimeOnly(libs.slf4j.api)
     runtimeOnly("ch.qos.logback:logback-classic:1.5.6")
 }
+
+// ── Shared paths ────────────────────────────────────────────────────
+val screenshotBuildDir = rootProject.layout.buildDirectory.dir("screenshots")
+val screenshotParentDir = project.parent!!.projectDir
+val referencesDir = screenshotParentDir.resolve("references")
+val profile = project.findProperty("screenshot.profile")?.toString() ?: "local"
+
+// ── Jemalloc for native safety ──────────────────────────────────────
+val jemallocPaths = listOf(
+    "/lib/x86_64-linux-gnu/libjemalloc.so.2",
+    "/usr/lib/libjemalloc.so.2",
+    "/usr/lib64/libjemalloc.so.2",
+    "/opt/homebrew/lib/libjemalloc.dylib"
+)
+val jemalloc = jemallocPaths.map { file(it) }.firstOrNull { it.exists() }
+
+// ── Pipeline Pass 1: Collect scenes ─────────────────────────────────
+tasks.register<JavaExec>("collectScenes") {
+    group = "verification"
+    description = "Pass 1: Discover scenes and write initial manifest"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass = "dev.engine.tests.screenshot.scenes.CollectScenes"
+    args = listOf(
+        screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
+        profile
+    )
+    outputs.upToDateWhen { false }
+}
+
+// ── Pipeline Pass 2: Run desktop backends ───────────────────────────
+tasks.register<JavaExec>("runDesktop") {
+    group = "verification"
+    description = "Pass 2: Run all scenes on desktop backends"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass = "dev.engine.tests.screenshot.desktop.DesktopRunnerMain"
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    if (jemalloc != null) environment("LD_PRELOAD", jemalloc.absolutePath)
+    args = listOf(
+        screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
+        screenshotBuildDir.get().asFile.absolutePath,
+        referencesDir.resolve(profile).absolutePath,
+        profile
+    )
+    outputs.upToDateWhen { false }
+    dependsOn("collectScenes")
+}
+
+// ── Save references ─────────────────────────────────────────────────
+tasks.register<JavaExec>("saveReferences") {
+    group = "verification"
+    description = "Render all scenes and save as reference screenshots"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass = "dev.engine.tests.screenshot.desktop.DesktopRunnerMain"
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    if (jemalloc != null) environment("LD_PRELOAD", jemalloc.absolutePath)
+    args = listOf(
+        screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
+        referencesDir.resolve(profile).absolutePath,
+        referencesDir.resolve(profile).absolutePath,
+        profile
+    )
+    outputs.upToDateWhen { false }
+    dependsOn("collectScenes")
+}
