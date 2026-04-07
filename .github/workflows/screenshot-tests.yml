@@ -25,45 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Java 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: gradle
-
-      - run: chmod +x gradlew
-
-      - name: Install Mesa and virtual display
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            mesa-utils libegl-mesa0 libgl1-mesa-dri libglx-mesa0 \
-            libvulkan1 mesa-vulkan-drivers xvfb libjemalloc2
-
-      - name: Configure Vulkan ICD
-        run: |
-          ls /usr/share/vulkan/icd.d/ 2>/dev/null || echo "No ICD directory"
-          for icd in \
-            /usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
-            /usr/share/vulkan/icd.d/lvp_icd.json \
-            /etc/vulkan/icd.d/lvp_icd.x86_64.json; do
-            if [ -f "$icd" ]; then
-              echo "Found Vulkan ICD: $icd"
-              echo "VK_ICD_FILENAMES=$icd" >> $GITHUB_ENV
-              echo "VK_DRIVER_FILES=$icd" >> $GITHUB_ENV
-              break
-            fi
-          done
-
-      - name: Download Slang compiler
-        run: |
-          SLANG_VERSION="2026.5.2"
-          SLANG_URL="https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/slang-${SLANG_VERSION}-linux-x86_64.tar.gz"
-          curl -sL "$SLANG_URL" | tar xz -C tools/
-          ls tools/lib/libslang.so && echo "Slang libraries found"
-          ls tools/bin/slangc && echo "slangc found"
+      - uses: ./.github/actions/setup-screenshot-env
 
       - name: Run screenshot pipeline
         id: pipeline
@@ -88,7 +50,6 @@ jobs:
         if: steps.pipeline.outcome == 'failure'
         run: exit 1
 
-  # On main push: commit the screenshot report JSON for the website
   publish-report:
     if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: screenshot-tests

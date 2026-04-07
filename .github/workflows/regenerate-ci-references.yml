@@ -16,35 +16,13 @@ env:
   MESA_GL_VERSION_OVERRIDE: "4.5"
   MESA_GLSL_VERSION_OVERRIDE: "450"
   GALLIUM_DRIVER: llvmpipe
-  VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
 
 jobs:
   regenerate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Java 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: gradle
-
-      - run: chmod +x gradlew
-
-      - name: Install Mesa and virtual display
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            mesa-utils libegl-mesa0 libgl1-mesa-dri libglx-mesa0 \
-            libvulkan1 mesa-vulkan-drivers xvfb libjemalloc2
-
-      - name: Download Slang compiler
-        run: |
-          SLANG_VERSION="2026.5.2"
-          SLANG_URL="https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/slang-${SLANG_VERSION}-linux-x86_64.tar.gz"
-          curl -sL "$SLANG_URL" | tar xz -C tools/
+      - uses: ./.github/actions/setup-screenshot-env
 
       - name: Generate CI reference screenshots
         run: |

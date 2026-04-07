@@ -1,0 +1,49 @@
+name: 'Setup Screenshot Test Environment'
+description: 'Installs Mesa, Slang, configures Vulkan ICD for screenshot testing'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Java 25
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '25'
+        cache: gradle
+
+    - name: Grant Gradle wrapper execute permission
+      shell: bash
+      run: chmod +x gradlew
+
+    - name: Install Mesa and virtual display
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          mesa-utils libegl-mesa0 libgl1-mesa-dri libglx-mesa0 \
+          libvulkan1 mesa-vulkan-drivers xvfb libjemalloc2
+
+    - name: Configure Vulkan ICD
+      shell: bash
+      run: |
+        ls /usr/share/vulkan/icd.d/ 2>/dev/null || echo "No ICD directory"
+        for icd in \
+          /usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
+          /usr/share/vulkan/icd.d/lvp_icd.json \
+          /etc/vulkan/icd.d/lvp_icd.x86_64.json; do
+          if [ -f "$icd" ]; then
+            echo "Found Vulkan ICD: $icd"
+            echo "VK_ICD_FILENAMES=$icd" >> $GITHUB_ENV
+            echo "VK_DRIVER_FILES=$icd" >> $GITHUB_ENV
+            break
+          fi
+        done
+
+    - name: Download Slang compiler
+      shell: bash
+      run: |
+        SLANG_VERSION="2026.5.2"
+        SLANG_URL="https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/slang-${SLANG_VERSION}-linux-x86_64.tar.gz"
+        curl -sL "$SLANG_URL" | tar xz -C tools/
+        ls tools/lib/libslang.so && echo "Slang libraries found"
+        ls tools/bin/slangc && echo "slangc found"
