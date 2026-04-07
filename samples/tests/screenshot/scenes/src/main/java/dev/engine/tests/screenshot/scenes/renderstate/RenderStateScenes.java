@@ -9,7 +9,6 @@ import dev.engine.graphics.renderstate.CullMode;
 import dev.engine.graphics.renderstate.FrontFace;
 import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.tests.screenshot.scenes.RenderTestScene;
-import dev.engine.tests.screenshot.scenes.SceneConfig;
 import dev.engine.tests.screenshot.scenes.Tolerance;
 import dev.engine.graphics.common.engine.Engine;
 
@@ -96,20 +95,7 @@ public class RenderStateScenes {
         cube.add(Transform.IDENTITY);
     };
 
-    // BUG: Vulkan multiply blend produces different results (brighter RGB, alpha=0).
-    // Investigation: GL/WG agree on dark result (3,3,10,255), VK gets (61,61,123,0).
-    // Likely a draw order or blend state issue in the Vulkan backend — the multiply
-    // cube may be blending against the wrong dst (clear color instead of background quad).
-    // See also: Vulkan swapchain alpha is undefined with opaque compositing.
     static final RenderTestScene ALL_BLEND_MODES = new RenderTestScene() {
-        @Override
-        public SceneConfig config() {
-            return SceneConfig.defaults()
-                    .withKnownLimitation("vulkan",
-                            "Vulkan multiply blend produces wrong result — likely draw order "
-                            + "or blend state bug (alpha=0, brighter RGB than GL/WebGPU)");
-        }
-
         @Override
         public void setup(Engine engine) {
             var renderer = engine.renderer();
@@ -151,10 +137,10 @@ public class RenderStateScenes {
                     .withRenderState(RenderState.DEPTH_WRITE, false));
             additive.add(Transform.IDENTITY);
 
-            // Multiply: white cube over blue bg — should show the blue bg color (white * blue = blue)
+            // Multiply: colored cube over blue bg — should darken (0.5*0.2=0.1, 0.5*0.2=0.1, 1.0*0.8=0.8)
             var multiply = scene.createEntity();
             multiply.add(PrimitiveMeshes.cube());
-            multiply.add(MaterialData.unlit(new Vec3(1.0f, 1.0f, 1.0f))
+            multiply.add(MaterialData.unlit(new Vec3(0.5f, 0.5f, 1.0f))
                     .withRenderState(RenderState.BLEND_MODE, BlendMode.MULTIPLY)
                     .withRenderState(RenderState.DEPTH_WRITE, false));
             multiply.add(Transform.at(3, 0, 0));
