@@ -119,24 +119,20 @@ public class WebTestApp {
             engine.setInputEvents(List.of());
             engine.tick(1.0 / 60.0);
 
-            // Yield to browser for the next animation frame.
-            // This is needed even after the last tick — the browser compositor
-            // must present the WebGPU content to the canvas before toDataURL()
-            // can read it. Without this yield, software renderers (CI headless
-            // Chrome) return blank/garbage from toDataURL().
-            toolkit.pollEvents();
-
             if (frame == captureFrame) {
-                // Wait for all GPU commands to finish
-                waitForGpuFlush();
-
-                // Capture canvas as PNG data URL
+                // Capture canvas IMMEDIATELY after tick, in the same event loop turn.
+                // WebGPU has no preserveDrawingBuffer — toDataURL() reads the
+                // drawingBuffer which is only valid before yielding to the browser.
+                // After requestAnimationFrame yields, the buffer is swapped/cleared.
                 String dataUrl = canvasToDataURL("canvas");
                 setScreenshotData(dataUrl);
                 setTestStatus("done", "Captured frame " + frame);
                 System.out.println("[WebTest] Screenshot captured at frame " + frame);
                 return;
             }
+
+            // Yield to browser for the next animation frame
+            toolkit.pollEvents();
         }
     }
 
