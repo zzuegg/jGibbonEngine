@@ -79,6 +79,10 @@ tasks.register<JavaExec>("runWeb") {
     )
     outputs.upToDateWhen { false }
     dependsOn("assembleWebTest")
+    // Must run after desktop so both append to the same manifest without conflict.
+    // When triggered standalone, collectScenes ensures the manifest exists.
+    mustRunAfter(":samples:tests:screenshot:desktop-runner:runDesktop")
+    dependsOn(":samples:tests:screenshot:desktop-runner:collectScenes")
 }
 
 // ── Save references ─────────────────────────────────────────────────
