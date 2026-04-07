@@ -74,8 +74,15 @@ public class WebRunner extends AbstractTestRunner {
                         "Message: " + msg + "\nLogs: " + extractStringValue(logsResult));
             }
 
+            // Dump browser console logs for debugging CI issues
+            String logs = cdp.evaluateJs(
+                    "JSON.stringify((window._allLogs||[]).map(function(l){return l.t+': '+l.m}).slice(-10))");
+            System.out.println("  Console: " + extractStringValue(logs));
+
             // Read screenshot data — try canvas.toDataURL() first, fall back to CDP
             byte[] pngBytes = cdp.readCanvasScreenshot();
+            System.out.println("  toDataURL size: " + (pngBytes != null ? pngBytes.length : 0)
+                    + ", blank: " + (pngBytes != null && isBlankImage(pngBytes)));
             boolean usedCdpFallback = false;
             if (pngBytes == null || pngBytes.length == 0 || isBlankImage(pngBytes)) {
                 // canvas.toDataURL() failed or returned blank — use CDP screenshot.
