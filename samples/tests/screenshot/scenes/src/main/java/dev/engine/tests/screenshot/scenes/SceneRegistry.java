@@ -1,10 +1,13 @@
 package dev.engine.tests.screenshot.scenes;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.net.JarURLConnection;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.jar.JarFile;
 
 /**
  * Discovers test scenes and comparison tests by scanning for static final fields
@@ -39,10 +42,36 @@ public class SceneRegistry {
                 var url = resources.nextElement();
                 if ("file".equals(url.getProtocol())) {
                     scanDirectory(new File(url.toURI()), scenesPackage);
+                } else if ("jar".equals(url.getProtocol())) {
+                    scanJar(url, packagePath);
                 }
             }
         } catch (Exception e) {
             throw new RuntimeException("Failed to discover scenes", e);
+        }
+    }
+
+    private void scanJar(java.net.URL url, String packagePath) {
+        try {
+            var conn = (JarURLConnection) url.openConnection();
+            try (var jar = conn.getJarFile()) {
+                var entries = jar.entries();
+                while (entries.hasMoreElements()) {
+                    var entry = entries.nextElement();
+                    var name = entry.getName();
+                    if (name.startsWith(packagePath) && name.endsWith(".class") && !entry.isDirectory()) {
+                        var className = name.replace('/', '.').replace(".class", "");
+                        var parts = className.split("\\.");
+                        var pkgName = className.substring(0, className.lastIndexOf('.'));
+                        try {
+                            var clazz = Class.forName(className);
+                            scanClass(clazz, categoryFromPackage(pkgName));
+                        } catch (ClassNotFoundException ignored) {}
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to scan JAR: " + url, e);
         }
     }
 
