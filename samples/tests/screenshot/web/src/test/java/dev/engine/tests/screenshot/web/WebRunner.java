@@ -76,10 +76,18 @@ public class WebRunner extends AbstractTestRunner {
 
             // Dump diagnostics for debugging CI issues
             String testMsg = cdp.evaluateJs("window._testMessage || ''");
-            System.out.println("  Status: " + extractStringValue(testMsg));
+            String statusInfo = extractStringValue(testMsg);
+            System.out.println("  Status: " + statusInfo);
             String logs = cdp.evaluateJs(
                     "JSON.stringify((window._allLogs||[]).map(function(l){return l.t+': '+l.m}).slice(-10))");
-            System.out.println("  Console: " + extractStringValue(logs));
+            String consoleInfo = extractStringValue(logs);
+            System.out.println("  Console: " + consoleInfo);
+
+            // Write diagnostics to a file in the output dir for artifact inspection
+            var diagDir = outputDir.resolve(BACKEND);
+            Files.createDirectories(diagDir);
+            Files.writeString(diagDir.resolve(sceneName + "_diag.txt"),
+                    "Status: " + statusInfo + "\nConsole: " + consoleInfo + "\n");
 
             // Read screenshot data — try canvas.toDataURL() first, fall back to CDP
             byte[] pngBytes = cdp.readCanvasScreenshot();
