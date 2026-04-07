@@ -181,6 +181,42 @@ public class CdpClient implements AutoCloseable {
         return Base64.getDecoder().decode(base64);
     }
 
+    /**
+     * Takes a screenshot via CDP Page.captureScreenshot.
+     * Captures the composited page content — works even when canvas.toDataURL()
+     * fails on software renderers.
+     *
+     * @param clip if true, clips to the given viewport dimensions
+     * @param width viewport width (used for clip)
+     * @param height viewport height (used for clip)
+     */
+    public byte[] captureScreenshot(boolean clip, int width, int height) throws Exception {
+        String params;
+        if (clip) {
+            params = "{\"format\":\"png\",\"captureBeyondViewport\":false," +
+                     "\"clip\":{\"x\":0,\"y\":0,\"width\":" + width +
+                     ",\"height\":" + height + ",\"scale\":1}}";
+        } else {
+            params = "{\"format\":\"png\",\"captureBeyondViewport\":false}";
+        }
+        var result = send("Page.captureScreenshot", params);
+        int dataIdx = result.indexOf("\"data\":\"");
+        if (dataIdx < 0) throw new RuntimeException("No screenshot data in CDP response");
+        int start = dataIdx + 8;
+        int end = result.indexOf("\"", start);
+        String base64 = result.substring(start, end);
+        return Base64.getDecoder().decode(base64);
+    }
+
+    /**
+     * Sets the browser viewport size via CDP Emulation.setDeviceMetricsOverride.
+     */
+    public void setViewportSize(int width, int height) throws Exception {
+        send("Emulation.setDeviceMetricsOverride",
+                "{\"width\":" + width + ",\"height\":" + height +
+                ",\"deviceScaleFactor\":1,\"mobile\":false}");
+    }
+
     @Override
     public void close() {
         try {

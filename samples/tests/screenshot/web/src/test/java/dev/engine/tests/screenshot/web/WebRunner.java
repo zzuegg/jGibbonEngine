@@ -67,11 +67,23 @@ public class WebRunner extends AbstractTestRunner {
                         "Message: " + msg + "\nLogs: " + extractStringValue(logsResult));
             }
 
-            // Read screenshot data from canvas
+            // Read screenshot data — try canvas.toDataURL() first, fall back to CDP
             byte[] pngBytes = cdp.readCanvasScreenshot();
+            boolean usedCdpFallback = false;
+            if (pngBytes == null || pngBytes.length == 0 || isBlankImage(pngBytes)) {
+                // canvas.toDataURL() failed or returned blank — use CDP screenshot.
+                // This happens on CI where software renderers don't flush to canvas.
+                cdp.setViewportSize(256, 256);
+                Thread.sleep(200); // let compositor present
+                pngBytes = cdp.captureScreenshot(true, 256, 256);
+                usedCdpFallback = true;
+            }
             if (pngBytes == null || pngBytes.length == 0) {
                 return new SceneResult.ExceptionResult(
                         "No screenshot data for scene '" + sceneName + "'", "");
+            }
+            if (usedCdpFallback) {
+                System.out.println("  Used CDP screenshot fallback for " + sceneName);
             }
 
             // Save the PNG
@@ -104,6 +116,30 @@ public class WebRunner extends AbstractTestRunner {
         int start = idx + 9;
         int end = cdpResponse.indexOf("\"", start);
         return end > start ? cdpResponse.substring(start, end) : "";
+    }
+
+    /**
+     * Checks if a PNG image is blank (all white or all same color).
+     * Decodes the PNG and samples pixels to detect uninitialized framebuffers.
+     */
+    private static boolean isBlankImage(byte[] pngBytes) {
+        try {
+            var img = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(pngBytes));
+            if (img == null) return true;
+            int w = img.getWidth(), h = img.getHeight();
+            int firstPixel = img.getRGB(0, 0);
+            // Sample a grid of pixels — if all same, it's blank
+            int sameCount = 0, total = 0;
+            for (int y = 0; y < h; y += h / 8 + 1) {
+                for (int x = 0; x < w; x += w / 8 + 1) {
+                    total++;
+                    if (img.getRGB(x, y) == firstPixel) sameCount++;
+                }
+            }
+            return sameCount == total;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static String stackTraceStr(Exception e) {
