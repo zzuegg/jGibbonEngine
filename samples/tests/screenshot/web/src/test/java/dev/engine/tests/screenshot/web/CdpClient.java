@@ -38,13 +38,21 @@ public class CdpClient implements AutoCloseable {
     private final Path userDataDir;
     private final AtomicInteger nextId = new AtomicInteger(1);
     private final ConcurrentHashMap<Integer, CompletableFuture<String>> pending;
+    private final StringBuilder chromeStderr;
 
     private CdpClient(Process chromeProcess, WebSocket webSocket, Path userDataDir,
-                       ConcurrentHashMap<Integer, CompletableFuture<String>> pending) {
+                       ConcurrentHashMap<Integer, CompletableFuture<String>> pending,
+                       StringBuilder chromeStderr) {
         this.chromeProcess = chromeProcess;
         this.webSocket = webSocket;
         this.userDataDir = userDataDir;
         this.pending = pending;
+        this.chromeStderr = chromeStderr;
+    }
+
+    /** Returns captured Chrome stderr output (GPU errors, adapter info, etc.). */
+    public String chromeStderr() {
+        return chromeStderr.toString();
     }
 
     /**
@@ -97,11 +105,13 @@ public class CdpClient implements AutoCloseable {
         stdoutDrain.setDaemon(true);
         stdoutDrain.start();
 
-        // Parse the WebSocket URL from stderr
-        String wsUrl = readWebSocketUrl(process);
+        // Parse the WebSocket URL from stderr, capturing all stderr output
+        var stderrCapture = new StringBuilder();
+        String wsUrl = readWebSocketUrl(process, stderrCapture);
         if (wsUrl == null) {
             process.destroyForcibly();
-            throw new RuntimeException("Failed to get CDP WebSocket URL from Chrome");
+            throw new RuntimeException("Failed to get CDP WebSocket URL from Chrome. stderr: "
+                    + stderrCapture.toString().substring(0, Math.min(500, stderrCapture.length())));
         }
 
         // Get the first tab's WebSocket URL via CDP HTTP endpoint
@@ -121,7 +131,7 @@ public class CdpClient implements AutoCloseable {
                 .buildAsync(URI.create(tabWsUrl), listener)
                 .get(10, TimeUnit.SECONDS);
 
-        return new CdpClient(process, ws, userDataDir, pending);
+        return new CdpClient(process, ws, userDataDir, pending, stderrCapture);
     }
 
     /**
@@ -245,7 +255,8 @@ public class CdpClient implements AutoCloseable {
 
     // --- Private helpers ---
 
-    private static String readWebSocketUrl(Process process) throws Exception {
+    private static String readWebSocketUrl(Process process, StringBuilder stderrCapture)
+            throws Exception {
         // Read stderr in a background thread — don't close the stream since
         // Chrome keeps writing to it. We just need the WS URL line.
         var reader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
@@ -255,14 +266,17 @@ public class CdpClient implements AutoCloseable {
             try {
                 String line;
                 while ((line = reader.readLine()) != null) {
+                    stderrCapture.append(line).append('\n');
                     var matcher = WS_URL_PATTERN.matcher(line);
                     if (matcher.find()) {
                         wsUrlFuture.complete(matcher.group(1));
                     }
-                    // Keep draining stderr so Chrome doesn't block
                 }
             } catch (Exception ignored) {}
-            wsUrlFuture.completeExceptionally(new RuntimeException("Chrome stderr closed without WS URL"));
+            if (!wsUrlFuture.isDone()) {
+                wsUrlFuture.completeExceptionally(
+                        new RuntimeException("Chrome stderr closed without WS URL"));
+            }
         }, "chrome-stderr-drain");
         stderrThread.setDaemon(true);
         stderrThread.start();

@@ -84,10 +84,13 @@ public class WebRunner extends AbstractTestRunner {
             System.out.println("  Console: " + consoleInfo);
 
             // Write diagnostics to a file in the output dir for artifact inspection
+            String chromeLog = cdp.chromeStderr();
             var diagDir = outputDir.resolve(BACKEND);
             Files.createDirectories(diagDir);
             Files.writeString(diagDir.resolve(sceneName + "_diag.txt"),
-                    "Status: " + statusInfo + "\nConsole: " + consoleInfo + "\n");
+                    "Status: " + statusInfo
+                    + "\nConsole: " + consoleInfo
+                    + "\n\n--- Chrome stderr ---\n" + chromeLog + "\n");
 
             // Read screenshot data — try canvas.toDataURL() first, fall back to CDP
             byte[] pngBytes = cdp.readCanvasScreenshot();
