@@ -21,7 +21,12 @@ tasks.register<JavaExec>("compare") {
     )
     outputs.upToDateWhen { false }
     dependsOn(":samples:tests:screenshot:desktop-runner:runDesktop")
-    dependsOn(":samples:tests:screenshot:web-runner:runWeb")
+    // Web runner is opt-in: Chrome's Dawn WebGPU cannot render with lavapipe
+    // on CI (device initializes but produces blank output). Run locally with
+    // a real GPU via: -Pscreenshot.web=true
+    if (project.findProperty("screenshot.web")?.toString() == "true") {
+        dependsOn(":samples:tests:screenshot:web-runner:runWeb")
+    }
 }
 
 // ── Pipeline Pass 4: Report ─────────────────────────────────────────
