@@ -97,7 +97,6 @@ public class WebTestApp {
         var engineConfig = sceneConfig.engineConfigBuilder()
                 .window(windowDesc)
                 .platform(platform)
-                .debugOverlay(false)
                 .build();
 
         var engine = new Engine(engineConfig, platform, backend.device());

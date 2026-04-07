@@ -458,6 +458,10 @@ public class TeaVmWgpuBindings implements WgpuBindings {
                 ? wgpuTextureFormatString(desc.depthStencilFormat()) : "";
         String topology = topologyString(desc.topology());
         String cullMode = cullModeString(desc.cullMode());
+        String frontFace = frontFaceString(desc.frontFace());
+
+        StencilFaceState sf = desc.stencilFront();
+        StencilFaceState sb2 = desc.stencilBack();
 
         return createRenderPipelineJS(
                 (int) device,
@@ -467,10 +471,20 @@ public class TeaVmWgpuBindings implements WgpuBindings {
                 (int) desc.fragmentModule(),
                 desc.fragmentEntryPoint(),
                 stride, attrsJson,
-                topology, cullMode,
+                topology, cullMode, frontFace,
                 colorFormat, depthFormat,
                 desc.depthWriteEnabled() == OPTIONAL_BOOL_TRUE,
                 compareString(desc.depthCompare()),
+                compareString(sf.compare()),
+                stencilOpString(sf.failOp()),
+                stencilOpString(sf.depthFailOp()),
+                stencilOpString(sf.passOp()),
+                compareString(sb2.compare()),
+                stencilOpString(sb2.failOp()),
+                stencilOpString(sb2.depthFailOp()),
+                stencilOpString(sb2.passOp()),
+                desc.stencilReadMask(),
+                desc.stencilWriteMask(),
                 blendFactorString(desc.blendColorSrcFactor()),
                 blendFactorString(desc.blendColorDstFactor()),
                 blendOpString(desc.blendColorOperation()),
@@ -482,8 +496,11 @@ public class TeaVmWgpuBindings implements WgpuBindings {
 
     @JSBody(params = {"deviceId", "layoutId", "vsModId", "vsEntry",
             "fsModId", "fsEntry", "stride", "attrsJson",
-            "topology", "cullMode", "colorFormat", "depthFormat",
+            "topology", "cullMode", "frontFace", "colorFormat", "depthFormat",
             "depthWrite", "depthCompare",
+            "stencilFrontCompare", "stencilFrontFail", "stencilFrontDepthFail", "stencilFrontPass",
+            "stencilBackCompare", "stencilBackFail", "stencilBackDepthFail", "stencilBackPass",
+            "stencilReadMask", "stencilWriteMask",
             "blendColorSrc", "blendColorDst", "blendColorOp",
             "blendAlphaSrc", "blendAlphaDst", "blendAlphaOp"}, script = """
         var device = window._wgpu[deviceId];
@@ -500,6 +517,7 @@ public class TeaVmWgpuBindings implements WgpuBindings {
             },
             primitive: {
                 topology: topology,
+                frontFace: frontFace,
                 cullMode: cullMode
             }
         };
@@ -520,7 +538,21 @@ public class TeaVmWgpuBindings implements WgpuBindings {
             desc.depthStencil = {
                 format: depthFormat,
                 depthWriteEnabled: depthWrite,
-                depthCompare: depthCompare
+                depthCompare: depthCompare,
+                stencilFront: {
+                    compare: stencilFrontCompare,
+                    failOp: stencilFrontFail,
+                    depthFailOp: stencilFrontDepthFail,
+                    passOp: stencilFrontPass
+                },
+                stencilBack: {
+                    compare: stencilBackCompare,
+                    failOp: stencilBackFail,
+                    depthFailOp: stencilBackDepthFail,
+                    passOp: stencilBackPass
+                },
+                stencilReadMask: stencilReadMask,
+                stencilWriteMask: stencilWriteMask
             };
         }
         var pipeline = device.createRenderPipeline(desc);
@@ -531,8 +563,11 @@ public class TeaVmWgpuBindings implements WgpuBindings {
     private static native int createRenderPipelineJS(
             int deviceId, int layoutId, int vsModId, String vsEntry,
             int fsModId, String fsEntry, int stride, String attrsJson,
-            String topology, String cullMode, String colorFormat, String depthFormat,
+            String topology, String cullMode, String frontFace, String colorFormat, String depthFormat,
             boolean depthWrite, String depthCompare,
+            String stencilFrontCompare, String stencilFrontFail, String stencilFrontDepthFail, String stencilFrontPass,
+            String stencilBackCompare, String stencilBackFail, String stencilBackDepthFail, String stencilBackPass,
+            int stencilReadMask, int stencilWriteMask,
             String blendColorSrc, String blendColorDst, String blendColorOp,
             String blendAlphaSrc, String blendAlphaDst, String blendAlphaOp);
 
@@ -941,6 +976,13 @@ public class TeaVmWgpuBindings implements WgpuBindings {
         };
     }
 
+    private static String frontFaceString(int frontFace) {
+        return switch (frontFace) {
+            case FRONT_FACE_CW -> "cw";
+            default -> "ccw";
+        };
+    }
+
     private static String compareString(int compare) {
         return switch (compare) {
             case COMPARE_NEVER -> "never";
@@ -952,6 +994,20 @@ public class TeaVmWgpuBindings implements WgpuBindings {
             case COMPARE_GREATER_EQUAL -> "greater-equal";
             case COMPARE_ALWAYS -> "always";
             default -> "always";
+        };
+    }
+
+    private static String stencilOpString(int op) {
+        return switch (op) {
+            case STENCIL_OP_KEEP -> "keep";
+            case STENCIL_OP_ZERO -> "zero";
+            case STENCIL_OP_REPLACE -> "replace";
+            case STENCIL_OP_INVERT -> "invert";
+            case STENCIL_OP_INCREMENT_CLAMP -> "increment-clamp";
+            case STENCIL_OP_DECREMENT_CLAMP -> "decrement-clamp";
+            case STENCIL_OP_INCREMENT_WRAP -> "increment-wrap";
+            case STENCIL_OP_DECREMENT_WRAP -> "decrement-wrap";
+            default -> "keep";
         };
     }
 
