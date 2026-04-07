@@ -52,10 +52,11 @@ jobs:
           ls tools/bin/slangc && echo "slangc found"
 
       - name: Run screenshot pipeline
+        id: pipeline
         continue-on-error: true
         run: |
           xvfb-run -a -s "-screen 0 1280x720x24" \
-            ./gradlew :samples:tests:screenshot:analysis:report \
+            ./gradlew :samples:tests:screenshot:analysis:screenshotTest \
             -Pscreenshot.profile=ci --no-daemon
 
       - name: Upload report
@@ -69,10 +70,9 @@ jobs:
             build/screenshots/**/*.png
           retention-days: 30
 
-      - name: Check for regressions
-        run: |
-          xvfb-run -a ./gradlew :samples:tests:screenshot:analysis:failOnRegression \
-            -Pscreenshot.profile=ci --no-daemon
+      - name: Fail on regression
+        if: steps.pipeline.outcome == 'failure'
+        run: exit 1
 
   # On main push: commit the screenshot report JSON for the website
   publish-report:
