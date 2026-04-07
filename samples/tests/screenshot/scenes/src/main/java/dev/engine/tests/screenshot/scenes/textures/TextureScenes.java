@@ -15,7 +15,7 @@ import java.nio.ByteBuffer;
 public class TextureScenes {
 
     /** Textured quad with nearest filtering — sharp checkerboard pixels. */
-    static final RenderTestScene TEXTURED_QUAD = engine -> {
+    public static final RenderTestScene TEXTURED_QUAD = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -32,7 +32,7 @@ public class TextureScenes {
     };
 
     /** Colored checkerboard with linear filtering — smooth blending. */
-    static final RenderTestScene MATERIAL_TEXTURE = engine -> {
+    public static final RenderTestScene MATERIAL_TEXTURE = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -63,7 +63,7 @@ public class TextureScenes {
 
     /** Two quads with different textures and different samplers —
      *  tests texture + sampler switching between draw calls. */
-    static final RenderTestScene TEXTURE_SWITCHING = engine -> {
+    public static final RenderTestScene TEXTURE_SWITCHING = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();

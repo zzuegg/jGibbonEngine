@@ -15,7 +15,7 @@ import dev.engine.graphics.common.engine.Engine;
 
 public class RenderStateScenes {
 
-    static final RenderTestScene MIXED_RENDER_STATES = engine -> {
+    public static final RenderTestScene MIXED_RENDER_STATES = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -41,7 +41,7 @@ public class RenderStateScenes {
         noCull.add(Transform.at(2, 0, 0));
     };
 
-    static final RenderTestScene DEPTH_WRITE_OFF = engine -> {
+    public static final RenderTestScene DEPTH_WRITE_OFF = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -61,7 +61,7 @@ public class RenderStateScenes {
         front.add(Transform.at(0, 0, 1));
     };
 
-    static final RenderTestScene BLEND_ADDITIVE = engine -> {
+    public static final RenderTestScene BLEND_ADDITIVE = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -81,7 +81,7 @@ public class RenderStateScenes {
         front.add(Transform.at(0.3f, 0, 1));
     };
 
-    static final RenderTestScene FRONT_FACE_CW = engine -> {
+    public static final RenderTestScene FRONT_FACE_CW = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -96,7 +96,7 @@ public class RenderStateScenes {
         cube.add(Transform.IDENTITY);
     };
 
-    static final RenderTestScene ALL_BLEND_MODES = new RenderTestScene() {
+    public static final RenderTestScene ALL_BLEND_MODES = new RenderTestScene() {
         @Override
         public SceneConfig config() {
             return SceneConfig.defaults()

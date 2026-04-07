@@ -26,7 +26,7 @@ public class UiScenes {
      * A UI window with label and button rendered over an empty scene.
      * Enables the debug overlay via engine config.
      */
-    static final RenderTestScene DEBUG_UI_WINDOW = new RenderTestScene() {
+    public static final RenderTestScene DEBUG_UI_WINDOW = new RenderTestScene() {
         @Override
         public SceneConfig config() {
             return new SceneConfig(

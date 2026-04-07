@@ -17,7 +17,7 @@ import java.nio.ByteBuffer;
 public class MixedMaterialScenes {
 
     /** Unlit + PBR + textured in same frame — tests shader/material switching per entity. */
-    static final RenderTestScene MIXED_SHADERS_SAME_FRAME = engine -> {
+    public static final RenderTestScene MIXED_SHADERS_SAME_FRAME = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -46,7 +46,7 @@ public class MixedMaterialScenes {
     };
 
     /** Many entities with same material — tests batching / no per-entity state leak. */
-    static final RenderTestScene MANY_SAME_MATERIAL = engine -> {
+    public static final RenderTestScene MANY_SAME_MATERIAL = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -66,7 +66,7 @@ public class MixedMaterialScenes {
     };
 
     /** Each entity has a different PBR roughness — gradient from smooth to rough. */
-    static final RenderTestScene PBR_ROUGHNESS_GRADIENT = engine -> {
+    public static final RenderTestScene PBR_ROUGHNESS_GRADIENT = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();

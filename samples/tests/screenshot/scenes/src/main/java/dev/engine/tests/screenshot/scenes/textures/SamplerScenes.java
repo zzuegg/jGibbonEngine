@@ -21,7 +21,7 @@ public class SamplerScenes {
 
     /** Two quads with same 4x4 checkerboard — one nearest, one linear.
      *  Nearest should show sharp pixel edges, linear should be smooth. */
-    static final RenderTestScene NEAREST_VS_LINEAR = engine -> {
+    public static final RenderTestScene NEAREST_VS_LINEAR = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -48,7 +48,7 @@ public class SamplerScenes {
 
     /** Same texture with repeat vs clamp wrap modes on a 3x-tiled quad.
      *  Repeat should show the pattern 3 times, clamp should show it once with stretched edges. */
-    static final RenderTestScene REPEAT_VS_CLAMP = engine -> {
+    public static final RenderTestScene REPEAT_VS_CLAMP = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -78,7 +78,7 @@ public class SamplerScenes {
 
     /** Verifies sampler switching between entities — nearest on first, linear on second.
      *  Tests that the sampler state doesn't leak between draw calls. */
-    static final RenderTestScene SAMPLER_SWITCHING = engine -> {
+    public static final RenderTestScene SAMPLER_SWITCHING = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();

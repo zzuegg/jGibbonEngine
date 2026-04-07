@@ -27,7 +27,7 @@ public class InputTestScenes {
      * A cube that changes color from red to green when key E is pressed on frame 2.
      * Capture at frame 1 (red) and frame 3 (green).
      */
-    static final RenderTestScene KEY_PRESS_CHANGES_COLOR = new RenderTestScene() {
+    public static final RenderTestScene KEY_PRESS_CHANGES_COLOR = new RenderTestScene() {
         @Override
         public void setup(Engine engine) {
             var entity = engine.scene().createEntity();

@@ -15,7 +15,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 public class PerEntityRenderStateScenes {
 
     /** One entity with depth disabled, another with depth enabled — tests state isolation. */
-    static final RenderTestScene PER_ENTITY_DEPTH = engine -> {
+    public static final RenderTestScene PER_ENTITY_DEPTH = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -51,7 +51,7 @@ public class PerEntityRenderStateScenes {
 
     /** One entity with back-face culling off, one with front-face culling —
      *  tests per-entity cull mode isolation. */
-    static final RenderTestScene PER_ENTITY_CULL = engine -> {
+    public static final RenderTestScene PER_ENTITY_CULL = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -81,7 +81,7 @@ public class PerEntityRenderStateScenes {
     };
 
     /** Blend mode on one entity does not affect the next entity rendered. */
-    static final RenderTestScene PER_ENTITY_BLEND = engine -> {
+    public static final RenderTestScene PER_ENTITY_BLEND = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();

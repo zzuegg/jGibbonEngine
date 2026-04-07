@@ -8,7 +8,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 
 public class MaterialScenes {
 
-    static final RenderTestScene PBR_MATERIALS = engine -> {
+    public static final RenderTestScene PBR_MATERIALS = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -27,7 +27,7 @@ public class MaterialScenes {
         metal.add(Transform.at(1.5f, 0, 0));
     };
 
-    static final RenderTestScene SINGLE_SPHERE_PBR = engine -> {
+    public static final RenderTestScene SINGLE_SPHERE_PBR = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -41,7 +41,7 @@ public class MaterialScenes {
         sphere.add(Transform.IDENTITY);
     };
 
-    static final RenderTestScene SHADER_SWITCHING = engine -> {
+    public static final RenderTestScene SHADER_SWITCHING = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
