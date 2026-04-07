@@ -62,5 +62,16 @@ include("examples")
 // ── Samples ─────────────────────────────────────────────────────────
 include("samples:tutorials")
 include("samples:examples")
-include("samples:tests:screenshot")
-project(":samples:tests:screenshot").projectDir = file("samples/tests/screenshot")
+
+// ── Screenshot Tests ────────────────────────────────────────────────
+include("samples:tests:screenshot:scenes")
+project(":samples:tests:screenshot:scenes").projectDir = file("samples/tests/screenshot/scenes")
+
+include("samples:tests:screenshot:runner")
+project(":samples:tests:screenshot:runner").projectDir = file("samples/tests/screenshot/runner")
+
+include("samples:tests:screenshot:desktop")
+project(":samples:tests:screenshot:desktop").projectDir = file("samples/tests/screenshot/desktop")
+
+include("samples:tests:screenshot:analysis")
+project(":samples:tests:screenshot:analysis").projectDir = file("samples/tests/screenshot/analysis")
