@@ -15,6 +15,10 @@ import dev.engine.providers.teavm.webgpu.TeaVmWgpuBindings;
 import dev.engine.providers.teavm.webgpu.TeaVmWgpuInit;
 import dev.engine.providers.teavm.windowing.CanvasWindowToolkit;
 import org.teavm.jso.JSBody;
+import org.teavm.jso.JSFunctor;
+import org.teavm.jso.JSObject;
+import org.teavm.interop.Async;
+import org.teavm.interop.AsyncCallback;
 
 import dev.engine.graphics.shader.params.CameraParams_NativeStruct;
 import dev.engine.graphics.shader.params.EngineParams_NativeStruct;
@@ -116,6 +120,11 @@ public class WebTestApp {
             engine.tick(1.0 / 60.0);
 
             if (frame == captureFrame) {
+                // Wait for all GPU commands to finish before reading the canvas.
+                // Without this, toDataURL() may capture uninitialized framebuffer
+                // on software renderers (CI headless Chrome with SwiftShader).
+                waitForGpuFlush();
+
                 // Capture canvas as PNG data URL
                 String dataUrl = canvasToDataURL("canvas");
                 setScreenshotData(dataUrl);
@@ -134,6 +143,33 @@ public class WebTestApp {
         System.out.println("[WebTest] Available scenes: " + scenes.keySet());
         setAvailableScenes(String.join(",", scenes.keySet()));
     }
+
+    @JSFunctor
+    private interface VoidCallback extends JSObject {
+        void call();
+    }
+
+    /**
+     * Waits for all submitted GPU work to complete. Uses TeaVM's @Async
+     * to block until the Promise from device.queue.onSubmittedWorkDone() resolves.
+     */
+    @Async
+    private static native void waitForGpuFlush();
+
+    private static void waitForGpuFlush(AsyncCallback<Void> callback) {
+        waitForGpuFlushJS(() -> callback.complete(null));
+    }
+
+    @JSBody(params = "callback", script = """
+        var deviceId = window._wgpuDevice;
+        var device = window._wgpu[deviceId];
+        if (device && device.queue) {
+            device.queue.onSubmittedWorkDone().then(function() { callback(); });
+        } else {
+            callback();
+        }
+    """)
+    private static native void waitForGpuFlushJS(VoidCallback callback);
 
     @JSBody(params = "name", script = """
         var url = new URL(window.location.href);
