@@ -45,6 +45,9 @@ public class CollectScenes {
             scene.tolerance = config.tolerance();
             scene.width = config.width();
             scene.height = config.height();
+            scene.knownLimitations = config.knownLimitations().stream()
+                    .map(kl -> new Manifest.KnownLimitation(kl.backend(), kl.reason()))
+                    .toList();
             manifest.scenes.add(scene);
         }
 

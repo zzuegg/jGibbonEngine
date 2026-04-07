@@ -38,6 +38,7 @@ public class Manifest {
         public Tolerance tolerance = Tolerance.loose();
         public int width = 256;
         public int height = 256;
+        public List<KnownLimitation> knownLimitations = List.of();
     }
 
     public static class Run {
@@ -50,6 +51,8 @@ public class Manifest {
     }
 
     public record Screenshot(int frame, String path) {}
+
+    public record KnownLimitation(String backend, String reason) {}
 
     public record RunError(String type, int exitCode, String message, String stderr, String stdout) {}
 
@@ -140,7 +143,15 @@ public class Manifest {
         sb.append("\"tolerance\":{\"maxChannelDiff\":").append(s.tolerance.maxChannelDiff())
           .append(",\"maxDiffPercent\":").append(s.tolerance.maxDiffPercent()).append("},");
         sb.append("\"width\":").append(s.width).append(",");
-        sb.append("\"height\":").append(s.height);
+        sb.append("\"height\":").append(s.height).append(",");
+        sb.append("\"knownLimitations\":[");
+        for (int i = 0; i < s.knownLimitations.size(); i++) {
+            var kl = s.knownLimitations.get(i);
+            sb.append("{\"backend\":").append(jsonStr(kl.backend()))
+              .append(",\"reason\":").append(jsonStr(kl.reason())).append("}");
+            if (i < s.knownLimitations.size() - 1) sb.append(",");
+        }
+        sb.append("]");
         sb.append("}");
     }
 
@@ -294,6 +305,7 @@ public class Manifest {
                     case "tolerance" -> s.tolerance = parseTolerance();
                     case "width" -> s.width = readInt();
                     case "height" -> s.height = readInt();
+                    case "knownLimitations" -> s.knownLimitations = parseKnownLimitations();
                     default -> skipValue();
                 }
                 skipWhitespace();
@@ -466,6 +478,37 @@ public class Manifest {
         private Tolerance parseNullableTolerance() {
             if (tryNull()) return null;
             return parseTolerance();
+        }
+
+        private List<KnownLimitation> parseKnownLimitations() {
+            var list = new ArrayList<KnownLimitation>();
+            expect('[');
+            skipWhitespace();
+            while (peek() != ']') {
+                String backend = "", reason = "";
+                expect('{');
+                while (peek() != '}') {
+                    var key = readString();
+                    skipWhitespace();
+                    expect(':');
+                    skipWhitespace();
+                    switch (key) {
+                        case "backend" -> backend = readString();
+                        case "reason" -> reason = readString();
+                        default -> skipValue();
+                    }
+                    skipWhitespace();
+                    if (peek() == ',') advance();
+                    skipWhitespace();
+                }
+                expect('}');
+                list.add(new KnownLimitation(backend, reason));
+                skipWhitespace();
+                if (peek() == ',') advance();
+                skipWhitespace();
+            }
+            expect(']');
+            return list;
         }
 
         private Map<String, String> parseStringMap() {

@@ -40,6 +40,21 @@ public final class RegressionChecker {
             return 1;
         }
 
+        // Report known limitations as info
+        long knownCount = manifest.comparisons.stream()
+                .filter(c -> "known_limitation".equals(c.status)).count();
+        if (knownCount > 0) {
+            System.out.println("Known limitations (" + knownCount + "):");
+            for (var comp : manifest.comparisons) {
+                if ("known_limitation".equals(comp.status)) {
+                    String location = "cross_backend".equals(comp.type)
+                            ? comp.backendA + " vs " + comp.backendB
+                            : comp.backend != null ? comp.backend : "unknown";
+                    System.out.println("  KNOWN: " + comp.scene + " [" + location + "] — " + comp.reason);
+                }
+            }
+        }
+
         boolean allNoReference = !manifest.comparisons.isEmpty()
                 && manifest.comparisons.stream()
                     .allMatch(c -> "no_reference".equals(c.status) || "skipped".equals(c.status));

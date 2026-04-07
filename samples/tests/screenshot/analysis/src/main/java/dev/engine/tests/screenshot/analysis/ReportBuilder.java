@@ -227,7 +227,8 @@ public final class ReportBuilder {
         if (!crossComps.isEmpty()) {
             sb.append("          <div class=\"card-matrix\">\n");
             for (var comp : crossComps) {
-                var cls = "fail".equals(comp.status) ? "mx-fail" : "mx-pass";
+                var cls = "fail".equals(comp.status) ? "mx-fail"
+                        : "known_limitation".equals(comp.status) ? "mx-known" : "mx-pass";
                 var mxTooltip = comp.backendA + " vs " + comp.backendB + ": "
                         + String.format("%.2f%%", comp.diffPercent);
                 if (comp.reason != null) mxTooltip += " — " + comp.reason;
@@ -416,6 +417,7 @@ public final class ReportBuilder {
             }
             .mx-pass { background: var(--green-dim); color: var(--green); }
             .mx-fail { background: var(--red-dim); color: var(--red); }
+            .mx-known { background: var(--orange-dim); color: var(--orange-light); }
 
             /* ── Detail overlay ─────────────────────────── */
             .overlay {
@@ -493,6 +495,7 @@ public final class ReportBuilder {
             .status-pass { color: var(--green); font-weight: 600; }
             .status-fail { color: var(--red); font-weight: 600; }
             .status-noref { color: var(--orange-light); }
+            .status-known { color: var(--orange-light); font-weight: 600; }
             .status-skip { color: var(--text-subtle); }
 
             /* Detail: error block */
@@ -610,12 +613,14 @@ public final class ReportBuilder {
                     var statusClass = switch (comp.status) {
                         case "pass" -> "status-pass";
                         case "fail" -> "status-fail";
+                        case "known_limitation" -> "status-known";
                         case "no_reference" -> "status-noref";
                         default -> "status-skip";
                     };
                     var statusLabel = switch (comp.status) {
                         case "pass" -> "Pass";
                         case "fail" -> "Fail";
+                        case "known_limitation" -> "Known Limitation";
                         case "no_reference" -> "No Reference";
                         case "skipped" -> "Skipped";
                         default -> comp.status;
@@ -638,10 +643,18 @@ public final class ReportBuilder {
                 sb.append("<table class=\"detail-table\">\n");
                 sb.append("<tr><th>Backends</th><th>Status</th><th>Diff</th><th>Threshold</th></tr>\n");
                 for (var comp : crossComps) {
-                    var statusClass = "fail".equals(comp.status) ? "status-fail" : "status-pass";
+                    var statusClass = switch (comp.status) {
+                        case "fail" -> "status-fail";
+                        case "known_limitation" -> "status-known";
+                        default -> "status-pass";
+                    };
+                    var statusLabel = switch (comp.status) {
+                        case "fail" -> "Fail";
+                        case "known_limitation" -> "Known";
+                        default -> "Pass";
+                    };
                     sb.append("<tr><td>").append(esc(comp.backendA)).append(" ↔ ").append(esc(comp.backendB)).append("</td>");
-                    sb.append("<td class=\"").append(statusClass).append("\">")
-                      .append("fail".equals(comp.status) ? "Fail" : "Pass").append("</td>");
+                    sb.append("<td class=\"").append(statusClass).append("\">").append(statusLabel).append("</td>");
                     sb.append("<td>").append(String.format("%.4f%%", comp.diffPercent)).append("</td>");
                     sb.append("<td>").append(comp.tolerance != null ? String.format("%.4f%%", comp.tolerance.maxDiffPercent()) : "—").append("</td>");
                     sb.append("</tr>\n");

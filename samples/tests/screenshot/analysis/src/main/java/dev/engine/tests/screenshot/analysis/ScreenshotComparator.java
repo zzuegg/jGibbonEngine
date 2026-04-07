@@ -124,9 +124,20 @@ public final class ScreenshotComparator {
                         if (diff <= scene.tolerance.maxDiffPercent()) {
                             comp.status = "pass";
                         } else {
-                            comp.status = "fail";
-                            comp.reason = String.format("Diff %.2f%% exceeds threshold %.2f%%",
-                                    diff, scene.tolerance.maxDiffPercent());
+                            // Check if this failure matches a known limitation
+                            var limitation = scene.knownLimitations.stream()
+                                    .filter(kl -> kl.backend().equals(backendA)
+                                            || kl.backend().equals(backendB))
+                                    .findFirst().orElse(null);
+                            if (limitation != null) {
+                                comp.status = "known_limitation";
+                                comp.reason = limitation.reason()
+                                        + String.format(" (diff %.2f%%)", diff);
+                            } else {
+                                comp.status = "fail";
+                                comp.reason = String.format("Diff %.2f%% exceeds threshold %.2f%%",
+                                        diff, scene.tolerance.maxDiffPercent());
+                            }
                         }
                         manifest.comparisons.add(comp);
                     }

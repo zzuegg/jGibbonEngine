@@ -11,6 +11,7 @@ import dev.engine.tests.screenshot.scenes.Tolerance;
 import dev.engine.ui.NkColor;
 import dev.engine.ui.NkContext;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -34,7 +35,8 @@ public class UiScenes {
                             .maxFrames(0)
                             .debugOverlay(true),
                     Set.of(3),
-                    Tolerance.tight());
+                    Tolerance.tight(),
+                    List.of());
         }
 
         @Override
