@@ -54,9 +54,14 @@ public class CdpClient implements AutoCloseable {
             throws Exception {
         var userDataDir = Files.createTempDirectory("chrome-test-");
 
+        // Use headed mode under xvfb when DISPLAY is set (CI), headless otherwise.
+        // Headless Chrome cannot render WebGPU to canvas (no VkSurface).
+        // Under xvfb, Chrome opens a real window in the virtual display and
+        // WebGPU canvas rendering works with software Vulkan (llvmpipe/lavapipe).
+        boolean hasDisplay = System.getenv("DISPLAY") != null;
         var args = new ArrayList<>(List.of(
                 chromeBinary,
-                "--headless=new",
+                hasDisplay ? "--no-first-run" : "--headless=new",
                 "--no-sandbox",
                 "--disable-extensions",
                 "--disable-dev-shm-usage",
@@ -66,9 +71,8 @@ public class CdpClient implements AutoCloseable {
                 "--user-data-dir=" + userDataDir.toAbsolutePath(),
                 "--window-size=" + windowWidth + "," + windowHeight,
                 "--enable-unsafe-webgpu",
-                "--enable-features=Vulkan,DefaultANGLEVulkan",
-                "--use-gl=angle",
-                "--use-angle=swiftshader",
+                "--enable-features=Vulkan",
+                "--use-angle=vulkan",
                 "about:blank"
         ));
 
