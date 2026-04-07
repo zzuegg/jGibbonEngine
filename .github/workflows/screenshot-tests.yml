@@ -76,7 +76,7 @@ jobs:
 
   # On main push: commit the screenshot report JSON for the website
   publish-report:
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: screenshot-tests
     runs-on: ubuntu-latest
     permissions:
