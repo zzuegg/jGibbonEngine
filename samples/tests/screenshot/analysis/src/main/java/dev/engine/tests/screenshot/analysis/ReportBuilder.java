@@ -683,7 +683,8 @@ public final class ReportBuilder {
                     };
                     sb.append("<tr><td>").append(esc(comp.backend != null ? comp.backend : "—")).append("</td>");
                     sb.append("<td class=\"").append(statusClass).append("\">").append(statusLabel).append("</td>");
-                    sb.append("<td>").append(comp.diffPercent > 0 ? String.format("%.4f%%", comp.diffPercent) : "—").append("</td>");
+                    boolean hasDiff = "pass".equals(comp.status) || "fail".equals(comp.status) || "known_limitation".equals(comp.status);
+                    sb.append("<td>").append(hasDiff ? String.format("%.4f%%", comp.diffPercent) : "—").append("</td>");
                     sb.append("<td>").append(comp.tolerance != null ? String.format("%.4f%%", comp.tolerance.maxDiffPercent()) : "—").append("</td>");
                     sb.append("</tr>\n");
                 }
