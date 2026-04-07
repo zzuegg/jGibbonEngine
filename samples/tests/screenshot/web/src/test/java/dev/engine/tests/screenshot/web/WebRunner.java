@@ -24,10 +24,17 @@ public class WebRunner extends AbstractTestRunner {
 
     private final Path webRoot;
     private final String chromeBinary;
+    private final boolean headless;
 
-    public WebRunner(Path webRoot, String chromeBinary) {
+    public WebRunner(Path webRoot, String chromeBinary, String profile) {
         this.webRoot = webRoot;
         this.chromeBinary = chromeBinary;
+        // CI profile uses headed mode under xvfb — headless Chrome can't render
+        // WebGPU to canvas (no VkSurface). Local profile uses headless (faster).
+        this.headless = !"ci".equals(profile);
+        System.out.println("  Headless: " + headless + " (profile=" + profile + ")");
+        System.out.println("  DISPLAY=" + System.getenv("DISPLAY"));
+        System.out.println("  VK_ICD_FILENAMES=" + System.getenv("VK_ICD_FILENAMES"));
     }
 
     @Override
@@ -41,7 +48,7 @@ public class WebRunner extends AbstractTestRunner {
         String sceneName = fieldName.toLowerCase();
 
         try (var httpServer = new EmbeddedHttpServer(webRoot);
-             var cdp = CdpClient.launch(chromeBinary, 256, 256)) {
+             var cdp = CdpClient.launch(chromeBinary, 256, 256, headless)) {
 
             String url = httpServer.baseUrl() + "/test.html?scene=" + sceneName + "&frames=3";
             System.out.println("  Chrome connected via CDP");

@@ -23,7 +23,7 @@ public class WebRunnerMain {
         String chromeBinary = findChrome();
 
         var config = new RunnerConfig(60_000, profile, outputDir, referencesDir, sceneFilter);
-        var runner = new WebRunner(webRoot, chromeBinary);
+        var runner = new WebRunner(webRoot, chromeBinary, profile);
 
         System.out.println("Running web screenshot tests...");
         System.out.println("  Manifest: " + manifestPath);

@@ -48,20 +48,19 @@ public class CdpClient implements AutoCloseable {
     }
 
     /**
-     * Launches Chrome headless and connects to it via CDP.
+     * Launches Chrome and connects to it via CDP.
+     *
+     * @param headless true for headless mode (fast, local). false for headed mode
+     *                 under xvfb (CI) — required for WebGPU canvas rendering
+     *                 because headless Chrome has no VkSurface support.
      */
-    public static CdpClient launch(String chromeBinary, int windowWidth, int windowHeight)
-            throws Exception {
+    public static CdpClient launch(String chromeBinary, int windowWidth, int windowHeight,
+                                    boolean headless) throws Exception {
         var userDataDir = Files.createTempDirectory("chrome-test-");
 
-        // Use headed mode under xvfb when DISPLAY is set (CI), headless otherwise.
-        // Headless Chrome cannot render WebGPU to canvas (no VkSurface).
-        // Under xvfb, Chrome opens a real window in the virtual display and
-        // WebGPU canvas rendering works with software Vulkan (llvmpipe/lavapipe).
-        boolean hasDisplay = System.getenv("DISPLAY") != null;
         var args = new ArrayList<>(List.of(
                 chromeBinary,
-                hasDisplay ? "--no-first-run" : "--headless=new",
+                headless ? "--headless=new" : "--no-first-run",
                 "--no-sandbox",
                 "--disable-extensions",
                 "--disable-dev-shm-usage",
@@ -78,6 +77,16 @@ public class CdpClient implements AutoCloseable {
 
         var pb = new ProcessBuilder(args);
         pb.redirectErrorStream(false);
+
+        // Forward Mesa/Vulkan env vars for CI software rendering.
+        // Without VK_ICD_FILENAMES, Dawn can't find lavapipe.
+        for (var envKey : List.of("LIBGL_ALWAYS_SOFTWARE", "MESA_GL_VERSION_OVERRIDE",
+                "MESA_GLSL_VERSION_OVERRIDE", "GALLIUM_DRIVER", "VK_ICD_FILENAMES",
+                "VK_DRIVER_FILES", "DISPLAY")) {
+            var val = System.getenv(envKey);
+            if (val != null) pb.environment().put(envKey, val);
+        }
+
         var process = pb.start();
 
         // Drain stdout in background to prevent pipe blocking
