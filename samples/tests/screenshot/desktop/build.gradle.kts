@@ -30,6 +30,7 @@ val screenshotBuildDir = rootProject.layout.buildDirectory.dir("screenshots")
 val screenshotParentDir = project.parent!!.projectDir
 val referencesDir = screenshotParentDir.resolve("references")
 val profile = project.findProperty("screenshot.profile")?.toString() ?: "local"
+val sceneFilter = project.findProperty("screenshot.scene")?.toString() ?: ""
 
 // ── Jemalloc for native safety ──────────────────────────────────────
 val jemallocPaths = listOf(
@@ -61,11 +62,12 @@ tasks.register<JavaExec>("runDesktop") {
     mainClass = "dev.engine.tests.screenshot.desktop.DesktopRunnerMain"
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     if (jemalloc != null) environment("LD_PRELOAD", jemalloc.absolutePath)
-    args = listOf(
+    args = listOfNotNull(
         screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
         screenshotBuildDir.get().asFile.absolutePath,
         referencesDir.resolve(profile).absolutePath,
-        profile
+        profile,
+        sceneFilter.ifEmpty { null }
     )
     outputs.upToDateWhen { false }
     dependsOn("collectScenes")
@@ -79,11 +81,12 @@ tasks.register<JavaExec>("saveReferences") {
     mainClass = "dev.engine.tests.screenshot.desktop.DesktopRunnerMain"
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     if (jemalloc != null) environment("LD_PRELOAD", jemalloc.absolutePath)
-    args = listOf(
+    args = listOfNotNull(
         screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
         referencesDir.resolve(profile).absolutePath,
         referencesDir.resolve(profile).absolutePath,
-        profile
+        profile,
+        sceneFilter.ifEmpty { null }
     )
     outputs.upToDateWhen { false }
     dependsOn("collectScenes")

@@ -42,6 +42,7 @@ public abstract class AbstractTestRunner {
         var manifest = Manifest.readFrom(manifestPath);
 
         for (var scene : manifest.scenes) {
+            if (!config.matchesScene(scene.name)) continue;
             for (var backend : backends()) {
                 long start = System.currentTimeMillis();
                 SceneResult result;
