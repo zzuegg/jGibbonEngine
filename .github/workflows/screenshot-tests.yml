@@ -44,6 +44,7 @@ jobs:
             build/screenshots/screenshot-report.json
             build/screenshots/report.html
             build/screenshots/**/*.png
+            build/screenshots/**/*.txt
           retention-days: 30
 
       - name: Fail on regression
