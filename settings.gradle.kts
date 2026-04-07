@@ -75,3 +75,6 @@ project(":samples:tests:screenshot:desktop-runner").projectDir = file("samples/t
 
 include("samples:tests:screenshot:analysis")
 project(":samples:tests:screenshot:analysis").projectDir = file("samples/tests/screenshot/analysis")
+
+include("samples:tests:screenshot:web-runner")
+project(":samples:tests:screenshot:web-runner").projectDir = file("samples/tests/screenshot/web")

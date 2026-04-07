@@ -12,7 +12,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 public class CameraScenes {
 
     /** Close-up perspective — cube should fill most of the frame. */
-    static final RenderTestScene CLOSE_PERSPECTIVE = engine -> {
+    public static final RenderTestScene CLOSE_PERSPECTIVE = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -27,7 +27,7 @@ public class CameraScenes {
     };
 
     /** Top-down view — looking straight down the Y axis. */
-    static final RenderTestScene TOP_DOWN_VIEW = engine -> {
+    public static final RenderTestScene TOP_DOWN_VIEW = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -47,7 +47,7 @@ public class CameraScenes {
     };
 
     /** Wide FOV — strong perspective distortion. */
-    static final RenderTestScene WIDE_FOV = engine -> {
+    public static final RenderTestScene WIDE_FOV = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();

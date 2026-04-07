@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Screenshot Test</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { background: #000; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="256" height="256"></canvas>
+    <script>
+        window._testStatus = 'loading';
+        window._testMessage = '';
+        window._screenshotData = null;
+        window._allLogs = [];
+
+        // Console capture
+        (function() {
+            var orig = {log: console.log, warn: console.warn, error: console.error};
+            ['log','warn','error'].forEach(function(t) {
+                console[t] = function() {
+                    window._allLogs.push({t:t, m: Array.from(arguments).join(' ')});
+                    orig[t].apply(console, arguments);
+                };
+            });
+        })();
+        window.onerror = function(msg, src, line) {
+            window._testStatus = 'error';
+            window._testMessage = msg + ' at ' + src + ':' + line;
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+            window._testStatus = 'error';
+            window._testMessage = String(e.reason);
+        });
+    </script>
+    <script src="js/web-test.js"></script>
+    <script type="module">
+        // Load Slang WASM, then start test
+        try {
+            var SlangModule = (await import('./slang/slang-wasm.mjs')).default;
+            var slang = await SlangModule({
+                locateFile: function(p) { return p.endsWith('.wasm') ? 'slang/slang-wasm.wasm' : p; }
+            });
+            window._slangModule = slang;
+        } catch (e) {
+            console.warn('Slang WASM unavailable:', e.message);
+        }
+
+        var mainFn = window.main || self.main;
+        if (typeof mainFn === 'function') {
+            mainFn();
+        } else {
+            window._testStatus = 'error';
+            window._testMessage = 'main() not found';
+        }
+    </script>
+</body>
+</html>

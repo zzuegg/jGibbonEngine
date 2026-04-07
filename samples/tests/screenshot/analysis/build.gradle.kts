@@ -21,6 +21,7 @@ tasks.register<JavaExec>("compare") {
     )
     outputs.upToDateWhen { false }
     dependsOn(":samples:tests:screenshot:desktop-runner:runDesktop")
+    dependsOn(":samples:tests:screenshot:web-runner:runWeb")
 }
 
 // ── Pipeline Pass 4: Report ─────────────────────────────────────────

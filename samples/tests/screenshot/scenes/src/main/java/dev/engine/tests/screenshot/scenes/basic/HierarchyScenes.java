@@ -13,7 +13,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 public class HierarchyScenes {
 
     /** Parent offset + child offset should combine correctly. */
-    static final RenderTestScene PARENT_CHILD_TRANSFORM = engine -> {
+    public static final RenderTestScene PARENT_CHILD_TRANSFORM = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -43,7 +43,7 @@ public class HierarchyScenes {
     };
 
     /** Multiple children under one parent — all should be offset by parent transform. */
-    static final RenderTestScene MULTI_CHILD = engine -> {
+    public static final RenderTestScene MULTI_CHILD = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();

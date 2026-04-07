@@ -8,7 +8,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 
 public class BasicScenes {
 
-    static final RenderTestScene DEPTH_TEST_CUBES = engine -> {
+    public static final RenderTestScene DEPTH_TEST_CUBES = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -27,7 +27,7 @@ public class BasicScenes {
         back.add(Transform.at(0.5f, 0, -1));
     };
 
-    static final RenderTestScene TWO_CUBES_UNLIT = engine -> {
+    public static final RenderTestScene TWO_CUBES_UNLIT = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -46,7 +46,7 @@ public class BasicScenes {
         cube2.add(Transform.at(1.5f, 0, 0));
     };
 
-    static final RenderTestScene PRIMITIVE_MESHES = engine -> {
+    public static final RenderTestScene PRIMITIVE_MESHES = engine -> {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
