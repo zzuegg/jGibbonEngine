@@ -44,15 +44,11 @@ jobs:
 
       - name: Configure Vulkan ICD
         run: |
-          echo "=== Available Vulkan ICDs ==="
-          find /usr -name "*lvp*" -o -name "*lavapipe*" 2>/dev/null || true
-          find /usr/share/vulkan -name "*.json" 2>/dev/null || true
-          # Try common paths for lavapipe ICD
+          ls /usr/share/vulkan/icd.d/ 2>/dev/null || echo "No ICD directory"
           for icd in \
             /usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
             /usr/share/vulkan/icd.d/lvp_icd.json \
-            /etc/vulkan/icd.d/lvp_icd.x86_64.json \
-            /etc/vulkan/icd.d/lvp_icd.json; do
+            /etc/vulkan/icd.d/lvp_icd.x86_64.json; do
             if [ -f "$icd" ]; then
               echo "Found Vulkan ICD: $icd"
               echo "VK_ICD_FILENAMES=$icd" >> $GITHUB_ENV
@@ -60,8 +56,6 @@ jobs:
               break
             fi
           done
-          # Verify
-          echo "VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-not set}"
 
       - name: Download Slang compiler
         run: |
