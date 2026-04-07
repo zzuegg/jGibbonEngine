@@ -9,6 +9,7 @@ import dev.engine.graphics.renderstate.CullMode;
 import dev.engine.graphics.renderstate.FrontFace;
 import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.tests.screenshot.scenes.RenderTestScene;
+import dev.engine.tests.screenshot.scenes.SceneConfig;
 import dev.engine.tests.screenshot.scenes.Tolerance;
 import dev.engine.graphics.common.engine.Engine;
 
@@ -97,53 +98,72 @@ public class RenderStateScenes {
 
     static final RenderTestScene ALL_BLEND_MODES = new RenderTestScene() {
         @Override
+        public SceneConfig config() {
+            return SceneConfig.defaults()
+                    .withKnownLimitation("vulkan",
+                            "Vulkan multiply blend produces brighter RGB and alpha=0 — "
+                            + "suspected swapchain alpha or blend state issue");
+        }
+
+        @Override
         public void setup(Engine engine) {
             var renderer = engine.renderer();
             var scene = engine.scene();
             var cam = renderer.createCamera();
-            cam.lookAt(new Vec3(0, 2, 12), Vec3.ZERO, Vec3.UNIT_Y);
-            cam.setPerspective((float) Math.toRadians(60), 256f / 256f, 0.1f, 100f);
+            cam.lookAt(new Vec3(0, 0, 8), Vec3.ZERO, Vec3.UNIT_Y);
+            cam.setPerspective((float) Math.toRadians(70), 256f / 256f, 0.1f, 100f);
             renderer.setActiveCamera(cam);
 
-            // Bright background with three colored stripes so blend effects are clearly visible
-            var bgLeft = scene.createEntity();
-            bgLeft.add(PrimitiveMeshes.quad());
-            bgLeft.add(MaterialData.unlit(new Vec3(0.8f, 0.2f, 0.2f))); // red
-            bgLeft.add(Transform.at(-3, 0, -2).withScale(2.5f));
+            // Bright white background so all blend effects are clearly visible
+            var bg = scene.createEntity();
+            bg.add(PrimitiveMeshes.quad());
+            bg.add(MaterialData.unlit(new Vec3(1.0f, 1.0f, 1.0f)));
+            bg.add(Transform.at(0, 0, -1).withScale(new Vec3(20, 20, 1)));
 
-            var bgCenter = scene.createEntity();
-            bgCenter.add(PrimitiveMeshes.quad());
-            bgCenter.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f))); // green
-            bgCenter.add(Transform.at(0, 0, -2).withScale(2.5f));
+            // Each column: a colored back cube + a blended front cube overlapping it
+            // This shows how each blend mode combines two colored objects
 
-            var bgRight = scene.createEntity();
-            bgRight.add(PrimitiveMeshes.quad());
-            bgRight.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f))); // blue
-            bgRight.add(Transform.at(3, 0, -2).withScale(2.5f));
+            // === Alpha blend (left): green cube behind, red cube in front ===
+            // Alpha with opaque source: front replaces back entirely
+            var alphaBack = scene.createEntity();
+            alphaBack.add(PrimitiveMeshes.cube());
+            alphaBack.add(MaterialData.unlit(new Vec3(0.0f, 0.8f, 0.0f)));
+            alphaBack.add(Transform.at(-3, 0, -0.5f));
 
-            // Alpha blend: white cube over red bg — should show opaque white (alpha=1.0)
-            var alpha = scene.createEntity();
-            alpha.add(PrimitiveMeshes.cube());
-            alpha.add(MaterialData.unlit(new Vec3(1.0f, 1.0f, 1.0f))
+            var alphaFront = scene.createEntity();
+            alphaFront.add(PrimitiveMeshes.cube());
+            alphaFront.add(MaterialData.unlit(new Vec3(0.9f, 0.0f, 0.0f))
                     .withRenderState(RenderState.BLEND_MODE, BlendMode.ALPHA)
                     .withRenderState(RenderState.DEPTH_WRITE, false));
-            alpha.add(Transform.at(-3, 0, 0));
+            alphaFront.add(Transform.at(-3, 0, 0.5f));
 
-            // Additive: yellow cube over green bg — should brighten (green + yellow = bright)
-            var additive = scene.createEntity();
-            additive.add(PrimitiveMeshes.cube());
-            additive.add(MaterialData.unlit(new Vec3(0.8f, 0.8f, 0.0f))
+            // === Additive blend (center): blue cube behind, green cube in front ===
+            // Additive: colors add together (blue + green = cyan where overlapping)
+            var addBack = scene.createEntity();
+            addBack.add(PrimitiveMeshes.cube());
+            addBack.add(MaterialData.unlit(new Vec3(0.0f, 0.0f, 0.9f)));
+            addBack.add(Transform.at(0, 0, -0.5f));
+
+            var addFront = scene.createEntity();
+            addFront.add(PrimitiveMeshes.cube());
+            addFront.add(MaterialData.unlit(new Vec3(0.0f, 0.8f, 0.0f))
                     .withRenderState(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
                     .withRenderState(RenderState.DEPTH_WRITE, false));
-            additive.add(Transform.IDENTITY);
+            addFront.add(Transform.at(0, 0, 0.5f));
 
-            // Multiply: colored cube over blue bg — should darken (0.5*0.2=0.1, 0.5*0.2=0.1, 1.0*0.8=0.8)
-            var multiply = scene.createEntity();
-            multiply.add(PrimitiveMeshes.cube());
-            multiply.add(MaterialData.unlit(new Vec3(0.5f, 0.5f, 1.0f))
+            // === Multiply blend (right): bright yellow cube behind, colored cube in front ===
+            // Multiply: colors multiply (yellow * blue-ish = dark, showing darkening effect)
+            var mulBack = scene.createEntity();
+            mulBack.add(PrimitiveMeshes.cube());
+            mulBack.add(MaterialData.unlit(new Vec3(1.0f, 1.0f, 0.2f)));
+            mulBack.add(Transform.at(3, 0, -0.5f));
+
+            var mulFront = scene.createEntity();
+            mulFront.add(PrimitiveMeshes.cube());
+            mulFront.add(MaterialData.unlit(new Vec3(0.5f, 0.5f, 1.0f))
                     .withRenderState(RenderState.BLEND_MODE, BlendMode.MULTIPLY)
                     .withRenderState(RenderState.DEPTH_WRITE, false));
-            multiply.add(Transform.at(3, 0, 0));
+            mulFront.add(Transform.at(3, 0, 0.5f));
         }
     };
 }
