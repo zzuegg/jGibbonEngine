@@ -47,10 +47,9 @@ jobs:
         run: |
           SLANG_VERSION="2026.5.2"
           SLANG_URL="https://github.com/shader-slang/slang/releases/download/v${SLANG_VERSION}/slang-${SLANG_VERSION}-linux-x86_64.tar.gz"
-          mkdir -p tools/bin tools/lib
-          curl -sL "$SLANG_URL" | tar xz -C tools/ --strip-components=1
-          ls tools/lib/libslang* || echo "Slang lib not found"
-          ls tools/bin/slangc || echo "slangc not found"
+          curl -sL "$SLANG_URL" | tar xz -C tools/
+          ls tools/lib/libslang.so && echo "Slang libraries found"
+          ls tools/bin/slangc && echo "slangc found"
 
       - name: Run screenshot pipeline
         continue-on-error: true
