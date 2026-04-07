@@ -22,7 +22,7 @@ class AbstractTestRunnerTest {
 
         var config = new RunnerConfig(5000, "local", tmp.resolve("screenshots"), tmp.resolve("refs"));
         var runner = new FakeTestRunner(List.of("opengl"),
-                (cls, field, backend, out, cfg) ->
+                (cls, field, backend, out) ->
                         new SceneResult.Success(Map.of(3, "opengl/test_scene_f3.png")));
         runner.run(manifestPath, config);
 
@@ -41,7 +41,7 @@ class AbstractTestRunnerTest {
 
         var config = new RunnerConfig(5000, "local", tmp.resolve("screenshots"), tmp.resolve("refs"));
         var runner = new FakeTestRunner(List.of("vulkan"),
-                (cls, field, backend, out, cfg) ->
+                (cls, field, backend, out) ->
                         new SceneResult.Crash(139, "SIGSEGV", ""));
         runner.run(manifestPath, config);
 
@@ -63,7 +63,7 @@ class AbstractTestRunnerTest {
         var config = new RunnerConfig(5000, "local", tmp.resolve("screenshots"), tmp.resolve("refs"));
         var callCount = new int[]{0};
         var runner = new FakeTestRunner(List.of("opengl"),
-                (cls, field, backend, out, cfg) -> {
+                (cls, field, backend, out) -> {
                     if (callCount[0]++ == 0)
                         return new SceneResult.Crash(139, "SIGSEGV", "");
                     return new SceneResult.Success(Map.of(3, "opengl/scene_b_f3.png"));
@@ -84,7 +84,7 @@ class AbstractTestRunnerTest {
 
         var config = new RunnerConfig(5000, "local", tmp.resolve("screenshots"), tmp.resolve("refs"));
         var runner = new FakeTestRunner(List.of("opengl", "vulkan"),
-                (cls, field, backend, out, cfg) ->
+                (cls, field, backend, out) ->
                         new SceneResult.Success(Map.of(3, backend + "/test_scene_f3.png")));
         runner.run(manifestPath, config);
 
@@ -102,7 +102,7 @@ class AbstractTestRunnerTest {
 
         var config = new RunnerConfig(5000, "local", tmp.resolve("screenshots"), tmp.resolve("refs"));
         var runner = new FakeTestRunner(List.of("opengl"),
-                (cls, field, backend, out, cfg) ->
+                (cls, field, backend, out) ->
                         new SceneResult.ExceptionResult("Shader failed", "at Foo.bar(Foo.java:42)"));
         runner.run(manifestPath, config);
 
@@ -120,7 +120,7 @@ class AbstractTestRunnerTest {
 
         var config = new RunnerConfig(5000, "local", tmp.resolve("screenshots"), tmp.resolve("refs"));
         var runner = new FakeTestRunner(List.of("webgpu"),
-                (cls, field, backend, out, cfg) ->
+                (cls, field, backend, out) ->
                         new SceneResult.Timeout("last stderr", "last stdout"));
         runner.run(manifestPath, config);
 

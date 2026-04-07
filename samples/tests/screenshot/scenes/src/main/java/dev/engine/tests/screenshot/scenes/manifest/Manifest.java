@@ -468,6 +468,25 @@ public class Manifest {
             return parseTolerance();
         }
 
+        private Map<String, String> parseStringMap() {
+            var map = new HashMap<String, String>();
+            expect('{');
+            skipWhitespace();
+            while (peek() != '}') {
+                var key = readString();
+                skipWhitespace();
+                expect(':');
+                skipWhitespace();
+                var value = readString();
+                map.put(key, value);
+                skipWhitespace();
+                if (peek() == ',') advance();
+                skipWhitespace();
+            }
+            expect('}');
+            return map;
+        }
+
         private Set<Integer> parseIntSet() {
             var set = new HashSet<Integer>();
             expect('[');

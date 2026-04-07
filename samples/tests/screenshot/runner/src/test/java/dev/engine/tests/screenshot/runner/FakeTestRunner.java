@@ -1,7 +1,5 @@
 package dev.engine.tests.screenshot.runner;
 
-import dev.engine.tests.screenshot.scenes.SceneConfig;
-
 import java.nio.file.Path;
 import java.util.List;
 
@@ -12,8 +10,7 @@ class FakeTestRunner extends AbstractTestRunner {
 
     @FunctionalInterface
     interface ResultFactory {
-        SceneResult create(String className, String fieldName, String backend,
-                           Path outputDir, SceneConfig config);
+        SceneResult create(String className, String fieldName, String backend, Path outputDir);
     }
 
     private final List<String> backends;
@@ -29,7 +26,7 @@ class FakeTestRunner extends AbstractTestRunner {
 
     @Override
     protected SceneResult runScene(String className, String fieldName, String backend,
-                                    Path outputDir, SceneConfig config) {
-        return resultFactory.create(className, fieldName, backend, outputDir, config);
+                                    Path outputDir) {
+        return resultFactory.create(className, fieldName, backend, outputDir);
     }
 }

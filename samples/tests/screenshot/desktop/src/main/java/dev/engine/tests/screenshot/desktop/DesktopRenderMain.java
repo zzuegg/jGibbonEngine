@@ -48,20 +48,16 @@ public class DesktopRenderMain {
             var scene = (RenderTestScene) field.get(null);
             var config = scene.config();
 
+            // Scene provides a partially-filled builder; runner adds platform/backend
             var factory = createBackendFactory(backend);
-            var windowDesc = WindowDescriptor.builder(backend + " Test")
-                    .size(config.width(), config.height()).build();
-            var gfxConfig = new GraphicsConfigLegacy(false);
-            var gfxBackend = factory.create(windowDesc, gfxConfig);
-
             var platform = DesktopPlatform.builder().build();
-            var engineConfig = EngineConfig.builder()
-                    .window(windowDesc)
+            var engineConfig = config.engineConfigBuilder()
                     .platform(platform)
                     .graphicsBackend(factory)
-                    .maxFrames(0)
-                    .debugOverlay(false)
                     .build();
+            var windowDesc = engineConfig.window();
+            var gfxConfig = new GraphicsConfigLegacy(false);
+            var gfxBackend = factory.create(windowDesc, gfxConfig);
             var engine = new Engine(engineConfig, platform, gfxBackend.device());
 
             try {

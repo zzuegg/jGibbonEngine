@@ -1,6 +1,5 @@
 package dev.engine.tests.screenshot.runner;
 
-import dev.engine.tests.screenshot.scenes.SceneConfig;
 import dev.engine.tests.screenshot.scenes.manifest.Manifest;
 
 import java.io.PrintWriter;
@@ -8,7 +7,6 @@ import java.io.StringWriter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeSet;
 
 /**
@@ -31,11 +29,10 @@ public abstract class AbstractTestRunner {
      * @param fieldName the static final field name
      * @param backend   the backend name (e.g. "opengl", "vulkan")
      * @param outputDir directory to write screenshot PNGs
-     * @param config    the scene's configuration
      * @return the result of the render attempt
      */
     protected abstract SceneResult runScene(String className, String fieldName,
-                                             String backend, Path outputDir, SceneConfig config);
+                                             String backend, Path outputDir);
 
     /**
      * Runs all scenes from the manifest on all backends.
@@ -45,17 +42,12 @@ public abstract class AbstractTestRunner {
         var manifest = Manifest.readFrom(manifestPath);
 
         for (var scene : manifest.scenes) {
-            var sceneConfig = new SceneConfig(
-                    scene.width, scene.height,
-                    scene.captureFrames, scene.tolerance,
-                    false, Map.of());
-
             for (var backend : backends()) {
                 long start = System.currentTimeMillis();
                 SceneResult result;
                 try {
                     result = runScene(scene.className, scene.fieldName,
-                            backend, config.outputDir(), sceneConfig);
+                            backend, config.outputDir());
                 } catch (Exception e) {
                     result = new SceneResult.ExceptionResult(e.getMessage(), stackTraceToString(e));
                 }

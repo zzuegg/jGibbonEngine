@@ -2,7 +2,6 @@ package dev.engine.tests.screenshot.desktop;
 
 import dev.engine.tests.screenshot.runner.AbstractTestRunner;
 import dev.engine.tests.screenshot.runner.SceneResult;
-import dev.engine.tests.screenshot.scenes.SceneConfig;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -32,7 +31,7 @@ public class DesktopRunner extends AbstractTestRunner {
 
     @Override
     protected SceneResult runScene(String className, String fieldName,
-                                    String backend, Path outputDir, SceneConfig config) {
+                                    String backend, Path outputDir) {
         var resultFile = outputDir.resolve(
                 backend + "_" + fieldName.toLowerCase() + "_result.json");
         try {

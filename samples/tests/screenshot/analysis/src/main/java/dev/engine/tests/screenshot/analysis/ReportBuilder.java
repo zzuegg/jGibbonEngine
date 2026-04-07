@@ -177,29 +177,46 @@ public final class ReportBuilder {
         sb.append("        <div class=\"card-body\">\n");
         sb.append("          <h3 class=\"card-title\">").append(formatSceneName(scene.name)).append("</h3>\n");
 
-        // Backend status dots
-        sb.append("          <div class=\"backend-dots\">\n");
+        // Backend badges (based on reference comparison status)
+        sb.append("          <div class=\"backend-badges\">\n");
         for (var backend : allBackends) {
             var run = manifest.runs.stream()
                     .filter(r -> r.scene.equals(scene.name) && r.backend.equals(backend))
                     .findFirst().orElse(null);
-            var dotClass = run == null ? "dot-skip" :
-                    "success".equals(run.status) ? "dot-pass" :
-                    "crash".equals(run.status) ? "dot-crash" : "dot-fail";
+            var refComp = manifest.comparisons.stream()
+                    .filter(c -> c.scene.equals(scene.name) && "reference".equals(c.type)
+                            && backend.equals(c.backend))
+                    .findFirst().orElse(null);
+
+            // Determine badge style from reference comparison, falling back to run status
+            String badgeClass;
             var tooltip = new StringBuilder(backend);
             if (run == null) {
+                badgeClass = "badge-skip";
                 tooltip.append(" — not run");
-            } else {
+            } else if (!"success".equals(run.status)) {
+                badgeClass = "badge-error";
                 tooltip.append(" — ").append(run.status);
                 if (run.error != null && run.error.message() != null) {
-                    tooltip.append(": ").append(run.error.message().length() > 100
-                            ? run.error.message().substring(0, 100) + "..."
-                            : run.error.message());
+                    var msg = run.error.message();
+                    tooltip.append(": ").append(msg.length() > 120 ? msg.substring(0, 120) + "..." : msg);
                 }
+            } else if (refComp == null || "no_reference".equals(refComp.status)) {
+                badgeClass = "badge-noref";
+                tooltip.append(" — no reference image");
+            } else if ("pass".equals(refComp.status)) {
+                badgeClass = "badge-pass";
+                tooltip.append(" — pass");
+                if (refComp.diffPercent > 0) tooltip.append(String.format(" (%.4f%%)", refComp.diffPercent));
+            } else {
+                badgeClass = "badge-fail";
+                tooltip.append(" — fail");
+                if (refComp.reason != null) tooltip.append(": ").append(refComp.reason);
             }
-            sb.append("            <span class=\"dot ").append(dotClass)
+
+            sb.append("            <span class=\"backend-badge ").append(badgeClass)
               .append("\" title=\"").append(esc(tooltip.toString()))
-              .append("\"></span>\n");
+              .append("\">").append(backendShort(backend)).append("</span>\n");
         }
         sb.append("          </div>\n");
 
@@ -379,15 +396,17 @@ public final class ReportBuilder {
               white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             }
 
-            /* Backend status dots */
-            .backend-dots { display: flex; gap: 6px; margin-bottom: 0.5rem; }
-            .dot {
-              width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+            /* Backend badges */
+            .backend-badges { display: flex; gap: 4px; margin-bottom: 0.5rem; }
+            .backend-badge {
+              font-size: 0.7rem; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+              padding: 2px 6px; border-radius: 4px; letter-spacing: 0.03em;
             }
-            .dot-pass { background: var(--green); }
-            .dot-fail { background: var(--red); }
-            .dot-crash { background: var(--red); box-shadow: 0 0 6px var(--red); }
-            .dot-skip { background: var(--text-subtle); opacity: 0.4; }
+            .badge-pass { background: var(--green-dim); color: var(--green); }
+            .badge-fail { background: var(--red-dim); color: var(--red); }
+            .badge-error { background: var(--red-dim); color: var(--red); }
+            .badge-noref { background: var(--orange-dim); color: var(--orange-light); }
+            .badge-skip { background: rgba(110,118,129,0.15); color: var(--text-subtle); }
 
             /* Compact matrix on card */
             .card-matrix { display: flex; gap: 4px; flex-wrap: wrap; }
