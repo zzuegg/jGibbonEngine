@@ -19,7 +19,6 @@ env:
   MESA_GL_VERSION_OVERRIDE: "4.5"
   MESA_GLSL_VERSION_OVERRIDE: "450"
   GALLIUM_DRIVER: llvmpipe
-  VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
 
 jobs:
   screenshot-tests:
@@ -42,6 +41,27 @@ jobs:
           sudo apt-get install -y \
             mesa-utils libegl-mesa0 libgl1-mesa-dri libglx-mesa0 \
             libvulkan1 mesa-vulkan-drivers xvfb libjemalloc2
+
+      - name: Configure Vulkan ICD
+        run: |
+          echo "=== Available Vulkan ICDs ==="
+          find /usr -name "*lvp*" -o -name "*lavapipe*" 2>/dev/null || true
+          find /usr/share/vulkan -name "*.json" 2>/dev/null || true
+          # Try common paths for lavapipe ICD
+          for icd in \
+            /usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
+            /usr/share/vulkan/icd.d/lvp_icd.json \
+            /etc/vulkan/icd.d/lvp_icd.x86_64.json \
+            /etc/vulkan/icd.d/lvp_icd.json; do
+            if [ -f "$icd" ]; then
+              echo "Found Vulkan ICD: $icd"
+              echo "VK_ICD_FILENAMES=$icd" >> $GITHUB_ENV
+              echo "VK_DRIVER_FILES=$icd" >> $GITHUB_ENV
+              break
+            fi
+          done
+          # Verify
+          echo "VK_ICD_FILENAMES=${VK_ICD_FILENAMES:-not set}"
 
       - name: Download Slang compiler
         run: |

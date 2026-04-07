@@ -111,6 +111,14 @@ public class DesktopRunner extends AbstractTestRunner {
         // Inherit working directory so Slang native library can be found at tools/lib/
         pb.directory(new File(System.getProperty("user.dir")));
 
+        // Forward Mesa/Vulkan env vars if set (important for CI software rendering)
+        for (var envKey : List.of("LIBGL_ALWAYS_SOFTWARE", "MESA_GL_VERSION_OVERRIDE",
+                "MESA_GLSL_VERSION_OVERRIDE", "GALLIUM_DRIVER", "VK_ICD_FILENAMES",
+                "VK_DRIVER_FILES", "DISPLAY")) {
+            var val = System.getenv(envKey);
+            if (val != null) pb.environment().put(envKey, val);
+        }
+
         // jemalloc preload to avoid glibc heap corruption with Slang COM objects
         var jemallocPaths = List.of(
                 "/lib/x86_64-linux-gnu/libjemalloc.so.2",
