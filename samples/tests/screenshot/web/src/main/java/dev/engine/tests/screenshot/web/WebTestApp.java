@@ -120,17 +120,23 @@ public class WebTestApp {
             engine.tick(1.0 / 60.0);
 
             if (frame == captureFrame) {
-                // Capture canvas IMMEDIATELY after tick, in the same event loop turn.
-                // WebGPU has no preserveDrawingBuffer — toDataURL() reads the
-                // drawingBuffer which is only valid before yielding to the browser.
-                // After requestAnimationFrame yields, the buffer is swapped/cleared.
+                // Try canvas.toDataURL() first (works locally with real GPU).
+                // Falls back to WebGPU texture readback if canvas is blank
+                // (CI: Chrome's SkSurface can't initialize with software Vulkan).
                 String dataUrl = canvasToDataURL("canvas");
+                boolean blank = isBlankDataUrl(dataUrl);
+                if (blank) {
+                    System.out.println("[WebTest] toDataURL blank, trying WebGPU readback...");
+                    dataUrl = readbackViaWebGPU();
+                    blank = isBlankDataUrl(dataUrl);
+                }
                 int dataLen = dataUrl != null ? dataUrl.length() : 0;
                 String gpuInfo = getGpuDiagnostics();
                 setScreenshotData(dataUrl);
-                setTestStatus("done", "frame=" + frame + " dataUrl.len=" + dataLen + " gpu=" + gpuInfo);
+                String method = blank ? "BLANK" : (dataUrl.length() > 100 ? "ok" : "empty");
+                setTestStatus("done", "frame=" + frame + " len=" + dataLen + " method=" + method + " gpu=" + gpuInfo);
                 System.out.println("[WebTest] Screenshot captured at frame " + frame
-                        + " dataUrl.len=" + dataLen + " gpu=" + gpuInfo);
+                        + " len=" + dataLen + " method=" + method);
                 return;
             }
 
@@ -171,6 +177,90 @@ public class WebTestApp {
         }
     """)
     private static native void waitForGpuFlushJS(VoidCallback callback);
+
+    /**
+     * Checks if a data URL represents a blank (all transparent) image.
+     * A minimal blank 256x256 PNG data URL is ~3200 chars.
+     * Real rendered content is typically 4000+ chars.
+     */
+    private static boolean isBlankDataUrl(String dataUrl) {
+        if (dataUrl == null || dataUrl.length() < 100) return true;
+        // Small PNGs with uniform content (blank) compress very well.
+        // A 256x256 blank PNG is ~170 bytes base64 ≈ 200 chars after prefix.
+        // But toDataURL includes the full prefix so check actual decoded size.
+        return dataUrl.length() < 300;
+    }
+
+    /**
+     * Reads the current WebGPU texture via copyTextureToBuffer + mapAsync,
+     * encodes as PNG data URL. Bypasses canvas compositor entirely.
+     * Uses TeaVM @Async to bridge the async mapAsync() Promise.
+     */
+    @Async
+    private static native String readbackViaWebGPU();
+
+    private static void readbackViaWebGPU(AsyncCallback<String> callback) {
+        readbackViaWebGPUJS(result -> callback.complete(result));
+    }
+
+    @JSFunctor
+    private interface StringCallback extends JSObject {
+        void call(String value);
+    }
+
+    @JSBody(params = "callback", script = """
+        try {
+            var deviceId = window._wgpuDevice;
+            var device = window._wgpu[deviceId];
+            var canvas = document.getElementById('canvas');
+            var ctx = canvas.getContext('webgpu');
+            var texture = ctx.getCurrentTexture();
+            var w = texture.width, h = texture.height;
+            var bytesPerRow = Math.ceil(w * 4 / 256) * 256;
+            var bufSize = bytesPerRow * h;
+
+            var buf = device.createBuffer({
+                size: bufSize,
+                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+            });
+
+            var encoder = device.createCommandEncoder();
+            encoder.copyTextureToBuffer(
+                { texture: texture },
+                { buffer: buf, bytesPerRow: bytesPerRow },
+                { width: w, height: h }
+            );
+            device.queue.submit([encoder.finish()]);
+
+            buf.mapAsync(GPUMapMode.READ).then(function() {
+                var data = new Uint8Array(buf.getMappedRange());
+                // Create ImageData, accounting for row padding
+                var imgCanvas = document.createElement('canvas');
+                imgCanvas.width = w; imgCanvas.height = h;
+                var imgCtx = imgCanvas.getContext('2d');
+                var imgData = imgCtx.createImageData(w, h);
+                for (var y = 0; y < h; y++) {
+                    var srcOff = y * bytesPerRow;
+                    var dstOff = y * w * 4;
+                    for (var x = 0; x < w * 4; x++) {
+                        imgData.data[dstOff + x] = data[srcOff + x];
+                    }
+                }
+                imgCtx.putImageData(imgData, 0, 0);
+                buf.unmap();
+                buf.destroy();
+                var result = imgCanvas.toDataURL('image/png');
+                callback(result);
+            }).catch(function(err) {
+                console.error('[WebTest] readback failed:', err);
+                callback('');
+            });
+        } catch(e) {
+            console.error('[WebTest] readback error:', e);
+            callback('');
+        }
+    """)
+    private static native void readbackViaWebGPUJS(StringCallback callback);
 
     @JSBody(script = """
         try {
