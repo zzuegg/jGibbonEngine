@@ -110,33 +110,38 @@ public class WebTestApp {
         System.out.println("[WebTest] Scene setup complete, rendering " + (captureFrame + 1) + " frames");
 
         // Render frames, yield to browser each frame via pollEvents
-        renderFrames(engine, toolkit, captureFrame);
+        renderFrames(engine, backend.device(), toolkit, captureFrame,
+                sceneConfig.width(), sceneConfig.height());
     }
 
-    private static void renderFrames(Engine engine, CanvasWindowToolkit toolkit,
-                                      int captureFrame) {
+    private static void renderFrames(Engine engine, dev.engine.graphics.RenderDevice device,
+                                      CanvasWindowToolkit toolkit, int captureFrame,
+                                      int width, int height) {
         for (int frame = 0; frame <= captureFrame; frame++) {
             engine.setInputEvents(List.of());
             engine.tick(1.0 / 60.0);
 
             if (frame == captureFrame) {
-                // Try canvas.toDataURL() first (works locally with real GPU).
-                // Falls back to WebGPU texture readback if canvas is blank
-                // (CI: Chrome's SkSurface can't initialize with software Vulkan).
-                String dataUrl = canvasToDataURL("canvas");
-                boolean blank = isBlankDataUrl(dataUrl);
-                if (blank) {
-                    System.out.println("[WebTest] toDataURL blank, trying WebGPU readback...");
-                    dataUrl = readbackViaWebGPU();
-                    blank = isBlankDataUrl(dataUrl);
+                // Read the offscreen render target texture via WebGPU readback.
+                // This works even when canvas compositor fails (CI software Vulkan)
+                // because it reads the engine's offscreen texture, not the canvas.
+                byte[] pixels = device.readFramebuffer(width, height);
+                if (pixels != null && pixels.length > 0) {
+                    // Encode as PNG data URL via a temporary canvas
+                    String dataUrl = encodePixelsToDataUrl(pixels, width, height);
+                    setScreenshotData(dataUrl);
+                    setTestStatus("done", "frame=" + frame + " method=readFramebuffer"
+                            + " pixels=" + pixels.length);
+                    System.out.println("[WebTest] frame=" + frame
+                            + " method=readFramebuffer pixels=" + pixels.length);
+                } else {
+                    // Fallback to canvas.toDataURL()
+                    String dataUrl = canvasToDataURL("canvas");
+                    setScreenshotData(dataUrl);
+                    setTestStatus("done", "frame=" + frame + " method=canvasFallback"
+                            + " len=" + (dataUrl != null ? dataUrl.length() : 0));
+                    System.out.println("[WebTest] frame=" + frame + " method=canvasFallback");
                 }
-                int dataLen = dataUrl != null ? dataUrl.length() : 0;
-                String gpuInfo = getGpuDiagnostics();
-                setScreenshotData(dataUrl);
-                String method = blank ? "BLANK" : (dataUrl.length() > 100 ? "ok" : "empty");
-                setTestStatus("done", "frame=" + frame + " len=" + dataLen + " method=" + method + " gpu=" + gpuInfo);
-                System.out.println("[WebTest] Screenshot captured at frame " + frame
-                        + " len=" + dataLen + " method=" + method);
                 return;
             }
 
@@ -177,19 +182,6 @@ public class WebTestApp {
         }
     """)
     private static native void waitForGpuFlushJS(VoidCallback callback);
-
-    /**
-     * Checks if a data URL represents a blank (all transparent) image.
-     * A minimal blank 256x256 PNG data URL is ~3200 chars.
-     * Real rendered content is typically 4000+ chars.
-     */
-    private static boolean isBlankDataUrl(String dataUrl) {
-        if (dataUrl == null || dataUrl.length() < 100) return true;
-        // Small PNGs with uniform content (blank) compress very well.
-        // A 256x256 blank PNG is ~170 bytes base64 ≈ 200 chars after prefix.
-        // But toDataURL includes the full prefix so check actual decoded size.
-        return dataUrl.length() < 300;
-    }
 
     /**
      * Reads the current WebGPU texture via copyTextureToBuffer + mapAsync,
@@ -295,6 +287,21 @@ public class WebTestApp {
         return document.getElementById(id).toDataURL('image/png');
     """)
     private static native String canvasToDataURL(String id);
+
+    /** Encodes RGBA pixel data as a PNG data URL via a temporary 2D canvas. */
+    @JSBody(params = {"pixels", "width", "height"}, script = """
+        var canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        var ctx = canvas.getContext('2d');
+        var imgData = ctx.createImageData(width, height);
+        for (var i = 0; i < pixels.length; i++) {
+            imgData.data[i] = pixels[i] & 0xFF;
+        }
+        ctx.putImageData(imgData, 0, 0);
+        return canvas.toDataURL('image/png');
+    """)
+    private static native String encodePixelsToDataUrl(byte[] pixels, int width, int height);
 
     @JSBody(params = {"status", "message"}, script = """
         window._testStatus = status;

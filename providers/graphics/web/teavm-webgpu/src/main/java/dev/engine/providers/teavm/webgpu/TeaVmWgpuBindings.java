@@ -1,7 +1,10 @@
 package dev.engine.providers.teavm.webgpu;
 
 import dev.engine.graphics.webgpu.WgpuBindings;
+import org.teavm.interop.Async;
+import org.teavm.interop.AsyncCallback;
 import org.teavm.jso.JSBody;
+import org.teavm.jso.JSFunctor;
 import org.teavm.jso.JSObject;
 import org.teavm.jso.core.JSArray;
 import org.teavm.jso.core.JSNumber;
@@ -209,18 +212,50 @@ public class TeaVmWgpuBindings implements WgpuBindings {
 
     @Override
     public void bufferMapReadSync(long instance, long buffer, int size, int maxPolls) {
-        throw unsupported("bufferMapReadSync — synchronous map not supported in browser");
+        // Uses TeaVM @Async to bridge the async mapAsync() Promise
+        bufferMapReadAsync((int) buffer, size);
+    }
+
+    @Async
+    private static native void bufferMapReadAsync(int bufferId, int size);
+
+    private static void bufferMapReadAsync(int bufferId, int size, AsyncCallback<Void> callback) {
+        bufferMapReadJS(bufferId, size, () -> callback.complete(null));
+    }
+
+    @JSBody(params = {"bufferId", "size", "callback"}, script = """
+        var buf = window._wgpu[bufferId];
+        buf.mapAsync(GPUMapMode.READ, 0, size).then(function() {
+            callback();
+        });
+    """)
+    private static native void bufferMapReadJS(int bufferId, int size, VoidCallback callback);
+
+    @JSFunctor
+    private interface VoidCallback extends org.teavm.jso.JSObject {
+        void call();
     }
 
     @Override
     public void bufferGetConstMappedRange(long buffer, int offset, int size, ByteBuffer dest) {
-        throw unsupported("bufferGetConstMappedRange — not supported in browser");
+        byte[] data = bufferGetMappedRangeJS((int) buffer, offset, size);
+        dest.put(data, 0, Math.min(data.length, size));
     }
+
+    @JSBody(params = {"bufferId", "offset", "size"}, script = """
+        var buf = window._wgpu[bufferId];
+        var range = buf.getMappedRange(offset, size);
+        return Array.from(new Uint8Array(range));
+    """)
+    private static native byte[] bufferGetMappedRangeJS(int bufferId, int offset, int size);
 
     @Override
     public void bufferUnmap(long buffer) {
-        throw unsupported("bufferUnmap — not supported in browser");
+        bufferUnmapJS((int) buffer);
     }
+
+    @JSBody(params = "bufferId", script = "window._wgpu[bufferId].unmap();")
+    private static native void bufferUnmapJS(int bufferId);
 
     // ===== Texture =====
 
@@ -716,8 +751,20 @@ public class TeaVmWgpuBindings implements WgpuBindings {
     public void commandEncoderCopyTextureToBuffer(long encoder, long texture, long buffer,
                                                    int width, int height,
                                                    int bytesPerRow, int rowsPerImage) {
-        throw unsupported("commandEncoderCopyTextureToBuffer — not yet implemented");
+        copyTexToBufferJS((int) encoder, (int) texture, (int) buffer,
+                width, height, bytesPerRow, rowsPerImage);
     }
+
+    @JSBody(params = {"encId", "texId", "bufId", "w", "h", "bytesPerRow", "rowsPerImage"}, script = """
+        var enc = window._wgpu[encId];
+        enc.copyTextureToBuffer(
+            { texture: window._wgpu[texId] },
+            { buffer: window._wgpu[bufId], bytesPerRow: bytesPerRow, rowsPerImage: rowsPerImage },
+            { width: w, height: h }
+        );
+    """)
+    private static native void copyTexToBufferJS(int encId, int texId, int bufId,
+                                                  int w, int h, int bytesPerRow, int rowsPerImage);
 
     @Override
     public long commandEncoderFinish(long encoder) {
