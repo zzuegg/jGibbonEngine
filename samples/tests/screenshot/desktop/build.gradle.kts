@@ -48,7 +48,7 @@ tasks.register<JavaExec>("collectScenes") {
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = "dev.engine.tests.screenshot.scenes.CollectScenes"
     args = listOf(
-        screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
+        screenshotBuildDir.get().file("screenshot-report.json").asFile.absolutePath,
         profile
     )
     outputs.upToDateWhen { false }
@@ -63,7 +63,7 @@ tasks.register<JavaExec>("runDesktop") {
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     if (jemalloc != null) environment("LD_PRELOAD", jemalloc.absolutePath)
     args = listOfNotNull(
-        screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
+        screenshotBuildDir.get().file("screenshot-report.json").asFile.absolutePath,
         screenshotBuildDir.get().asFile.absolutePath,
         referencesDir.resolve(profile).absolutePath,
         profile,
@@ -82,7 +82,7 @@ tasks.register<JavaExec>("saveReferences") {
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     if (jemalloc != null) environment("LD_PRELOAD", jemalloc.absolutePath)
     args = listOfNotNull(
-        screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
+        screenshotBuildDir.get().file("screenshot-report.json").asFile.absolutePath,
         referencesDir.resolve(profile).absolutePath,
         referencesDir.resolve(profile).absolutePath,
         profile,

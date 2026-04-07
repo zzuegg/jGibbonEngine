@@ -29,6 +29,8 @@ nav:
     url: "/guides/"
   - title: "Showcase"
     url: "/showcase/"
+  - title: "Regression Tests"
+    url: "/regression-tests/"
   - title: "Javadoc / API"
     url: "/javadoc/"
   - title: "GitHub"

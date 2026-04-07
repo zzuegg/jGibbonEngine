@@ -15,7 +15,7 @@ tasks.register<JavaExec>("compare") {
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = "dev.engine.tests.screenshot.analysis.ScreenshotComparator"
     args = listOf(
-        screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
+        screenshotBuildDir.get().file("screenshot-report.json").asFile.absolutePath,
         screenshotBuildDir.get().asFile.absolutePath,
         referencesDir.resolve(profile).absolutePath
     )
@@ -30,7 +30,7 @@ tasks.register<JavaExec>("report") {
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = "dev.engine.tests.screenshot.analysis.ReportBuilder"
     args = listOf(
-        screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
+        screenshotBuildDir.get().file("screenshot-report.json").asFile.absolutePath,
         screenshotBuildDir.get().asFile.absolutePath,
         screenshotBuildDir.get().file("report.html").asFile.absolutePath
     )
@@ -49,7 +49,7 @@ tasks.register<JavaExec>("failOnRegression") {
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass = "dev.engine.tests.screenshot.analysis.RegressionChecker"
     args = listOf(
-        screenshotBuildDir.get().file("manifest.json").asFile.absolutePath,
+        screenshotBuildDir.get().file("screenshot-report.json").asFile.absolutePath,
         referencesDir.resolve(profile).absolutePath
     )
     outputs.upToDateWhen { false }

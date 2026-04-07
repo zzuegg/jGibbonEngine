@@ -1,0 +1,430 @@
+---
+layout: default
+title: "Regression Tests"
+description: "Cross-backend visual regression test results"
+---
+
+<style>
+  .report-loading { text-align: center; padding: 4rem 0; color: var(--text-muted); }
+  .report-error { text-align: center; padding: 2rem; color: var(--amber);
+    background: rgba(251,191,36,0.1); border-radius: var(--radius-lg); margin: 2rem 0; }
+
+  .report-meta { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 2rem; }
+  .report-meta-item { font-size: 0.875rem; color: var(--text-muted);
+    background: var(--bg-surface); padding: 0.25rem 0.75rem;
+    border-radius: var(--radius); border: 1px solid var(--border-subtle); }
+  .report-meta-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--orange); margin-right: 0.5rem; }
+
+  .report-stats { display: flex; gap: 2rem; justify-content: center;
+    flex-wrap: wrap; margin-bottom: 2rem; }
+  .report-stat { text-align: center; min-width: 80px; }
+  .report-stat-value { font-family: 'Space Grotesk', sans-serif;
+    font-size: 2.25rem; font-weight: 700; color: var(--orange); }
+  .report-stat-value.pass { color: var(--green, #22c55e); }
+  .report-stat-value.partial { color: var(--orange, #f97316); }
+  .report-stat-value.fail { color: #f87171; }
+  .report-stat-label { font-size: 0.875rem; color: var(--text-muted); }
+
+  .report-filter { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;
+    padding: 0.75rem 1rem; background: var(--bg-surface, #161b22);
+    border: 1px solid var(--border-subtle, #21262d); border-radius: 1rem;
+    margin-bottom: 2rem; }
+  .report-filter-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-subtle, #6e7681); margin-right: 0.5rem; }
+  .report-filter-btn { padding: 0.375rem 0.875rem; border-radius: 0.5rem;
+    border: 1px solid var(--border, #30363d); background: transparent;
+    color: var(--text-muted, #8b949e); cursor: pointer; font-size: 0.875rem;
+    font-family: 'Space Grotesk', sans-serif; font-weight: 500; transition: all 0.2s; }
+  .report-filter-btn:hover { background: var(--bg-elevated, #1c2128);
+    color: var(--text, #e6edf3); }
+  .report-filter-btn.active { background: var(--orange, #f97316);
+    color: #0d1117; border-color: var(--orange, #f97316); }
+
+  .report-category { margin-bottom: 2.5rem; }
+  .report-category-label { font-size: 0.75rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--orange, #f97316); margin-bottom: 0.25rem; }
+  .report-category-title { font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.5rem; font-weight: 700; margin-bottom: 1.25rem; }
+  .report-category-count { color: var(--text-subtle, #6e7681); font-weight: 400; }
+
+  .report-grid { display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1.25rem; }
+
+  .report-card { background: var(--bg-surface, #161b22);
+    border: 1px solid var(--border-subtle, #21262d);
+    border-radius: 1rem; overflow: hidden; cursor: pointer; transition: all 0.2s; }
+  .report-card:hover { border-color: var(--orange, #f97316);
+    transform: translateY(-2px); box-shadow: 0 8px 24px rgba(249,115,22,0.12); }
+  .report-card[data-status="failed"] { border-color: rgba(248,113,113,0.4); }
+  .report-card[data-status="failed"]:hover { border-color: #f87171;
+    box-shadow: 0 8px 24px rgba(248,113,113,0.15); }
+  .report-card[data-status="partial"] { border-color: rgba(249,115,22,0.4); }
+  .report-card[data-status="partial"]:hover { border-color: var(--orange, #f97316); }
+  .report-card.hidden { display: none; }
+
+  .report-card-thumb { aspect-ratio: 1; background: var(--bg-primary, #0d1117);
+    display: flex; align-items: center; justify-content: center;
+    border-bottom: 1px solid var(--border-subtle, #21262d); }
+  .report-card-thumb img { width: 100%; height: 100%; object-fit: contain;
+    image-rendering: pixelated; }
+  .report-card-body { padding: 0.875rem 1rem; }
+  .report-card-title { font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .report-badges { display: flex; gap: 4px; margin-bottom: 0.5rem; }
+  .report-badge { font-size: 0.7rem; font-weight: 700;
+    font-family: 'JetBrains Mono', monospace; padding: 2px 6px;
+    border-radius: 4px; letter-spacing: 0.03em; }
+  .report-badge-pass { background: rgba(34,197,94,0.15); color: #22c55e; }
+  .report-badge-fail { background: rgba(248,113,113,0.15); color: #f87171; }
+  .report-badge-noref { background: rgba(249,115,22,0.15); color: #fb923c; }
+  .report-badge-skip { background: rgba(110,118,129,0.15); color: #6e7681; }
+
+  .report-matrix { display: flex; gap: 4px; flex-wrap: wrap; }
+  .report-mx { font-size: 0.65rem; font-family: 'JetBrains Mono', monospace;
+    padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+  .report-mx-pass { background: rgba(34,197,94,0.15); color: #22c55e; }
+  .report-mx-fail { background: rgba(248,113,113,0.15); color: #f87171; }
+  .report-mx-known { background: rgba(249,115,22,0.15); color: #fb923c; }
+
+  /* Detail overlay */
+  .report-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px); z-index: 200; display: flex;
+    align-items: center; justify-content: center; padding: 2rem; }
+  .report-overlay.hidden { display: none; }
+  .report-detail { background: var(--bg-surface, #161b22);
+    border: 1px solid var(--border, #30363d); border-radius: 1rem;
+    max-width: 900px; width: 100%; max-height: 85vh; overflow-y: auto;
+    position: relative; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
+  .report-detail-close { position: sticky; top: 0; float: right; margin: 0.75rem;
+    background: var(--bg-elevated, #1c2128); border: 1px solid var(--border, #30363d);
+    color: var(--text-muted, #8b949e); font-size: 1.5rem; width: 2rem; height: 2rem;
+    border-radius: 0.5rem; cursor: pointer; display: flex;
+    align-items: center; justify-content: center; z-index: 1; transition: all 0.2s; }
+  .report-detail-close:hover { color: var(--text, #e6edf3); }
+  .report-detail-header { padding: 1.5rem 1.75rem 1rem;
+    border-bottom: 1px solid var(--border-subtle, #21262d); }
+  .report-detail-header h2 { font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.5rem; font-weight: 700; margin: 0 0 0.25rem; }
+  .report-detail-class { font-size: 0.8rem; color: var(--text-subtle, #6e7681);
+    font-family: 'JetBrains Mono', monospace; }
+  .report-detail-body { padding: 1.5rem 1.75rem; }
+  .report-detail-section { font-size: 0.75rem; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--orange, #f97316); margin-bottom: 0.75rem; margin-top: 1.5rem; }
+  .report-detail-section:first-child { margin-top: 0; }
+
+  .report-known-callout { background: rgba(249,115,22,0.15);
+    border: 1px solid rgba(249,115,22,0.3); border-left: 3px solid var(--orange, #f97316);
+    border-radius: 0.5rem; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+  .report-known-title { font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.85rem; font-weight: 600; color: var(--orange, #f97316);
+    margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .report-known-item { font-size: 0.85rem; color: var(--text-muted, #8b949e);
+    margin-bottom: 0.25rem; }
+  .report-known-backend { font-family: 'JetBrains Mono', monospace;
+    font-weight: 600; color: #fb923c; background: rgba(249,115,22,0.2);
+    padding: 1px 5px; border-radius: 3px; font-size: 0.8rem; }
+
+  .report-detail-table { width: 100%; border-collapse: collapse;
+    font-size: 0.85rem; margin-bottom: 1rem; }
+  .report-detail-table th { text-align: left; font-weight: 600;
+    color: var(--text-muted, #8b949e); padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border, #30363d); font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.05em; }
+  .report-detail-table td { padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-subtle, #21262d); }
+  .report-detail-table tr:last-child td { border-bottom: none; }
+  .status-pass { color: #22c55e; font-weight: 600; }
+  .status-fail { color: #f87171; font-weight: 600; }
+  .status-known { color: #fb923c; font-weight: 600; }
+  .status-noref { color: #fb923c; }
+  .status-skip { color: #6e7681; }
+
+  .report-error-block { background: var(--bg-elevated, #1c2128);
+    border: 1px solid var(--border-subtle, #21262d);
+    border-left: 3px solid #f87171; border-radius: 0.5rem;
+    padding: 1rem 1.25rem; margin-bottom: 1rem;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+    color: var(--text-muted, #8b949e); white-space: pre-wrap;
+    max-height: 200px; overflow-y: auto; }
+  .report-error-title { color: #f87171; font-weight: 600; margin-bottom: 0.5rem;
+    font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem; }
+
+  .report-no-thumb { color: var(--text-subtle, #6e7681);
+    font-size: 0.85rem; font-style: italic; }
+</style>
+
+<div class="page-container">
+  <header class="page-hero">
+    <h1 class="page-title">Regression Tests</h1>
+    <p class="page-description">Cross-backend visual regression test results from the main branch</p>
+  </header>
+  <article class="page-content">
+    <div id="report-root">
+      <div class="report-loading" id="report-loading">Loading screenshot report...</div>
+    </div>
+  </article>
+</div>
+
+<!-- Detail overlay -->
+<div id="report-overlay" class="report-overlay hidden" onclick="if(event.target===this)closeDetail()">
+  <div class="report-detail">
+    <button class="report-detail-close" onclick="closeDetail()">&times;</button>
+    <div id="report-detail-content"></div>
+  </div>
+</div>
+
+<script>
+const REPO = 'zzuegg/jGibbonEngine';
+const BRANCH = 'main';
+const REPORT_PATH = 'docs/regression-tests/screenshot-report.json';
+const REF_BASE = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/samples/tests/screenshot/references/ci`;
+
+const BACKEND_SHORT = { opengl: 'GL', vulkan: 'VK', webgpu: 'WG' };
+
+async function loadReport() {
+  const loading = document.getElementById('report-loading');
+  try {
+    const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${REPORT_PATH}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const report = await resp.json();
+    renderReport(report);
+  } catch (e) {
+    loading.innerHTML = `<div class="report-error">Failed to load screenshot report: ${e.message}<br>
+      <small>The report may not have been generated yet.</small></div>`;
+  }
+}
+
+function renderReport(r) {
+  const root = document.getElementById('report-root');
+
+  // Compute scene statuses
+  const statuses = {};
+  for (const scene of r.scenes) {
+    const comps = r.comparisons.filter(c => c.scene === scene.name);
+    const hasFail = comps.some(c => c.status === 'fail');
+    const hasKnown = comps.some(c => c.status === 'known_limitation');
+    const hasError = r.runs.some(run => run.scene === scene.name && run.status !== 'success');
+    statuses[scene.name] = hasFail ? 'failed' : (hasKnown || hasError) ? 'partial' : 'passed';
+  }
+
+  const counts = { passed: 0, partial: 0, failed: 0 };
+  Object.values(statuses).forEach(s => counts[s]++);
+
+  let html = '';
+
+  // Metadata
+  html += '<div class="report-meta">';
+  html += `<span class="report-meta-item"><span class="report-meta-label">Branch</span>${esc(r.branch)}</span>`;
+  html += `<span class="report-meta-item"><span class="report-meta-label">Commit</span>${esc(r.commit)}</span>`;
+  html += `<span class="report-meta-item"><span class="report-meta-label">Profile</span>${esc(r.profile)}</span>`;
+  html += `<span class="report-meta-item"><span class="report-meta-label">Time</span>${esc((r.timestamp||'').substring(0,19))}</span>`;
+  html += '</div>';
+
+  // Stats
+  html += '<div class="report-stats">';
+  html += `<div class="report-stat"><div class="report-stat-value">${r.scenes.length}</div><div class="report-stat-label">Scenes</div></div>`;
+  html += `<div class="report-stat"><div class="report-stat-value pass">${counts.passed}</div><div class="report-stat-label">Passed</div></div>`;
+  if (counts.partial > 0) html += `<div class="report-stat"><div class="report-stat-value partial">${counts.partial}</div><div class="report-stat-label">Partial</div></div>`;
+  if (counts.failed > 0) html += `<div class="report-stat"><div class="report-stat-value fail">${counts.failed}</div><div class="report-stat-label">Failed</div></div>`;
+  html += `<div class="report-stat"><div class="report-stat-value">${r.runs.length}</div><div class="report-stat-label">Runs</div></div>`;
+  html += '</div>';
+
+  // Filters
+  html += '<div class="report-filter">';
+  html += '<span class="report-filter-label">Filter</span>';
+  html += '<button class="report-filter-btn active" onclick="filterCards(\'all\',this)">All</button>';
+  html += '<button class="report-filter-btn" onclick="filterCards(\'passed\',this)">Passed</button>';
+  if (counts.partial > 0) html += '<button class="report-filter-btn" onclick="filterCards(\'partial\',this)">Partial</button>';
+  if (counts.failed > 0) html += '<button class="report-filter-btn" onclick="filterCards(\'failed\',this)">Failed</button>';
+  html += '</div>';
+
+  // Group by category
+  const categories = {};
+  for (const scene of r.scenes) {
+    (categories[scene.category] = categories[scene.category] || []).push(scene);
+  }
+
+  for (const [cat, scenes] of Object.entries(categories)) {
+    html += '<div class="report-category">';
+    html += `<div class="report-category-label">${esc(cat)}</div>`;
+    html += `<h2 class="report-category-title">${esc(cat)} <span class="report-category-count">(${scenes.length})</span></h2>`;
+    html += '<div class="report-grid">';
+
+    for (const scene of scenes) {
+      const status = statuses[scene.name];
+      const frame = Math.max(...scene.captureFrames);
+      const thumbUrl = `${REF_BASE}/opengl/${scene.name}_f${frame}.png`;
+
+      html += `<div class="report-card" data-status="${status}" data-scene="${esc(scene.name)}" onclick="showSceneDetail('${esc(scene.name)}')">`;
+      html += `<div class="report-card-thumb"><img src="${thumbUrl}" onerror="this.parentElement.innerHTML='<div class=report-no-thumb>No reference</div>'" loading="lazy"></div>`;
+      html += '<div class="report-card-body">';
+      html += `<div class="report-card-title">${formatName(scene.name)}</div>`;
+
+      // Backend badges
+      html += '<div class="report-badges">';
+      const backends = [...new Set(r.runs.filter(run => run.scene === scene.name).map(run => run.backend))].sort();
+      for (const be of backends) {
+        const ref = r.comparisons.find(c => c.scene === scene.name && c.type === 'reference' && c.backend === be);
+        const run = r.runs.find(run => run.scene === scene.name && run.backend === be);
+        let cls = 'report-badge-skip';
+        if (!run) cls = 'report-badge-skip';
+        else if (run.status !== 'success') cls = 'report-badge-fail';
+        else if (!ref || ref.status === 'no_reference') cls = 'report-badge-noref';
+        else if (ref.status === 'pass') cls = 'report-badge-pass';
+        else cls = 'report-badge-fail';
+        html += `<span class="report-badge ${cls}">${BACKEND_SHORT[be] || be}</span>`;
+      }
+      html += '</div>';
+
+      // Cross-backend matrix
+      const cross = r.comparisons.filter(c => c.scene === scene.name && c.type === 'cross_backend');
+      if (cross.length) {
+        html += '<div class="report-matrix">';
+        for (const c of cross) {
+          const cls = c.status === 'fail' ? 'report-mx-fail' : c.status === 'known_limitation' ? 'report-mx-known' : 'report-mx-pass';
+          html += `<span class="report-mx ${cls}" title="${esc(c.reason || `${(c.diffPercent||0).toFixed(2)}%`)}">${BACKEND_SHORT[c.backendA]||c.backendA}\u2194${BACKEND_SHORT[c.backendB]||c.backendB}</span>`;
+        }
+        html += '</div>';
+      }
+
+      html += '</div></div>'; // card-body, card
+    }
+    html += '</div></div>'; // grid, category
+  }
+
+  // Store report globally for detail view
+  window._report = r;
+  window._statuses = statuses;
+  root.innerHTML = html;
+}
+
+function showSceneDetail(name) {
+  const r = window._report;
+  const scene = r.scenes.find(s => s.name === name);
+  if (!scene) return;
+
+  let html = '';
+  html += '<div class="report-detail-header">';
+  html += `<h2>${formatName(name)}</h2>`;
+  html += `<div class="report-detail-class">${esc(scene.className)}.${esc(scene.fieldName)}</div>`;
+  html += '</div><div class="report-detail-body">';
+
+  // Known limitations
+  if (scene.knownLimitations && scene.knownLimitations.length) {
+    html += '<div class="report-known-callout">';
+    html += '<div class="report-known-title">Known Limitations</div>';
+    for (const kl of scene.knownLimitations) {
+      html += `<div class="report-known-item"><span class="report-known-backend">${esc(kl.backend)}</span> ${esc(kl.reason)}</div>`;
+    }
+    html += '</div>';
+  }
+
+  // Reference comparisons
+  const refs = r.comparisons.filter(c => c.scene === name && c.type === 'reference');
+  if (refs.length) {
+    html += '<div class="report-detail-section">Reference Comparisons</div>';
+    html += '<table class="report-detail-table"><tr><th>Backend</th><th>Status</th><th>Diff</th><th>Threshold</th></tr>';
+    for (const c of refs) {
+      const cls = statusClass(c.status);
+      const label = statusLabel(c.status);
+      const hasDiff = ['pass','fail','known_limitation'].includes(c.status);
+      html += `<tr><td>${esc(c.backend||'')}</td><td class="${cls}">${label}</td>`;
+      html += `<td>${hasDiff ? (c.diffPercent||0).toFixed(4)+'%' : '\u2014'}</td>`;
+      html += `<td>${c.tolerance ? c.tolerance.maxDiffPercent.toFixed(4)+'%' : '\u2014'}</td></tr>`;
+    }
+    html += '</table>';
+  }
+
+  // Cross-backend
+  const cross = r.comparisons.filter(c => c.scene === name && c.type === 'cross_backend');
+  if (cross.length) {
+    html += '<div class="report-detail-section">Cross-Backend Comparison</div>';
+    html += '<table class="report-detail-table"><tr><th>Backends</th><th>Status</th><th>Diff</th><th>Threshold</th><th>Reason</th></tr>';
+    for (const c of cross) {
+      const cls = statusClass(c.status);
+      const label = c.status === 'known_limitation' ? 'Known' : c.status === 'fail' ? 'Fail' : 'Pass';
+      html += `<tr><td>${esc(c.backendA)} \u2194 ${esc(c.backendB)}</td><td class="${cls}">${label}</td>`;
+      html += `<td>${(c.diffPercent||0).toFixed(4)}%</td>`;
+      html += `<td>${c.tolerance ? c.tolerance.maxDiffPercent.toFixed(4)+'%' : '\u2014'}</td>`;
+      html += `<td class="${cls}">${c.reason ? esc(c.reason) : '\u2014'}</td></tr>`;
+    }
+    html += '</table>';
+  }
+
+  // Errors
+  const errors = r.runs.filter(run => run.scene === name && run.status !== 'success');
+  if (errors.length) {
+    html += '<div class="report-detail-section">Errors</div>';
+    for (const run of errors) {
+      html += '<div class="report-error-block">';
+      html += `<div class="report-error-title">${esc(run.backend)} \u2014 ${esc(run.status)}</div>`;
+      if (run.error) {
+        html += esc(run.error.message || '');
+        if (run.error.stderr) html += '\n\n' + esc(run.error.stderr);
+      }
+      html += '</div>';
+    }
+  }
+
+  // Run times
+  const runs = r.runs.filter(run => run.scene === name);
+  if (runs.length) {
+    html += '<div class="report-detail-section">Run Times</div>';
+    html += '<table class="report-detail-table"><tr><th>Backend</th><th>Status</th><th>Duration</th></tr>';
+    for (const run of runs) {
+      html += `<tr><td>${esc(run.backend)}</td><td>${esc(run.status)}</td><td>${run.durationMs}ms</td></tr>`;
+    }
+    html += '</table>';
+  }
+
+  html += '</div>'; // detail-body
+  document.getElementById('report-detail-content').innerHTML = html;
+  document.getElementById('report-overlay').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDetail() {
+  document.getElementById('report-overlay').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function filterCards(mode, btn) {
+  document.querySelectorAll('.report-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.report-card').forEach(c => {
+    c.classList.toggle('hidden', mode !== 'all' && c.dataset.status !== mode);
+  });
+  document.querySelectorAll('.report-category').forEach(cat => {
+    const visible = cat.querySelectorAll('.report-card:not(.hidden)').length;
+    cat.style.display = visible === 0 ? 'none' : '';
+  });
+}
+
+function formatName(name) {
+  return name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function statusClass(s) {
+  return { pass:'status-pass', fail:'status-fail', known_limitation:'status-known',
+           no_reference:'status-noref', skipped:'status-skip' }[s] || '';
+}
+
+function statusLabel(s) {
+  return { pass:'Pass', fail:'Fail', known_limitation:'Known Limitation',
+           no_reference:'No Reference', skipped:'Skipped' }[s] || s;
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+loadReport();
+</script>
