@@ -66,8 +66,9 @@ public class CdpClient implements AutoCloseable {
                 "--user-data-dir=" + userDataDir.toAbsolutePath(),
                 "--window-size=" + windowWidth + "," + windowHeight,
                 "--enable-unsafe-webgpu",
-                "--enable-features=Vulkan",
-                "--use-angle=vulkan",
+                "--enable-features=Vulkan,DefaultANGLEVulkan",
+                "--use-gl=angle",
+                "--use-angle=swiftshader",
                 "about:blank"
         ));
 
