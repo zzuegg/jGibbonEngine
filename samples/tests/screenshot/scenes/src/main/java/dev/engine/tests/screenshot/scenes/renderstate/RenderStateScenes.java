@@ -115,31 +115,48 @@ public class RenderStateScenes {
             var renderer = engine.renderer();
             var scene = engine.scene();
             var cam = renderer.createCamera();
-            cam.lookAt(new Vec3(0, 3, 10), Vec3.ZERO, Vec3.UNIT_Y);
+            cam.lookAt(new Vec3(0, 2, 12), Vec3.ZERO, Vec3.UNIT_Y);
             cam.setPerspective((float) Math.toRadians(60), 256f / 256f, 0.1f, 100f);
             renderer.setActiveCamera(cam);
 
-            var bg = scene.createEntity();
-            bg.add(PrimitiveMeshes.quad());
-            bg.add(MaterialData.unlit(new Vec3(0.3f, 0.3f, 0.3f)));
-            bg.add(Transform.at(0, 0, -2).withScale(5f));
+            // Bright background with three colored stripes so blend effects are clearly visible
+            var bgLeft = scene.createEntity();
+            bgLeft.add(PrimitiveMeshes.quad());
+            bgLeft.add(MaterialData.unlit(new Vec3(0.8f, 0.2f, 0.2f))); // red
+            bgLeft.add(Transform.at(-3, 0, -2).withScale(2.5f));
 
+            var bgCenter = scene.createEntity();
+            bgCenter.add(PrimitiveMeshes.quad());
+            bgCenter.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f))); // green
+            bgCenter.add(Transform.at(0, 0, -2).withScale(2.5f));
+
+            var bgRight = scene.createEntity();
+            bgRight.add(PrimitiveMeshes.quad());
+            bgRight.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f))); // blue
+            bgRight.add(Transform.at(3, 0, -2).withScale(2.5f));
+
+            // Alpha blend: white cube over red bg — should show opaque white (alpha=1.0)
             var alpha = scene.createEntity();
             alpha.add(PrimitiveMeshes.cube());
-            alpha.add(MaterialData.unlit(new Vec3(1.0f, 0.0f, 0.0f))
-                    .withRenderState(RenderState.BLEND_MODE, BlendMode.ALPHA));
+            alpha.add(MaterialData.unlit(new Vec3(1.0f, 1.0f, 1.0f))
+                    .withRenderState(RenderState.BLEND_MODE, BlendMode.ALPHA)
+                    .withRenderState(RenderState.DEPTH_WRITE, false));
             alpha.add(Transform.at(-3, 0, 0));
 
+            // Additive: yellow cube over green bg — should brighten (green + yellow = bright)
             var additive = scene.createEntity();
             additive.add(PrimitiveMeshes.cube());
-            additive.add(MaterialData.unlit(new Vec3(0.0f, 1.0f, 0.0f))
-                    .withRenderState(RenderState.BLEND_MODE, BlendMode.ADDITIVE));
+            additive.add(MaterialData.unlit(new Vec3(0.8f, 0.8f, 0.0f))
+                    .withRenderState(RenderState.BLEND_MODE, BlendMode.ADDITIVE)
+                    .withRenderState(RenderState.DEPTH_WRITE, false));
             additive.add(Transform.IDENTITY);
 
+            // Multiply: white cube over blue bg — should show the blue bg color (white * blue = blue)
             var multiply = scene.createEntity();
             multiply.add(PrimitiveMeshes.cube());
-            multiply.add(MaterialData.unlit(new Vec3(0.5f, 0.5f, 1.0f))
-                    .withRenderState(RenderState.BLEND_MODE, BlendMode.MULTIPLY));
+            multiply.add(MaterialData.unlit(new Vec3(1.0f, 1.0f, 1.0f))
+                    .withRenderState(RenderState.BLEND_MODE, BlendMode.MULTIPLY)
+                    .withRenderState(RenderState.DEPTH_WRITE, false));
             multiply.add(Transform.at(3, 0, 0));
         }
     };
