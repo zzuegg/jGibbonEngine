@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.renderstate;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
@@ -12,6 +13,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 /**
  * Tests that render state is correctly applied per-entity without leaking to other entities.
  */
+@Discoverable
 public class PerEntityRenderStateScenes {
 
     /** One entity with depth disabled, another with depth enabled — tests state isolation. */

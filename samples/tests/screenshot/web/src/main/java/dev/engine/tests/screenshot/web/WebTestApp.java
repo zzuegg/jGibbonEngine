@@ -20,10 +20,6 @@ import org.teavm.jso.JSObject;
 import org.teavm.interop.Async;
 import org.teavm.interop.AsyncCallback;
 
-import dev.engine.graphics.shader.params.CameraParams_NativeStruct;
-import dev.engine.graphics.shader.params.EngineParams_NativeStruct;
-import dev.engine.graphics.shader.params.ObjectParams_NativeStruct;
-
 import java.util.List;
 
 /**
@@ -42,10 +38,11 @@ import java.util.List;
 public class WebTestApp {
 
     public static void main(String[] args) {
-        // Force-load NativeStruct classes for TeaVM DCE
-        CameraParams_NativeStruct.init();
-        EngineParams_NativeStruct.init();
-        ObjectParams_NativeStruct.init();
+        // Initialize discovery registries (loads NativeStruct companions, scene classes, etc.)
+        dev.engine.core.Discovery.addRegistry(
+                new dev.engine.graphics.shader.params.GeneratedDiscoveryRegistry());
+        dev.engine.core.Discovery.addRegistry(
+                new dev.engine.tests.screenshot.scenes.basic.GeneratedDiscoveryRegistry());
 
         String sceneName = getUrlParam("scene");
         int captureFrame = parseIntParam("frames", 3);

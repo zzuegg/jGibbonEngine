@@ -1,11 +1,13 @@
 package dev.engine.tests.screenshot.scenes.materials;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.tests.screenshot.scenes.RenderTestScene;
 
+@Discoverable
 public class MaterialScenes {
 
     public static final RenderTestScene PBR_MATERIALS = engine -> {

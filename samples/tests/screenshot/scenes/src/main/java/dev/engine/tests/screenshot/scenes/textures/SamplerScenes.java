@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.textures;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.asset.TextureData;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
@@ -17,6 +18,7 @@ import java.nio.ByteBuffer;
 /**
  * Tests that per-texture sampler configurations produce visually different results.
  */
+@Discoverable
 public class SamplerScenes {
 
     /** Two quads with same 4x4 checkerboard — one nearest, one linear.

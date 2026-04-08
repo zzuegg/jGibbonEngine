@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.textures;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.asset.TextureData;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
@@ -12,6 +13,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 
 import java.nio.ByteBuffer;
 
+@Discoverable
 public class TextureScenes {
 
     /** Textured quad with nearest filtering — sharp checkerboard pixels. */
