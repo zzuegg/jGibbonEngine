@@ -30,9 +30,9 @@ public class WebRunner extends AbstractTestRunner {
     public WebRunner(Path webRoot, String chromeBinary, String profile) {
         this.webRoot = webRoot;
         this.chromeBinary = chromeBinary;
-        // CI profile uses headed mode under xvfb — headless Chrome can't render
-        // WebGPU to canvas (no VkSurface). Local profile uses headless (faster).
-        this.headless = !"ci".equals(profile);
+        // SwiftShader mode (CI) uses headless — Chrome's SwiftShader handles
+        // all rendering in software. Local without SwiftShader uses headless too.
+        this.headless = true;
         // CI uses Chrome's bundled SwiftShader for WebGPU because lavapipe
         // produces blank output with Dawn.
         this.useSwiftShader = "ci".equals(profile);

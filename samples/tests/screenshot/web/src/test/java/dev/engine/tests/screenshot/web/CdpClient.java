@@ -71,7 +71,7 @@ public class CdpClient implements AutoCloseable {
 
         var args = new ArrayList<>(List.of(
                 chromeBinary,
-                headless ? "--headless=new" : "--no-first-run",
+                useSwiftShader ? "--headless=new" : (headless ? "--headless=new" : "--no-first-run"),
                 "--no-sandbox",
                 "--disable-extensions",
                 "--disable-dev-shm-usage",
@@ -82,10 +82,19 @@ public class CdpClient implements AutoCloseable {
                 "--window-size=" + windowWidth + "," + windowHeight,
                 "--enable-unsafe-webgpu",
                 "--enable-features=Vulkan",
-                "--ozone-platform=x11",
-                useSwiftShader ? "--use-webgpu-adapter=swiftshader" : "--use-angle=vulkan",
-                "about:blank"
+                "--ozone-platform=x11"
         ));
+        if (useSwiftShader) {
+            // Force Chrome to use its bundled SwiftShader for everything:
+            // ANGLE (GL compositor) and Dawn (WebGPU).
+            args.addAll(List.of(
+                    "--use-gl=angle",
+                    "--use-angle=swiftshader",
+                    "--use-webgpu-adapter=swiftshader",
+                    "about:blank"));
+        } else {
+            args.addAll(List.of("--use-angle=vulkan", "about:blank"));
+        }
 
         var pb = new ProcessBuilder(args);
         pb.redirectErrorStream(false);
