@@ -30,6 +30,9 @@ project(":providers:wgpu-ffm").projectDir = file("providers/graphics/desktop/wgp
 include("providers:teavm-webgpu")
 project(":providers:teavm-webgpu").projectDir = file("providers/graphics/web/teavm-webgpu")
 
+include("providers:graal-webgpu")
+project(":providers:graal-webgpu").projectDir = file("providers/graphics/web/graal-webgpu")
+
 // ── Providers: windowing ─────────────────────────────────────────────
 include("providers:lwjgl-glfw")
 project(":providers:lwjgl-glfw").projectDir = file("providers/windowing/desktop/lwjgl-glfw")
@@ -39,6 +42,9 @@ project(":providers:sdl3").projectDir = file("providers/windowing/desktop/sdl3")
 
 include("providers:teavm-windowing")
 project(":providers:teavm-windowing").projectDir = file("providers/windowing/web/teavm-windowing")
+
+include("providers:graal-windowing")
+project(":providers:graal-windowing").projectDir = file("providers/windowing/web/graal-windowing")
 
 // ── Providers: shader ────────────────────────────────────────────────
 include("providers:slang")
@@ -57,6 +63,7 @@ project(":providers:assimp").projectDir = file("providers/assets/assimp")
 // ── Platforms ────────────────────────────────────────────────────────
 include("platforms:desktop")
 include("platforms:web")
+include("platforms:graalwasm")
 
 // ── Tools ───────────────────────────────────────────────────────────
 include("tools:site-generator")

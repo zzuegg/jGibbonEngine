@@ -1,56 +1,95 @@
-# GraalWasm Slang Compiler Integration
+# GraalWasm Platform Integration
 
 ## Architecture
 
-The Slang WASM compiler integration is split into two modules:
+The GraalWasm platform provides a complete WebGPU backend running on the JVM
+via GraalJS + GraalWasm. It mirrors the TeaVM web platform structurally but
+uses GraalVM polyglot interop instead of TeaVM JSO.
 
-- **`providers:slang-wasm`** — Shared `SlangWasmBridge` interface + `SlangWasmCompiler`
-- **`providers:graal-slang-wasm`** — GraalVM polyglot bridge implementation
+### Modules
 
-### How it works
+| Module | Purpose |
+|--------|---------|
+| `providers:slang-wasm` | Shared `SlangWasmBridge` interface + `SlangWasmCompiler` |
+| `providers:graal-slang-wasm` | Slang WASM compiler via GraalJS + GraalWasm |
+| `providers:graal-webgpu` | `WgpuBindings` impl calling browser WebGPU via GraalJS |
+| `providers:graal-windowing` | Canvas `WindowToolkit` via GraalJS DOM calls |
+| `platforms:graalwasm` | Platform assembly wiring everything together |
 
-The same `slang-wasm.wasm` Emscripten binary used by the TeaVM web platform runs
-on the JVM via GraalJS + GraalWasm. The flow:
+### Shared GraalJS Context
 
-1. Java reads `slang-wasm.wasm` bytes and passes them to the GraalJS context
-2. The bytes are converted to a JS `ArrayBuffer` and passed as `wasmBinary` to
-   the Emscripten module init (avoids needing browser `fetch` or Node `fs`)
-3. The Emscripten `.mjs` glue is loaded via ES module `import()`
-4. GraalWasm executes the WASM binary natively on the JVM
-5. The embind API (createGlobalSession, loadModuleFromSource, etc.) is called
-   through GraalVM's polyglot `Value` interop
+All providers share a single GraalJS `Context` — same as how TeaVM providers
+share the browser's global JS scope implicitly. The `GraalWasmPlatform` creates
+and owns this context, passing it to all providers.
 
-### Key gotchas
-
-- **Emscripten environment detection**: The `.mjs` file checks for `process` (Node)
-  and `window` (browser). GraalJS is neither — the Emscripten module may need the
-  `wasmBinary` option to avoid file-loading code paths that assume Node or browser APIs.
-
-- **Thread safety**: The GraalVM polyglot `Context` is single-threaded. All
-  compilation calls are `synchronized`. Don't share a bridge across threads without
-  external synchronization.
-
-- **ES module loading**: The init script must be evaluated with MIME type
-  `application/javascript+module` to support top-level `await`. The
-  `js.esm-eval-returns-exports` option must be enabled.
-
-- **Java byte[] → ArrayBuffer**: Java byte values are signed (-128..127). When
-  copying to `Uint8Array`, mask with `& 0xFF` to get unsigned values.
-
-### Sharing with TeaVM
-
-The `SlangWasmBridge` interface can also be implemented by TeaVM:
+### Usage
 
 ```java
-// TeaVM bridge (delegates to existing @JSBody calls)
+var platform = GraalWasmPlatform.builder()
+    .slangWasmDir(Path.of("tools/slang-wasm"))
+    .assetBaseUrl("assets/")
+    .build();
+
+int deviceId = platform.initWebGpu();
+
+var config = EngineConfig.builder()
+    .window(WindowDescriptor.builder("Engine - GraalWasm").size(1280, 720).build())
+    .platform(platform)
+    .graphics(platform.graphicsConfig())
+    .build();
+
+new MyApp().launch(config);
+```
+
+## Slang WASM Compiler
+
+The same `slang-wasm.wasm` Emscripten binary used by TeaVM runs on the JVM
+via GraalJS + GraalWasm:
+
+1. Java reads `slang-wasm.wasm` bytes and passes as `wasmBinary` to Emscripten init
+2. The `.mjs` glue is loaded via ES module `import()`
+3. GraalWasm executes the WASM binary natively on the JVM
+4. The embind API is called through `Value` interop
+
+## WebGPU Bindings
+
+The WebGPU API is a browser JavaScript API (`navigator.gpu`), not a WASM export.
+There is no `.wasm` file for WebGPU — it lives in the browser's JS environment.
+Therefore, the GraalJS bridge through JS is necessary for WebGPU calls.
+
+The JS bridge is thin — just a handle registry + direct WebGPU API calls, bundled
+as a single JS object for efficient polyglot method dispatch.
+
+## Key Gotchas
+
+- **WebGPU requires browser context**: `navigator.gpu` must exist. This works when
+  GraalJS runs in a browser-like environment or with a WebGPU polyfill.
+
+- **Thread safety**: GraalVM polyglot `Context` is single-threaded. The entire
+  render loop runs on one thread — same as in a browser.
+
+- **ES module for async**: Top-level `await` (used for `requestAnimationFrame`,
+  `fetch`, WebGPU init) requires source evaluated with MIME type
+  `application/javascript+module`.
+
+- **Java byte[] → JS**: Java bytes are signed. When passing to `Uint8Array`,
+  the JS bridge masks with `& 0xFF`.
+
+- **Emscripten environment**: The `.mjs` file checks for `process` (Node) and
+  `window` (browser). Pass `wasmBinary` to avoid file-loading code paths.
+
+## Sharing with TeaVM
+
+The `SlangWasmBridge` interface can be implemented by TeaVM to share the
+`compileWithTypeMap` source-specialization logic:
+
+```java
 public class TeaVmSlangBridge implements SlangWasmBridge {
     public boolean isAvailable() { return TeaVmSlangCompiler.isAvailable(); }
     public String[] compile(String s, String v, String f) { return TeaVmSlangCompiler.compile(s, v, f); }
     public String compileCompute(String s, String e) { return TeaVmSlangCompiler.compileCompute(s, e); }
 }
 
-// Then replace TeaVmShaderCompiler with:
+// Replace TeaVmShaderCompiler with:
 var compiler = new SlangWasmCompiler(new TeaVmSlangBridge());
 ```
-
-This shares the `compileWithTypeMap` source-specialization logic across both platforms.
