@@ -25,6 +25,7 @@ public class WebRunner extends AbstractTestRunner {
     private final Path webRoot;
     private final String chromeBinary;
     private final boolean headless;
+    private final boolean useSwiftShader;
 
     public WebRunner(Path webRoot, String chromeBinary, String profile) {
         this.webRoot = webRoot;
@@ -32,7 +33,11 @@ public class WebRunner extends AbstractTestRunner {
         // CI profile uses headed mode under xvfb — headless Chrome can't render
         // WebGPU to canvas (no VkSurface). Local profile uses headless (faster).
         this.headless = !"ci".equals(profile);
+        // CI uses Chrome's bundled SwiftShader for WebGPU because lavapipe
+        // produces blank output with Dawn.
+        this.useSwiftShader = "ci".equals(profile);
         System.out.println("  Headless: " + headless + " (profile=" + profile + ")");
+        System.out.println("  SwiftShader: " + useSwiftShader);
         System.out.println("  DISPLAY=" + System.getenv("DISPLAY"));
         System.out.println("  VK_ICD_FILENAMES=" + System.getenv("VK_ICD_FILENAMES"));
     }
@@ -48,7 +53,7 @@ public class WebRunner extends AbstractTestRunner {
         String sceneName = fieldName.toLowerCase();
 
         try (var httpServer = new EmbeddedHttpServer(webRoot);
-             var cdp = CdpClient.launch(chromeBinary, 256, 256, headless)) {
+             var cdp = CdpClient.launch(chromeBinary, 256, 256, headless, useSwiftShader)) {
 
             String url = httpServer.baseUrl() + "/test.html?scene=" + sceneName + "&frames=3";
             System.out.println("  Chrome connected via CDP");

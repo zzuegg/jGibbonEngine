@@ -33,7 +33,7 @@ jobs:
         run: |
           xvfb-run -a -s "-screen 0 1280x720x24" \
             ./gradlew :samples:tests:screenshot:analysis:screenshotTest \
-            -Pscreenshot.profile=ci --no-daemon
+            -Pscreenshot.profile=ci -Pscreenshot.web=true --no-daemon
 
       - name: Upload report
         if: always()
