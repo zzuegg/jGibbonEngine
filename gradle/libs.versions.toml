@@ -7,6 +7,9 @@ slf4j = "2.0.16"
 # Native
 lwjgl = "3.4.1"
 
+# GraalVM polyglot
+graalvm = "24.2.0"
+
 # Testing
 junit = "5.11.3"
 
@@ -31,6 +34,11 @@ lwjgl-assimp = { module = "org.lwjgl:lwjgl-assimp" }
 lwjgl-assimp-natives = { module = "org.lwjgl:lwjgl-assimp", version.ref = "lwjgl" }
 lwjgl-stb = { module = "org.lwjgl:lwjgl-stb" }
 lwjgl-stb-natives = { module = "org.lwjgl:lwjgl-stb", version.ref = "lwjgl" }
+
+# GraalVM
+graalvm-polyglot = { module = "org.graalvm.polyglot:polyglot", version.ref = "graalvm" }
+graalvm-js = { module = "org.graalvm.polyglot:js-community", version.ref = "graalvm" }
+graalvm-wasm = { module = "org.graalvm.polyglot:wasm-community", version.ref = "graalvm" }
 
 # Testing
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }

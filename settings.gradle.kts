@@ -44,6 +44,12 @@ project(":providers:teavm-windowing").projectDir = file("providers/windowing/web
 include("providers:slang")
 project(":providers:slang").projectDir = file("providers/shader/slang")
 
+include("providers:slang-wasm")
+project(":providers:slang-wasm").projectDir = file("providers/shader/slang-wasm")
+
+include("providers:graal-slang-wasm")
+project(":providers:graal-slang-wasm").projectDir = file("providers/shader/graal-slang-wasm")
+
 // ── Providers: assets ────────────────────────────────────────────────
 include("providers:assimp")
 project(":providers:assimp").projectDir = file("providers/assets/assimp")
