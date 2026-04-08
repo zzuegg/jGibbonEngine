@@ -1,17 +1,18 @@
 package dev.engine.tests.screenshot.scenes;
 
-import java.io.File;
-import java.io.IOException;
+import dev.engine.core.Discovery;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.net.JarURLConnection;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.jar.JarFile;
 
 /**
- * Discovers test scenes and comparison tests by scanning for static final fields
- * in classes under sub-packages of {@code dev.engine.tests.screenshot.scenes}.
+ * Discovers test scenes and comparison tests from {@code @Discoverable} classes
+ * via {@link Discovery}. Scans static final fields in discovered classes for
+ * {@link RenderTestScene} and {@link ComparisonTest} instances.
+ *
+ * <p>Works on both JVM and TeaVM — no classpath scanning or Class.forName() needed.
  */
 public class SceneRegistry {
 
@@ -32,63 +33,10 @@ public class SceneRegistry {
     public List<DiscoveredComparison> comparisons() { return comparisons; }
 
     private void discover() {
-        var scenesPackage = "dev.engine.tests.screenshot.scenes";
-        var classLoader = getClass().getClassLoader();
-
-        try {
-            var packagePath = scenesPackage.replace('.', '/');
-            var resources = classLoader.getResources(packagePath);
-            while (resources.hasMoreElements()) {
-                var url = resources.nextElement();
-                if ("file".equals(url.getProtocol())) {
-                    scanDirectory(new File(url.toURI()), scenesPackage);
-                } else if ("jar".equals(url.getProtocol())) {
-                    scanJar(url, packagePath);
-                }
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to discover scenes", e);
-        }
-    }
-
-    private void scanJar(java.net.URL url, String packagePath) {
-        try {
-            var conn = (JarURLConnection) url.openConnection();
-            try (var jar = conn.getJarFile()) {
-                var entries = jar.entries();
-                while (entries.hasMoreElements()) {
-                    var entry = entries.nextElement();
-                    var name = entry.getName();
-                    if (name.startsWith(packagePath) && name.endsWith(".class") && !entry.isDirectory()) {
-                        var className = name.replace('/', '.').replace(".class", "");
-                        var parts = className.split("\\.");
-                        var pkgName = className.substring(0, className.lastIndexOf('.'));
-                        try {
-                            var clazz = Class.forName(className);
-                            scanClass(clazz, categoryFromPackage(pkgName));
-                        } catch (ClassNotFoundException ignored) {}
-                    }
-                }
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to scan JAR: " + url, e);
-        }
-    }
-
-    private void scanDirectory(File dir, String packageName) {
-        if (!dir.exists()) return;
-        var files = dir.listFiles();
-        if (files == null) return;
-        for (var file : files) {
-            if (file.isDirectory()) {
-                scanDirectory(file, packageName + "." + file.getName());
-            } else if (file.getName().endsWith(".class")) {
-                var className = packageName + "." + file.getName().replace(".class", "");
-                try {
-                    var clazz = Class.forName(className);
-                    scanClass(clazz, categoryFromPackage(packageName));
-                } catch (ClassNotFoundException ignored) {}
-            }
+        Discovery.ensureInitialized();
+        for (var cls : Discovery.allClasses()) {
+            var category = categoryFromClass(cls);
+            scanClass(cls, category);
         }
     }
 
@@ -122,8 +70,9 @@ public class SceneRegistry {
         return fieldName.toLowerCase();
     }
 
-    private static String categoryFromPackage(String packageName) {
-        var parts = packageName.split("\\.");
+    private static String categoryFromClass(Class<?> cls) {
+        var pkg = cls.getPackageName();
+        var parts = pkg.split("\\.");
         var last = parts[parts.length - 1];
         if ("scenes".equals(last)) return "General";
         return last.substring(0, 1).toUpperCase() + last.substring(1);

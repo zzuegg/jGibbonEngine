@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.basic;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.HierarchicalScene;
@@ -10,6 +11,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 /**
  * Tests parent-child entity transforms.
  */
+@Discoverable
 public class HierarchyScenes {
 
     /** Parent offset + child offset should combine correctly. */

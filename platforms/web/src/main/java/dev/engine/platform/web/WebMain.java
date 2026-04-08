@@ -16,9 +16,6 @@ import dev.engine.providers.teavm.webgpu.TeaVmWgpuInit;
 import dev.engine.providers.teavm.windowing.CanvasWindowToolkit;
 import org.teavm.jso.JSBody;
 
-import dev.engine.graphics.shader.params.CameraParams_NativeStruct;
-import dev.engine.graphics.shader.params.EngineParams_NativeStruct;
-import dev.engine.graphics.shader.params.ObjectParams_NativeStruct;
 
 import java.util.List;
 
@@ -28,11 +25,9 @@ import java.util.List;
 public class WebMain extends BaseApplication {
 
     public static void main(String[] args) {
-        // Force-load generated NativeStruct classes — TeaVM's dead code elimination
-        // removes classes only reachable via Class.forName() with dynamic strings.
-        CameraParams_NativeStruct.init();
-        EngineParams_NativeStruct.init();
-        ObjectParams_NativeStruct.init();
+        // Initialize discovery registries (loads NativeStruct companions etc.)
+        dev.engine.core.Discovery.addRegistry(
+                new dev.engine.graphics.shader.params.GeneratedDiscoveryRegistry());
 
         System.out.println("[WebMain] Initializing WebGPU...");
         int deviceId = TeaVmWgpuInit.initAsync();

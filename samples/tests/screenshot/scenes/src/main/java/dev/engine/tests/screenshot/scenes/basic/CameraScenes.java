@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.basic;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
@@ -9,6 +10,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 /**
  * Tests camera projection and view transforms.
  */
+@Discoverable
 public class CameraScenes {
 
     /** Close-up perspective — cube should fill most of the frame. */

@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.ui;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.module.AbstractModule;
 import dev.engine.core.module.Time;
 import dev.engine.graphics.common.engine.Engine;
@@ -17,6 +18,7 @@ import java.util.Set;
 /**
  * Screenshot tests for the debug UI overlay.
  */
+@Discoverable
 public class UiScenes {
 
     // Tight tolerance — UI rendering differs slightly between GL/VK
