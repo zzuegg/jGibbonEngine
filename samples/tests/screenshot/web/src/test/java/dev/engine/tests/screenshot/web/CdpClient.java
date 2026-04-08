@@ -61,14 +61,17 @@ public class CdpClient implements AutoCloseable {
      * @param headless true for headless mode (fast, local). false for headed mode
      *                 under xvfb (CI) — required for WebGPU canvas rendering
      *                 because headless Chrome has no VkSurface support.
+     * @param useSwiftShader true to force Chrome's bundled SwiftShader Vulkan for
+     *                       WebGPU instead of the system Vulkan driver. Required on
+     *                       CI where lavapipe produces blank WebGPU output.
      */
     public static CdpClient launch(String chromeBinary, int windowWidth, int windowHeight,
-                                    boolean headless) throws Exception {
+                                    boolean headless, boolean useSwiftShader) throws Exception {
         var userDataDir = Files.createTempDirectory("chrome-test-");
 
         var args = new ArrayList<>(List.of(
                 chromeBinary,
-                headless ? "--headless=new" : "--no-first-run",
+                useSwiftShader ? "--headless=new" : (headless ? "--headless=new" : "--no-first-run"),
                 "--no-sandbox",
                 "--disable-extensions",
                 "--disable-dev-shm-usage",
@@ -79,20 +82,51 @@ public class CdpClient implements AutoCloseable {
                 "--window-size=" + windowWidth + "," + windowHeight,
                 "--enable-unsafe-webgpu",
                 "--enable-features=Vulkan",
-                "--use-angle=vulkan",
-                "about:blank"
+                "--ozone-platform=x11"
         ));
+        if (useSwiftShader) {
+            // Force Chrome to use its bundled SwiftShader for everything:
+            // ANGLE (GL compositor) and Dawn (WebGPU).
+            args.addAll(List.of(
+                    "--use-gl=angle",
+                    "--use-angle=swiftshader",
+                    "--use-webgpu-adapter=swiftshader",
+                    "about:blank"));
+        } else {
+            args.addAll(List.of("--use-angle=vulkan", "about:blank"));
+        }
 
         var pb = new ProcessBuilder(args);
         pb.redirectErrorStream(false);
 
-        // Forward Mesa/Vulkan env vars for CI software rendering.
-        // Without VK_ICD_FILENAMES, Dawn can't find lavapipe.
-        for (var envKey : List.of("LIBGL_ALWAYS_SOFTWARE", "MESA_GL_VERSION_OVERRIDE",
-                "MESA_GLSL_VERSION_OVERRIDE", "GALLIUM_DRIVER", "VK_ICD_FILENAMES",
-                "VK_DRIVER_FILES", "DISPLAY")) {
-            var val = System.getenv(envKey);
-            if (val != null) pb.environment().put(envKey, val);
+        // Forward display env var so Chrome can connect to X server.
+        var display = System.getenv("DISPLAY");
+        if (display != null) pb.environment().put("DISPLAY", display);
+
+        if (useSwiftShader) {
+            // Point Dawn at Chrome's bundled SwiftShader Vulkan ICD instead of
+            // the system driver (lavapipe). SwiftShader ships with Chrome and
+            // works reliably in CI without a real GPU.
+            var chromePath = java.nio.file.Path.of(chromeBinary).toRealPath();
+            var chromeDir = chromePath.getParent();
+            var swIcd = chromeDir != null
+                    ? chromeDir.resolve("vk_swiftshader_icd.json")
+                    : java.nio.file.Path.of("/opt/google/chrome/vk_swiftshader_icd.json");
+            if (Files.exists(swIcd)) {
+                pb.environment().put("VK_ICD_FILENAMES", swIcd.toAbsolutePath().toString());
+                pb.environment().put("VK_DRIVER_FILES", swIcd.toAbsolutePath().toString());
+                System.out.println("  SwiftShader ICD: " + swIcd);
+            } else {
+                System.out.println("  WARNING: SwiftShader ICD not found at " + swIcd);
+            }
+        } else {
+            // Forward Mesa/Vulkan env vars for local rendering.
+            for (var envKey : List.of("LIBGL_ALWAYS_SOFTWARE", "MESA_GL_VERSION_OVERRIDE",
+                    "MESA_GLSL_VERSION_OVERRIDE", "GALLIUM_DRIVER", "VK_ICD_FILENAMES",
+                    "VK_DRIVER_FILES")) {
+                var val = System.getenv(envKey);
+                if (val != null) pb.environment().put(envKey, val);
+            }
         }
 
         var process = pb.start();
