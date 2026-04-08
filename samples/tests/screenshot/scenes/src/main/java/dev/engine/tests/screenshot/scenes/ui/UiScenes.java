@@ -36,7 +36,8 @@ public class UiScenes {
                             .debugOverlay(true),
                     Set.of(3),
                     Tolerance.tight(),
-                    List.of());
+                    List.of(new SceneConfig.KnownLimitation("teavm-webgpu",
+                            "UI text rendering differs in headless Chrome")));
         }
 
         @Override
