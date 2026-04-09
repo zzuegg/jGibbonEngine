@@ -21,12 +21,12 @@ tasks.register<JavaExec>("compare") {
     )
     outputs.upToDateWhen { false }
     dependsOn(":samples:tests:screenshot:desktop-runner:runDesktop")
-    // Web runner is opt-in: pass -Pscreenshot.web=true to include web backend.
-    if (project.findProperty("screenshot.web")?.toString() == "true") {
+    // Web runner: pass -Pscreenshot.web=false to exclude web backend.
+    if (project.findProperty("screenshot.web")?.toString() != "false") {
         dependsOn(":samples:tests:screenshot:web-runner:runWeb")
     }
-    // GraalWasm runner is opt-in: pass -Pscreenshot.graalwasm=true to include.
-    if (project.findProperty("screenshot.graalwasm")?.toString() == "true") {
+    // GraalWasm runner: pass -Pscreenshot.graalwasm=false to exclude.
+    if (project.findProperty("screenshot.graalwasm")?.toString() != "false") {
         dependsOn(":samples:tests:screenshot:graalwasm-runner:runGraalWasm")
     }
 }
