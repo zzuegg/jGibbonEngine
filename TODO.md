@@ -37,10 +37,10 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 
 ## Missing Math Functionality
 
-- [ ] **Mat4 missing inverse() method** — No way to compute matrix inverse, which is essential for: unprojection, normal matrix (inverse transpose), inverse view matrix, physics. Users currently cannot perform these operations.
-- [ ] **Mat4 missing orthographic projection** — Camera.java has a private `ortho()` method but Mat4 doesn't expose one. Users can't create orthographic matrices for 2D rendering, shadow mapping, or UI.
-- [ ] **No Mat3 type** — Normal matrix computation requires the 3x3 inverse transpose of the model matrix. No way to extract or use a 3x3 matrix currently. Needed for correct lighting.
-- [ ] **Vec3 missing common operations** — No reflect(), refract(), clamp(), min(), max(), abs(), distance(). These are standard in every shader language and frequently needed for game logic.
+- [x] **Mat4 missing inverse() method** — Fixed: added inverse(), determinant(), toMat3().
+- [x] **Mat4 missing orthographic projection** — Fixed: added Mat4.ortho(), Camera now uses it instead of private method.
+- [x] **No Mat3 type** — Fixed: added Mat3 record with mul, transform, transpose, determinant, inverse, normalMatrix, scale.
+- [x] **Vec3 missing common operations** — Fixed: added reflect, clamp, min, max, abs, distance, distanceSquared.
 
 ## Dead / Redundant Code
 
@@ -69,8 +69,8 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 
 - [x] **EngineConfig missing common options** — Added debugOverlay toggle. FPS cap via maxFrames already existed. VSync now in GraphicsConfig.presentMode. Window options in WindowDescriptor.
 - [x] **GraphicsConfig missing graphics settings** — Added msaaSamples, srgb, maxAnisotropy, presentMode. Backends can read these during device creation.
-- [ ] **Wire new GraphicsConfig settings into backends** — msaaSamples, srgb, maxAnisotropy are declared but not yet read by GL/VK/WebGPU device creation. Each backend needs to apply these during initialization.
-- [ ] **Wire WindowDescriptor fields into window toolkits** — resizable, decorated, fullscreen, highDpi are declared but not yet applied by GlfwWindowToolkit or Sdl3WindowToolkit during window creation.
+- [x] **Wire new GraphicsConfig settings into backends** — Fixed: GraphicsConfig passed to all backend constructors. srgb enables GL_FRAMEBUFFER_SRGB and auto-selects VK sRGB format. maxAnisotropy caps sampler anisotropy across all backends. MSAA deferred to render pipeline.
+- [x] **Wire WindowDescriptor fields into window toolkits** — Fixed: GLFW applies resizable, decorated, highDpi, fullscreen. SDL3 applies resizable, borderless, fullscreen, highDpi.
 - [ ] **Wire presentMode into WebGPU/OpenGL backends** — VulkanConfig reads it, but OpenGlConfig and WebGpuBackend still hardcode their present mode. OpenGL should set swapInterval, WebGPU should call setPresentMode.
 - [x] **WindowDescriptor too minimal** — Added resizable, decorated, fullscreen, highDpi fields with builder pattern. Backward-compatible 3-arg constructor preserved.
 
@@ -344,7 +344,7 @@ Features that modern game engines require and that each API supports natively, b
 ### Vulkan-Specific Missing Features
 
 - [ ] **No VMA or sub-allocator** — Every `createBuffer`/`createImage` does a separate `vkAllocateMemory`. Vulkan has a hard limit on total allocations (~4096 on many drivers). A sub-allocator (or VMA-equivalent) is mandatory for non-trivial scenes.
-- [ ] **No pipeline cache** — `VkPipelineCache` is never used. Pipeline compilation is the most expensive operation in Vulkan. A persistent cache eliminates recompilation across runs. Trivial to add.
+- [x] **No pipeline cache** — Fixed: VkPipelineCache created at device init, passed to all graphics and compute pipeline creation, destroyed on close. Disk persistence not yet implemented.
 - [ ] **No secondary command buffers** — Only one command buffer per frame. Secondary command buffers enable parallel recording from multiple threads — the whole point of Vulkan's explicit model.
 - [ ] **No dynamic rendering (VK_KHR_dynamic_rendering)** — The engine uses VkRenderPass objects which require framebuffer/render-pass compatibility. Dynamic rendering eliminates render pass objects entirely, simplifying multi-pass and reducing state.
 - [ ] **No descriptor set indexing / bindless descriptors** — Uses one descriptor set per draw. `VK_EXT_descriptor_indexing` enables thousands of textures/buffers bound at once. Essential for: asset streaming, virtual texturing, GPU-driven rendering.
