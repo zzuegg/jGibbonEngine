@@ -25,7 +25,7 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 - [x] **EventBus.Subscription.unsubscribe() race condition** — Fixed: uses AtomicBoolean.compareAndSet() for thread-safe unsubscribe.
 - [x] **FileWatcher only watches one directory level** — Fixed: walkFileTree registers all subdirectories recursively. Event paths resolved relative to root directory.
 - [x] **ResourceStats frame counters not thread-safe** — Fixed: all frame counters (created/destroyed/used/updated) now use AtomicInteger. swapFrame() uses getAndSet(0) for atomic swap+reset.
-- [ ] **Hierarchy mutations don't emit transactions** — `Hierarchy.java` has mutable `setParent()`/`addChild()`/`removeChild()` that bypass the transaction system. Parent/child changes are invisible to the renderer and any other transaction consumers.
+- [x] **Hierarchy mutations don't emit transactions** — Fixed: Entity.setParent() and HierarchicalScene.removeParent() now emit ComponentChanged(Hierarchy) for child, new parent, and old parent. Tests added.
 - [x] **ObjLoader mishandles mixed attribute faces** — Fixed: vertices missing texcoords or normals are padded with defaults (0,0 for TC, 0,0,1 for normals) to maintain consistent stride.
 
 ## Security / Robustness
