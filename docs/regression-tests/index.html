@@ -184,7 +184,7 @@ const BRANCH = 'main';
 const REPORT_PATH = 'docs/regression-tests/screenshot-report.json';
 const REF_BASE = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/samples/tests/screenshot/references/ci`;
 
-const BACKEND_SHORT = { opengl: 'GL', vulkan: 'VK', webgpu: 'WG', 'teavm-webgpu': 'Web' };
+const BACKEND_SHORT = { opengl: 'GL', vulkan: 'VK', webgpu: 'WG', 'teavm-webgpu': 'Web', 'graalwasm-webgpu': 'Graal' };
 
 async function loadReport() {
   const loading = document.getElementById('report-loading');
