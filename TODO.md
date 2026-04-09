@@ -18,15 +18,15 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 
 - [x] **NPE in BaseApplication when debugOverlay=false** — Fixed: Engine no longer allocates DebugUiOverlay when disabled (set to null), BaseApplication already null-checks debugUi().
 - [x] **UniformManager material write loop skips Vec4/Mat4/Vec2 alignment** — Fixed: write loop now aligns Vec4/Mat4 to 16 bytes and Vec2 to 8 bytes, matching the size calculation.
-- [ ] **TransactionBus.drain() returns list that gets cleared on next swap** — `TransactionBus.SubscriberState.swap()` returns the raw ArrayList and stores it as `readBuffer`. On the next `swap()`, this same list becomes `writeBuffer` and is cleared. If the consumer hasn't finished iterating, the list is mutated under it. Works in practice (single drain per frame) but fragile — should return a copy or use triple buffering.
+- [x] **TransactionBus.drain() returns list that gets cleared on next swap** — Fixed: swap() now returns an owned snapshot (old writeBuffer) and allocates a fresh writeBuffer. Caller's list is never mutated.
 - [x] **Vec2/Vec3/Vec4/Quat normalize() division by zero** — Fixed: normalize() returns ZERO (or IDENTITY for Quat) when length is zero.
 - [x] **Transform.lookingAt() NaN when target == position** — Fixed: early return `this` when target equals position.
 - [x] **ZipAssetSource never closes ZipFile** — Fixed: implements AutoCloseable with close() that closes the ZipFile.
 - [x] **EventBus.Subscription.unsubscribe() race condition** — Fixed: uses AtomicBoolean.compareAndSet() for thread-safe unsubscribe.
-- [ ] **FileWatcher only watches one directory level** — `FileWatcher.java:38`. `WatchService.register()` only watches the given directory, not subdirectories. Shader files in `shaders/subdir/` won't trigger hot-reload. Need `RECURSIVE` flag or register all subdirectories.
-- [ ] **ResourceStats frame counters not thread-safe** — `ResourceStats.Entry` uses plain `int` for `created`/`destroyed`/`used`/`updated`, but `recordCreate`/`recordDestroy` can be called from the Cleaner thread (via GpuResourceManager cleanup actions) while `newFrame()` runs on the render thread. Only `liveTotal` is atomic. Should use AtomicIntegers or ensure single-thread access.
+- [x] **FileWatcher only watches one directory level** — Fixed: walkFileTree registers all subdirectories recursively. Event paths resolved relative to root directory.
+- [x] **ResourceStats frame counters not thread-safe** — Fixed: all frame counters (created/destroyed/used/updated) now use AtomicInteger. swapFrame() uses getAndSet(0) for atomic swap+reset.
 - [ ] **Hierarchy mutations don't emit transactions** — `Hierarchy.java` has mutable `setParent()`/`addChild()`/`removeChild()` that bypass the transaction system. Parent/child changes are invisible to the renderer and any other transaction consumers.
-- [ ] **ObjLoader mishandles mixed attribute faces** — `ObjLoader.java`. Global `hasTexCoords`/`hasNormals` flags are set when ANY `vt`/`vn` line exists, but individual faces may omit them (e.g., `f 1//1` has normals but no texcoords). Vertex stride mismatch causes buffer corruption.
+- [x] **ObjLoader mishandles mixed attribute faces** — Fixed: vertices missing texcoords or normals are padded with defaults (0,0 for TC, 0,0,1 for normals) to maintain consistent stride.
 
 ## Security / Robustness
 
