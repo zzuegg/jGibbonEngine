@@ -1,3 +1,15 @@
+val graalJavaVersion = rootProject.extensions
+    .getByType<VersionCatalogsExtension>()
+    .named("libs")
+    .findVersion("graalvm-java").orElseThrow().requiredVersion
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(graalJavaVersion)
+        vendor = JvmVendorSpec.ORACLE
+    }
+}
+
 tasks.withType<JavaCompile> {
     options.compilerArgs.addAll(listOf("--add-modules", "org.graalvm.webimage.api"))
 }
@@ -29,9 +41,15 @@ tasks.test {
 }
 
 // ── WASM compilation via native-image --tool:svm-wasm ───────────────
+
+// Resolve native-image from the GraalVM toolchain
+val graalHome: Provider<String> = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(graalJavaVersion)
+    vendor = JvmVendorSpec.ORACLE
+}.map { it.executablePath.asFile.parentFile.parentFile.absolutePath }
+
 tasks.register<Exec>("wasmCompile") {
     dependsOn(tasks.jar)
-    // Ensure all dependency jars are built
     dependsOn(configurations.runtimeClasspath)
     group = "build"
     description = "Compile GraalWasm test app to WebAssembly"
@@ -42,24 +60,59 @@ tasks.register<Exec>("wasmCompile") {
         outputDir.get().asFile.mkdirs()
     }
 
-    // Use doFirst to resolve classpath at execution time
     doFirst {
         val cp = sourceSets.main.get().runtimeClasspath.asPath
+        val graalBin = graalHome.get() + "/bin"
+        val nativeImage = "$graalBin/native-image"
+
+        // Find wasm-as (Binaryen) on PATH or common locations
+        val wasmAs = listOf(
+            System.getenv("WASM_AS"),
+            findOnPath("wasm-as"),
+            "/tmp/binaryen-version_129/bin/wasm-as",
+            "/usr/bin/wasm-as",
+            "/usr/local/bin/wasm-as"
+        ).firstOrNull { it != null && file(it).exists() }
+
         val wat2wasm = project.findProperty("wat2wasm.path")?.toString()
+            ?: listOf(
+                findOnPath("wat2wasm"),
+                "/tmp/wabt-1.0.40/bin/wat2wasm",
+                "/usr/bin/wat2wasm",
+                "/usr/local/bin/wat2wasm"
+            ).firstOrNull { it != null && file(it).exists() }
+
         val cmd = mutableListOf(
-            "native-image",
+            nativeImage,
             "--tool:svm-wasm",
             "-H:-AutoRunVM",
             "-cp", cp,
             "dev.engine.tests.screenshot.graalwasm.GraalWasmTestApp",
             "-o", outputDir.get().file("main").asFile.absolutePath
         )
-        if (wat2wasm != null) {
+
+        // Prefer Binaryen (wasm-as), fall back to wabt (wat2wasm)
+        if (wasmAs != null) {
+            // Binaryen is on PATH or found — native-image finds it automatically
+            val binDir = file(wasmAs).parentFile.absolutePath
+            environment("PATH", binDir + ":" + System.getenv("PATH"))
+        } else if (wat2wasm != null) {
             cmd.add("-H:-UseBinaryen")
             cmd.add("-H:Wat2WasmPath=$wat2wasm")
+        } else {
+            throw GradleException(
+                "Neither wasm-as (Binaryen) nor wat2wasm (WABT) found. " +
+                "Install Binaryen (apt install binaryen) or set -Pwat2wasm.path=<path>."
+            )
         }
+
         commandLine(cmd)
     }
+}
+
+fun findOnPath(name: String): String? {
+    val pathDirs = System.getenv("PATH")?.split(File.pathSeparator) ?: return null
+    return pathDirs.map { File(it, name) }.firstOrNull { it.exists() && it.canExecute() }?.absolutePath
 }
 
 // Copy test.html and assets next to compiled WASM

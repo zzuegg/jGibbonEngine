@@ -1,5 +1,6 @@
 [versions]
 java = "25"
+graalvm-java = "26"
 
 # Logging
 slf4j = "2.0.16"

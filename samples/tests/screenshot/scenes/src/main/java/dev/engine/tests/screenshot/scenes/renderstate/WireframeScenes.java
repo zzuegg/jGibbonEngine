@@ -22,7 +22,8 @@ public class WireframeScenes {
         public SceneConfig config() {
             return SceneConfig.defaults()
                     .withKnownLimitation("webgpu", "Wireframe not supported on WebGPU")
-                    .withKnownLimitation("teavm-webgpu", "Wireframe not supported on WebGPU");
+                    .withKnownLimitation("teavm-webgpu", "Wireframe not supported on WebGPU")
+                    .withKnownLimitation("graalwasm-webgpu", "Wireframe not supported on WebGPU");
         }
 
         @Override
