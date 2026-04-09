@@ -411,8 +411,9 @@ public class NativeStructProcessor extends AbstractProcessor {
     // --- Discovery registry generation ---
 
     private void generateDiscoveryRegistry() {
-        // Determine the package from the first discoverable class
-        var firstClass = discoverableClasses.keySet().iterator().next();
+        // Determine the package deterministically: use the alphabetically first package
+        // so the generated class location is stable across JVM implementations.
+        var firstClass = discoverableClasses.keySet().stream().sorted().findFirst().orElseThrow();
         var pkg = firstClass.contains(".") ? firstClass.substring(0, firstClass.lastIndexOf('.')) : "";
         var registryClassName = "GeneratedDiscoveryRegistry";
         var fqn = pkg.isEmpty() ? registryClassName : pkg + "." + registryClassName;
@@ -437,6 +438,7 @@ public class NativeStructProcessor extends AbstractProcessor {
                 w.write("    public List<Class<?>> classes() {\n");
                 w.write("        return List.of(\n");
                 var entries = new ArrayList<>(discoverableClasses.keySet());
+                java.util.Collections.sort(entries);
                 for (int i = 0; i < entries.size(); i++) {
                     w.write("            " + entries.get(i) + ".class");
                     if (i < entries.size() - 1) w.write(",");
