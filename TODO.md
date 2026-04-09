@@ -70,7 +70,7 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 
 - [x] **EngineConfig missing common options** — Added debugOverlay toggle. FPS cap via maxFrames already existed. VSync now in GraphicsConfig.presentMode. Window options in WindowDescriptor.
 - [x] **GraphicsConfig missing graphics settings** — Added msaaSamples, srgb, maxAnisotropy, presentMode. Backends can read these during device creation.
-- [x] **Wire new GraphicsConfig settings into backends** — Fixed: GraphicsConfig passed to all backend constructors. srgb enables GL_FRAMEBUFFER_SRGB and auto-selects VK sRGB format. maxAnisotropy caps sampler anisotropy across all backends. MSAA deferred to render pipeline.
+- [x] **Wire new GraphicsConfig settings into backends** — Partial: GraphicsConfig passed to all backend constructors. maxAnisotropy caps sampler anisotropy across all backends. sRGB partially wired (GL default framebuffer, VK swapchain auto-select) but not fully tested — custom render targets and WebGPU still missing. MSAA deferred to render pipeline.
 - [x] **Wire WindowDescriptor fields into window toolkits** — Fixed: GLFW applies resizable, decorated, highDpi, fullscreen. SDL3 applies resizable, borderless, fullscreen, highDpi.
 - [ ] **Wire presentMode into WebGPU/OpenGL backends** — VulkanConfig reads it, but OpenGlConfig and WebGpuBackend still hardcode their present mode. OpenGL should set swapInterval, WebGPU should call setPresentMode.
 - [x] **WindowDescriptor too minimal** — Added resizable, decorated, fullscreen, highDpi fields with builder pattern. Backward-compatible 3-arg constructor preserved.
