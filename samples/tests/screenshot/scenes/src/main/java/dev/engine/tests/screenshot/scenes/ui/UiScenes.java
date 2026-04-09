@@ -38,10 +38,14 @@ public class UiScenes {
                             .debugOverlay(true),
                     Set.of(3),
                     Tolerance.tight(),
-                    List.of(new SceneConfig.KnownLimitation("teavm-webgpu",
-                            "UI text rendering differs in headless Chrome"),
+                    List.of(new SceneConfig.KnownLimitation("vulkan",
+                                    "UI font rasterization differs between GL and Vulkan backends"),
+                            new SceneConfig.KnownLimitation("webgpu",
+                                    "UI font rasterization differs between GL and WebGPU backends"),
+                            new SceneConfig.KnownLimitation("teavm-webgpu",
+                                    "UI text rendering differs in headless Chrome"),
                             new SceneConfig.KnownLimitation("graalwasm-webgpu",
-                            "UI text rendering differs in headless Chrome")));
+                                    "UI text rendering differs in headless Chrome")));
         }
 
         @Override

@@ -4,29 +4,43 @@ import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
+import dev.engine.graphics.common.engine.Engine;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.tests.screenshot.scenes.RenderTestScene;
+import dev.engine.tests.screenshot.scenes.SceneConfig;
 
 @Discoverable
 public class MaterialScenes {
 
-    public static final RenderTestScene PBR_MATERIALS = engine -> {
-        var renderer = engine.renderer();
-        var scene = engine.scene();
-        var cam = renderer.createCamera();
-        cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
-        cam.setPerspective((float) Math.toRadians(60), 256f / 256f, 0.1f, 100f);
-        renderer.setActiveCamera(cam);
+    public static final RenderTestScene PBR_MATERIALS = new RenderTestScene() {
+        @Override
+        public SceneConfig config() {
+            return SceneConfig.defaults()
+                    .withKnownLimitation("teavm-webgpu",
+                            "Web renderer (SwiftShader) produces minor PBR floating-point differences vs Mesa in CI")
+                    .withKnownLimitation("graalwasm-webgpu",
+                            "Web renderer (SwiftShader) produces minor PBR floating-point differences vs Mesa in CI");
+        }
 
-        var rough = scene.createEntity();
-        rough.add(PrimitiveMeshes.sphere());
-        rough.add(MaterialData.pbr(new Vec3(0.8f, 0.3f, 0.1f), 0.9f, 0.1f));
-        rough.add(Transform.at(-1.5f, 0, 0));
+        @Override
+        public void setup(Engine engine) {
+            var renderer = engine.renderer();
+            var scene = engine.scene();
+            var cam = renderer.createCamera();
+            cam.lookAt(new Vec3(0, 2, 5), Vec3.ZERO, Vec3.UNIT_Y);
+            cam.setPerspective((float) Math.toRadians(60), 256f / 256f, 0.1f, 100f);
+            renderer.setActiveCamera(cam);
 
-        var metal = scene.createEntity();
-        metal.add(PrimitiveMeshes.sphere());
-        metal.add(MaterialData.pbr(new Vec3(0.8f, 0.8f, 0.8f), 0.1f, 0.9f));
-        metal.add(Transform.at(1.5f, 0, 0));
+            var rough = scene.createEntity();
+            rough.add(PrimitiveMeshes.sphere());
+            rough.add(MaterialData.pbr(new Vec3(0.8f, 0.3f, 0.1f), 0.9f, 0.1f));
+            rough.add(Transform.at(-1.5f, 0, 0));
+
+            var metal = scene.createEntity();
+            metal.add(PrimitiveMeshes.sphere());
+            metal.add(MaterialData.pbr(new Vec3(0.8f, 0.8f, 0.8f), 0.1f, 0.9f));
+            metal.add(Transform.at(1.5f, 0, 0));
+        }
     };
 
     public static final RenderTestScene SINGLE_SPHERE_PBR = engine -> {

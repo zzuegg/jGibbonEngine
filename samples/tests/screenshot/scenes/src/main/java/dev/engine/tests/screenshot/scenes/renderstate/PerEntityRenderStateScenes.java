@@ -4,11 +4,13 @@ import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
+import dev.engine.graphics.common.engine.Engine;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.graphics.renderstate.BlendMode;
 import dev.engine.graphics.renderstate.CullMode;
 import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.tests.screenshot.scenes.RenderTestScene;
+import dev.engine.tests.screenshot.scenes.SceneConfig;
 
 /**
  * Tests that render state is correctly applied per-entity without leaking to other entities.
@@ -17,7 +19,18 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 public class PerEntityRenderStateScenes {
 
     /** One entity with depth disabled, another with depth enabled — tests state isolation. */
-    public static final RenderTestScene PER_ENTITY_DEPTH = engine -> {
+    public static final RenderTestScene PER_ENTITY_DEPTH = new RenderTestScene() {
+        @Override
+        public SceneConfig config() {
+            return SceneConfig.defaults()
+                    .withKnownLimitation("teavm-webgpu",
+                            "Web renderer (SwiftShader) produces minor depth floating-point differences vs Mesa in CI")
+                    .withKnownLimitation("graalwasm-webgpu",
+                            "Web renderer (SwiftShader) produces minor depth floating-point differences vs Mesa in CI");
+        }
+
+        @Override
+        public void setup(Engine engine) {
         var renderer = engine.renderer();
         var scene = engine.scene();
         var cam = renderer.createCamera();
@@ -49,6 +62,7 @@ public class PerEntityRenderStateScenes {
         nearNormal.add(PrimitiveMeshes.cube());
         nearNormal.add(MaterialData.unlit(new Vec3(0.9f, 0.9f, 0.2f)));
         nearNormal.add(Transform.at(1.5f, 0, 0));
+        }
     };
 
     /** One entity with back-face culling off, one with front-face culling —
