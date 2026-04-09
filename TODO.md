@@ -51,6 +51,9 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 - [x] **DebugUiOverlay allocated when disabled** — Fixed: set to null when debugOverlay=false, null-check on shutdown.
 - [ ] **WgpuRenderDevice.memoryFactory unused externally** — The `IntFunction<NativeMemory> memoryFactory` constructor parameter was only used internally (defaulting to `createDefaultMemory`). No external caller ever passed a custom factory. Dead parameter — remove or document intended use for TeaVM.
 
+**Not dead code (do not remove):**
+- TeaVM stub classes (`TConcurrentLinkedQueue`, `TCountDownLatch`, `TCleaner` in `providers/windowing/web/teavm-windowing`) — required for TeaVM web target compatibility.
+
 ## Hardcoded Values (should be configurable/dynamic)
 
 - [ ] **Primitive topology hardcoded to TRIANGLES** — All draw commands in Gl/Vk/Wgpu RenderDevice. Topology should be part of PipelineDescriptor or DrawCommand. Prevents drawing lines, points, triangle strips.
