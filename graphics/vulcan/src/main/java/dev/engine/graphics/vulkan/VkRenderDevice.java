@@ -41,6 +41,7 @@ public class VkRenderDevice implements RenderDevice {
     private final long surface;
     private final VkSwapchain swapchain;
     private final long renderPass;
+    private final long pipelineCache;
     private final int depthFormat;
     private final VkFramebufferSet framebuffers;
 
@@ -96,6 +97,7 @@ public class VkRenderDevice implements RenderDevice {
     // Pending texture+sampler bindings for descriptor flush (unit -> imageView, unit -> sampler)
     private final long[] pendingTextureViews = new long[8];
     private final long[] pendingTextureSamplers = new long[8];
+    private final float configMaxAnisotropy;
 
     /**
      * Creates a Vulkan render device.
@@ -108,13 +110,15 @@ public class VkRenderDevice implements RenderDevice {
                            java.util.function.LongUnaryOperator surfaceFactory,
                            int initialWidth, int initialHeight) {
         this(vk, requiredExtensions, surfaceFactory, initialWidth, initialHeight,
-                VkBindings.VK_FORMAT_B8G8R8A8_UNORM, VkBindings.VK_PRESENT_MODE_FIFO_KHR);
+                VkBindings.VK_FORMAT_B8G8R8A8_UNORM, VkBindings.VK_PRESENT_MODE_FIFO_KHR, null);
     }
 
     public VkRenderDevice(VkBindings vk, String[] requiredExtensions,
                            java.util.function.LongUnaryOperator surfaceFactory,
                            int initialWidth, int initialHeight,
-                           int preferredFormat, int preferredPresentMode) {
+                           int preferredFormat, int preferredPresentMode,
+                           dev.engine.graphics.GraphicsConfig config) {
+        this.configMaxAnisotropy = config != null ? config.maxAnisotropy() : 1f;
         this.vk = vk;
 
         // --- Create VkInstance ---
@@ -174,6 +178,7 @@ public class VkRenderDevice implements RenderDevice {
 
         this.depthFormat = VkRenderPassFactory.findDepthFormat(vk, instance, physicalDevice);
         this.renderPass = VkRenderPassFactory.createColorDepth(vk, device, swapchain.imageFormat(), depthFormat);
+        this.pipelineCache = vk.createPipelineCache(device, null);
 
         this.framebuffers = new VkFramebufferSet(vk, device, physicalDevice);
         framebuffers.create(swapchain, renderPass, depthFormat);
@@ -538,7 +543,8 @@ public class VkRenderDevice implements RenderDevice {
         int magFilter = mapFilter(descriptor.magFilter());
         int minFilter = mapFilter(descriptor.minFilter());
         int mipmapMode = mapMipmapMode(descriptor.minFilter());
-        boolean anisotropyEnable = descriptor.maxAnisotropy() > 1f;
+        float aniso = Math.min(descriptor.maxAnisotropy(), configMaxAnisotropy);
+        boolean anisotropyEnable = aniso > 1f;
         boolean compareEnable = descriptor.compareFunc() != null;
         int compareOp = compareEnable ? mapCompareOp(descriptor.compareFunc()) : VkBindings.VK_COMPARE_OP_NEVER;
         int borderColor = mapBorderColor(descriptor.borderColor());
@@ -547,7 +553,7 @@ public class VkRenderDevice implements RenderDevice {
                 mapWrapMode(descriptor.wrapS()), mapWrapMode(descriptor.wrapT()),
                 mapWrapMode(descriptor.wrapR()),
                 descriptor.minLod(), descriptor.maxLod(), descriptor.lodBias(),
-                anisotropyEnable, descriptor.maxAnisotropy(),
+                anisotropyEnable, aniso,
                 compareEnable, compareOp, borderColor);
 
         return samplerRegistry.register(new VkSamplerAllocation(sampler, descriptor));
@@ -567,7 +573,7 @@ public class VkRenderDevice implements RenderDevice {
         if (descriptor.hasSpirv()) {
             log.debug("createPipeline: using pipelineLayout=0x{}", Long.toHexString(descriptorManager.pipelineLayout()));
             long pipeline = VkPipelineFactory.create(vk, device, renderPass,
-                    descriptorManager.pipelineLayout(), descriptor.binaries(), descriptor.vertexFormat());
+                    descriptorManager.pipelineLayout(), pipelineCache, descriptor.binaries(), descriptor.vertexFormat());
             var handle = pipelineRegistry.register(pipeline);
             pipelineSpecs.put(handle.index(), new PipelineSpec(descriptor.binaries(), descriptor.vertexFormat()));
             return handle;
@@ -596,7 +602,7 @@ public class VkRenderDevice implements RenderDevice {
             throw new UnsupportedOperationException("Vulkan compute requires SPIRV binary");
         }
         long shaderModule = vk.createShaderModule(device, descriptor.binary().spirv());
-        long pipeline = vk.createComputePipeline(device, descriptorManager.pipelineLayout(), shaderModule);
+        long pipeline = vk.createComputePipeline(device, descriptorManager.pipelineLayout(), pipelineCache, shaderModule);
         vk.destroyShaderModule(device, shaderModule);
         return pipelineRegistry.register(pipeline);
     }
@@ -1169,7 +1175,7 @@ public class VkRenderDevice implements RenderDevice {
             var spec = pipelineSpecs.get(currentBoundPipeline.index());
             if (spec == null) return pipelineRegistry.get(currentBoundPipeline);
             return VkPipelineFactory.create(vk, device, renderPass,
-                    descriptorManager.pipelineLayout(), spec.binaries(), spec.vertexFormat(), blendConfig, wireframe);
+                    descriptorManager.pipelineLayout(), pipelineCache, spec.binaries(), spec.vertexFormat(), blendConfig, wireframe);
         });
         vk.cmdBindPipeline(cmd, VkBindings.VK_PIPELINE_BIND_POINT_GRAPHICS, variantPipeline);
     }
@@ -1268,6 +1274,7 @@ public class VkRenderDevice implements RenderDevice {
         for (var frame : frames) frame.close();
         descriptorManager.close();
         framebuffers.close();
+        vk.destroyPipelineCache(device, pipelineCache);
         vk.destroyRenderPass(device, renderPass);
         swapchain.close();
         vk.destroyCommandPool(device, commandPool);

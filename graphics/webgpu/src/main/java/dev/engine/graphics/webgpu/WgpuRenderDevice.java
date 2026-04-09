@@ -210,19 +210,21 @@ public class WgpuRenderDevice implements RenderDevice {
      */
     /** Factory for creating NativeMemory instances. Desktop: SegmentNativeMemory, Web: ByteBufferNativeMemory. */
     private final IntFunction<NativeMemory> memoryFactory;
+    private final float configMaxAnisotropy;
 
     public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu) {
-        this(window, gpu, false, WgpuRenderDevice::createDefaultMemory);
+        this(window, gpu, false, null);
     }
 
     public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu, boolean presentToSurface) {
-        this(window, gpu, presentToSurface, WgpuRenderDevice::createDefaultMemory);
+        this(window, gpu, presentToSurface, null);
     }
 
-    public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu, boolean presentToSurface, IntFunction<NativeMemory> memoryFactory) {
+    public WgpuRenderDevice(WindowHandle window, WgpuBindings gpu, boolean presentToSurface, dev.engine.graphics.GraphicsConfig config) {
+        this.configMaxAnisotropy = config != null ? config.maxAnisotropy() : 1f;
+        this.memoryFactory = WgpuRenderDevice::createDefaultMemory;
         this.window = window;
         this.gpu = gpu;
-        this.memoryFactory = memoryFactory;
         boolean available = false;
         try {
             available = gpu.initialize();
@@ -526,6 +528,7 @@ public class WgpuRenderDevice implements RenderDevice {
         if (nativeAvailable) {
             int compare = descriptor.compareFunc() != null
                     ? mapCompareFunction(descriptor.compareFunc()) : 0; // 0 = undefined/disabled in WebGPU
+            float aniso = Math.min(descriptor.maxAnisotropy(), configMaxAnisotropy);
             long sampler = gpu.deviceCreateSampler(wgpuDevice,
                     mapWrapMode(descriptor.wrapS()),
                     mapWrapMode(descriptor.wrapT()),
@@ -534,7 +537,7 @@ public class WgpuRenderDevice implements RenderDevice {
                     mapFilterMode(descriptor.minFilter()),
                     mapMipmapFilterMode(descriptor.minFilter()),
                     descriptor.minLod(), descriptor.maxLod(),
-                    compare, descriptor.maxAnisotropy());
+                    compare, aniso);
             return samplers.register(new WgpuSampler(sampler, descriptor));
         }
         return samplers.register(new WgpuSampler(0, descriptor));

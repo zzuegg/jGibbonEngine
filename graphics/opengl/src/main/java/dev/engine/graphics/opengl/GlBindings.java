@@ -37,11 +37,12 @@ public interface GlBindings {
     int GL_DST_COLOR           = 0x0306;
 
     // --- Capabilities ---
-    int GL_DEPTH_TEST    = 0x0B71;
-    int GL_BLEND         = 0x0BE2;
-    int GL_CULL_FACE     = 0x0B44;
-    int GL_SCISSOR_TEST  = 0x0C11;
-    int GL_STENCIL_TEST  = 0x0B90;
+    int GL_DEPTH_TEST      = 0x0B71;
+    int GL_BLEND           = 0x0BE2;
+    int GL_CULL_FACE       = 0x0B44;
+    int GL_SCISSOR_TEST    = 0x0C11;
+    int GL_STENCIL_TEST    = 0x0B90;
+    int GL_FRAMEBUFFER_SRGB = 0x8DB9;
 
     // --- Cull / winding ---
     int GL_FRONT          = 0x0404;

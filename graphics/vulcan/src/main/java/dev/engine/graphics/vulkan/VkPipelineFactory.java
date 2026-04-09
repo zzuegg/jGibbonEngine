@@ -38,18 +38,18 @@ final class VkPipelineFactory {
                 VkBindings.VK_BLEND_FACTOR_ONE, VkBindings.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA);
     }
 
-    static long create(VkBindings vk, long device, long renderPass, long pipelineLayout,
+    static long create(VkBindings vk, long device, long renderPass, long pipelineLayout, long pipelineCache,
                         List<ShaderBinary> binaries, VertexFormat vertexFormat) {
-        return create(vk, device, renderPass, pipelineLayout, binaries, vertexFormat, BlendConfig.NONE, false);
+        return create(vk, device, renderPass, pipelineLayout, pipelineCache, binaries, vertexFormat, BlendConfig.NONE, false);
     }
 
-    static long create(VkBindings vk, long device, long renderPass, long pipelineLayout,
+    static long create(VkBindings vk, long device, long renderPass, long pipelineLayout, long pipelineCache,
                         List<ShaderBinary> binaries, VertexFormat vertexFormat,
                         BlendConfig blendConfig) {
-        return create(vk, device, renderPass, pipelineLayout, binaries, vertexFormat, blendConfig, false);
+        return create(vk, device, renderPass, pipelineLayout, pipelineCache, binaries, vertexFormat, blendConfig, false);
     }
 
-    static long create(VkBindings vk, long device, long renderPass, long pipelineLayout,
+    static long create(VkBindings vk, long device, long renderPass, long pipelineLayout, long pipelineCache,
                         List<ShaderBinary> binaries, VertexFormat vertexFormat,
                         BlendConfig blendConfig, boolean wireframe) {
         // Create shader modules
@@ -96,7 +96,7 @@ final class VkPipelineFactory {
                 VkBindings.VK_DYNAMIC_STATE_STENCIL_REFERENCE
         };
 
-        long pipeline = vk.createGraphicsPipeline(device, renderPass, pipelineLayout,
+        long pipeline = vk.createGraphicsPipeline(device, renderPass, pipelineLayout, pipelineCache,
                 modules, stages,
                 attribLocations, attribFormats, attribOffsets, vertexStride,
                 blendConfig.enabled(), blendConfig.srcColorFactor(), blendConfig.dstColorFactor(),

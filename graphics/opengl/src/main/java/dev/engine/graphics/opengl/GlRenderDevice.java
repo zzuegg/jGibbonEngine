@@ -84,13 +84,24 @@ public class GlRenderDevice implements RenderDevice {
     private final dev.engine.graphics.window.WindowHandle window;
     private final int pushConstantUbo;
     private final GlBindings gl;
+    private final float configMaxAnisotropy;
 
     public GlRenderDevice(dev.engine.graphics.window.WindowHandle window, GlBindings gl) {
+        this(window, gl, null);
+    }
+
+    public GlRenderDevice(dev.engine.graphics.window.WindowHandle window, GlBindings gl, dev.engine.graphics.GraphicsConfig config) {
         this.gl = gl;
         this.window = window;
+        this.configMaxAnisotropy = config != null ? config.maxAnisotropy() : 1f;
         gl.makeContextCurrent(window.nativeHandle());
         gl.createCapabilities();
         log.info("OpenGL context created: {}", gl.glGetString(GlBindings.GL_VERSION));
+
+        if (config != null && config.srgb()) {
+            gl.glEnable(GlBindings.GL_FRAMEBUFFER_SRGB);
+            log.info("sRGB framebuffer enabled");
+        }
 
         pushConstantUbo = gl.glCreateBuffers();
         gl.glNamedBufferStorage(pushConstantUbo, 128, GlBindings.GL_DYNAMIC_STORAGE_BIT);
@@ -334,8 +345,9 @@ public class GlRenderDevice implements RenderDevice {
         gl.glSamplerParameterf(glSampler, GlBindings.GL_TEXTURE_MIN_LOD, descriptor.minLod());
         gl.glSamplerParameterf(glSampler, GlBindings.GL_TEXTURE_MAX_LOD, descriptor.maxLod());
         gl.glSamplerParameterf(glSampler, GlBindings.GL_TEXTURE_LOD_BIAS, descriptor.lodBias());
-        if (descriptor.maxAnisotropy() > 1f) {
-            gl.glSamplerParameterf(glSampler, GlBindings.GL_MAX_TEXTURE_MAX_ANISOTROPY, descriptor.maxAnisotropy());
+        float aniso = Math.min(descriptor.maxAnisotropy(), configMaxAnisotropy);
+        if (aniso > 1f) {
+            gl.glSamplerParameterf(glSampler, GlBindings.GL_MAX_TEXTURE_MAX_ANISOTROPY, aniso);
         }
         if (descriptor.compareFunc() != null) {
             gl.glSamplerParameteri(glSampler, GlBindings.GL_TEXTURE_COMPARE_MODE, GlBindings.GL_COMPARE_REF_TO_TEXTURE);

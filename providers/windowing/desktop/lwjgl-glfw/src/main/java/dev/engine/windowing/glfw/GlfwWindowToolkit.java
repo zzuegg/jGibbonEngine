@@ -81,11 +81,15 @@ public class GlfwWindowToolkit implements WindowToolkit {
     public WindowHandle createWindow(WindowDescriptor descriptor) {
         GLFW.glfwDefaultWindowHints();
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_RESIZABLE, descriptor.resizable() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_DECORATED, descriptor.decorated() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_SCALE_TO_MONITOR, descriptor.highDpi() ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
         windowHints.accept(null);
 
+        long monitor = descriptor.fullscreen() ? GLFW.glfwGetPrimaryMonitor() : 0;
         long window = GLFW.glfwCreateWindow(
                 descriptor.width(), descriptor.height(),
-                descriptor.title(), 0, 0);
+                descriptor.title(), monitor, 0);
         if (window == 0) {
             throw new RuntimeException("Failed to create GLFW window");
         }

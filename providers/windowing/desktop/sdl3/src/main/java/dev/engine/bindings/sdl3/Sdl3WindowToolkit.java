@@ -81,7 +81,11 @@ public class Sdl3WindowToolkit implements WindowToolkit {
 
     @Override
     public WindowHandle createWindow(WindowDescriptor descriptor) {
-        long flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
+        long flags = SDL_WINDOW_HIDDEN;
+        if (descriptor.resizable()) flags |= SDL_WINDOW_RESIZABLE;
+        if (!descriptor.decorated()) flags |= SDL_WINDOW_BORDERLESS;
+        if (descriptor.fullscreen()) flags |= SDL_WINDOW_FULLSCREEN;
+        if (descriptor.highDpi()) flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
         if (opengl) flags |= SDL_WINDOW_OPENGL;
         if (vulkan) flags |= SDL_WINDOW_VULKAN;
 

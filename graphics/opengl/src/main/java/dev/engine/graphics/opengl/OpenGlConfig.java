@@ -23,6 +23,6 @@ public final class OpenGlConfig extends GraphicsConfig {
 
     @Override
     protected RenderDevice createDevice(WindowHandle window) {
-        return new GlRenderDevice(window, gl);
+        return new GlRenderDevice(window, gl, this);
     }
 }

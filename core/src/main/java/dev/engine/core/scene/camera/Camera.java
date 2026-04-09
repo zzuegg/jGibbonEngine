@@ -27,7 +27,7 @@ public class Camera {
     }
 
     public void setOrthographic(float left, float right, float bottom, float top, float near, float far) {
-        this.projection = ortho(left, right, bottom, top, near, far);
+        this.projection = Mat4.ortho(left, right, bottom, top, near, far);
         this.nearPlane = near;
         this.farPlane = far;
     }
@@ -43,13 +43,4 @@ public class Camera {
     public Vec3 position() { return position; }
     public float nearPlane() { return nearPlane; }
     public float farPlane() { return farPlane; }
-
-    private static Mat4 ortho(float l, float r, float b, float t, float n, float f) {
-        return new Mat4(
-                2f / (r - l), 0, 0, -(r + l) / (r - l),
-                0, 2f / (t - b), 0, -(t + b) / (t - b),
-                0, 0, -2f / (f - n), -(f + n) / (f - n),
-                0, 0, 0, 1
-        );
-    }
 }

@@ -75,6 +75,15 @@ public record Mat4(
         );
     }
 
+    public static Mat4 ortho(float left, float right, float bottom, float top, float near, float far) {
+        return new Mat4(
+                2f / (right - left), 0, 0, -(right + left) / (right - left),
+                0, 2f / (top - bottom), 0, -(top + bottom) / (top - bottom),
+                0, 0, -2f / (far - near), -(far + near) / (far - near),
+                0, 0, 0, 1
+        );
+    }
+
     public static Mat4 lookAt(Vec3 eye, Vec3 center, Vec3 up) {
         Vec3 f = center.sub(eye).normalize();
         Vec3 s = f.cross(up).normalize();
@@ -126,6 +135,70 @@ public record Mat4(
                 m01, m11, m21, m31,
                 m02, m12, m22, m32,
                 m03, m13, m23, m33
+        );
+    }
+
+    public float determinant() {
+        float a = m00 * (m11 * (m22 * m33 - m23 * m32) - m12 * (m21 * m33 - m23 * m31) + m13 * (m21 * m32 - m22 * m31));
+        float b = m01 * (m10 * (m22 * m33 - m23 * m32) - m12 * (m20 * m33 - m23 * m30) + m13 * (m20 * m32 - m22 * m30));
+        float c = m02 * (m10 * (m21 * m33 - m23 * m31) - m11 * (m20 * m33 - m23 * m30) + m13 * (m20 * m31 - m21 * m30));
+        float d = m03 * (m10 * (m21 * m32 - m22 * m31) - m11 * (m20 * m32 - m22 * m30) + m12 * (m20 * m31 - m21 * m30));
+        return a - b + c - d;
+    }
+
+    public Mat4 inverse() {
+        float a2323 = m22 * m33 - m23 * m32;
+        float a1323 = m21 * m33 - m23 * m31;
+        float a1223 = m21 * m32 - m22 * m31;
+        float a0323 = m20 * m33 - m23 * m30;
+        float a0223 = m20 * m32 - m22 * m30;
+        float a0123 = m20 * m31 - m21 * m30;
+        float a2313 = m12 * m33 - m13 * m32;
+        float a1313 = m11 * m33 - m13 * m31;
+        float a1213 = m11 * m32 - m12 * m31;
+        float a2312 = m12 * m23 - m13 * m22;
+        float a1312 = m11 * m23 - m13 * m21;
+        float a1212 = m11 * m22 - m12 * m21;
+        float a0313 = m10 * m33 - m13 * m30;
+        float a0213 = m10 * m32 - m12 * m30;
+        float a0312 = m10 * m23 - m13 * m20;
+        float a0212 = m10 * m22 - m12 * m20;
+        float a0113 = m10 * m31 - m11 * m30;
+        float a0112 = m10 * m21 - m11 * m20;
+
+        float det = m00 * (m11 * a2323 - m12 * a1323 + m13 * a1223)
+                  - m01 * (m10 * a2323 - m12 * a0323 + m13 * a0223)
+                  + m02 * (m10 * a1323 - m11 * a0323 + m13 * a0123)
+                  - m03 * (m10 * a1223 - m11 * a0223 + m12 * a0123);
+
+        float invDet = 1f / det;
+
+        return new Mat4(
+                 (m11 * a2323 - m12 * a1323 + m13 * a1223) * invDet,
+                -(m01 * a2323 - m02 * a1323 + m03 * a1223) * invDet,
+                 (m01 * a2313 - m02 * a1313 + m03 * a1213) * invDet,
+                -(m01 * a2312 - m02 * a1312 + m03 * a1212) * invDet,
+                -(m10 * a2323 - m12 * a0323 + m13 * a0223) * invDet,
+                 (m00 * a2323 - m02 * a0323 + m03 * a0223) * invDet,
+                -(m00 * a2313 - m02 * a0313 + m03 * a0213) * invDet,
+                 (m00 * a2312 - m02 * a0312 + m03 * a0212) * invDet,
+                 (m10 * a1323 - m11 * a0323 + m13 * a0123) * invDet,
+                -(m00 * a1323 - m01 * a0323 + m03 * a0123) * invDet,
+                 (m00 * a1313 - m01 * a0313 + m03 * a0113) * invDet,
+                -(m00 * a1312 - m01 * a0312 + m03 * a0112) * invDet,
+                -(m10 * a1223 - m11 * a0223 + m12 * a0123) * invDet,
+                 (m00 * a1223 - m01 * a0223 + m02 * a0123) * invDet,
+                -(m00 * a1213 - m01 * a0213 + m02 * a0113) * invDet,
+                 (m00 * a1212 - m01 * a0212 + m02 * a0112) * invDet
+        );
+    }
+
+    /** Extracts the upper-left 3x3 submatrix. */
+    public Mat3 toMat3() {
+        return new Mat3(
+                m00, m01, m02,
+                m10, m11, m12,
+                m20, m21, m22
         );
     }
 

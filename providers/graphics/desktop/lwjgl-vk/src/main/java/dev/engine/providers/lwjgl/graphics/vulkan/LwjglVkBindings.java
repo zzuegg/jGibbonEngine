@@ -848,6 +848,7 @@ public class LwjglVkBindings implements VkBindings {
 
     @Override
     public long createGraphicsPipeline(long deviceHandle, long renderPass, long pipelineLayout,
+                                       long pipelineCache,
                                        long[] shaderModules, int[] shaderStages,
                                        int[] vertexAttribLocations, int[] vertexAttribFormats,
                                        int[] vertexAttribOffsets, int vertexStride,
@@ -959,14 +960,14 @@ public class LwjglVkBindings implements VkBindings {
                     .subpass(0);
 
             var pPipeline = stack.mallocLong(1);
-            int result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, pipelineInfo, null, pPipeline);
+            int result = vkCreateGraphicsPipelines(device, pipelineCache, pipelineInfo, null, pPipeline);
             if (result != VK_SUCCESS) throw new RuntimeException("Failed to create graphics pipeline: " + result);
             return pPipeline.get(0);
         }
     }
 
     @Override
-    public long createComputePipeline(long deviceHandle, long pipelineLayout, long shaderModule) {
+    public long createComputePipeline(long deviceHandle, long pipelineLayout, long pipelineCache, long shaderModule) {
         var device = deviceCache.get(deviceHandle);
         try (var stack = stackPush()) {
             var stageInfo = VkPipelineShaderStageCreateInfo.calloc(stack)
@@ -982,7 +983,7 @@ public class LwjglVkBindings implements VkBindings {
                     .layout(pipelineLayout);
 
             var pPipeline = stack.mallocLong(1);
-            int result = vkCreateComputePipelines(device, VK_NULL_HANDLE, pipelineInfo, null, pPipeline);
+            int result = vkCreateComputePipelines(device, pipelineCache, pipelineInfo, null, pPipeline);
             if (result != VK_SUCCESS) throw new RuntimeException("Failed to create compute pipeline: " + result);
             return pPipeline.get(0);
         }
@@ -991,6 +992,51 @@ public class LwjglVkBindings implements VkBindings {
     @Override
     public void destroyPipeline(long deviceHandle, long pipeline) {
         vkDestroyPipeline(deviceCache.get(deviceHandle), pipeline, null);
+    }
+
+    // ===== Pipeline Cache =====
+
+    @Override
+    public long createPipelineCache(long deviceHandle, byte[] initialData) {
+        var device = deviceCache.get(deviceHandle);
+        try (var stack = stackPush()) {
+            var createInfo = VkPipelineCacheCreateInfo.calloc(stack)
+                    .sType$Default();
+            if (initialData != null && initialData.length > 0) {
+                var buf = stack.malloc(initialData.length);
+                buf.put(initialData).flip();
+                createInfo.pInitialData(buf);
+            }
+            var pCache = stack.mallocLong(1);
+            int result = vkCreatePipelineCache(device, createInfo, null, pCache);
+            if (result != VK_SUCCESS) throw new RuntimeException("Failed to create pipeline cache: " + result);
+            return pCache.get(0);
+        }
+    }
+
+    @Override
+    public byte[] getPipelineCacheData(long deviceHandle, long pipelineCache) {
+        var device = deviceCache.get(deviceHandle);
+        try (var stack = stackPush()) {
+            var pSize = stack.mallocPointer(1);
+            vkGetPipelineCacheData(device, pipelineCache, pSize, null);
+            long size = pSize.get(0);
+            if (size == 0) return new byte[0];
+            ByteBuffer buf = MemoryUtil.memAlloc((int) size);
+            try {
+                vkGetPipelineCacheData(device, pipelineCache, pSize, buf);
+                byte[] data = new byte[(int) pSize.get(0)];
+                buf.get(data);
+                return data;
+            } finally {
+                MemoryUtil.memFree(buf);
+            }
+        }
+    }
+
+    @Override
+    public void destroyPipelineCache(long deviceHandle, long pipelineCache) {
+        vkDestroyPipelineCache(deviceCache.get(deviceHandle), pipelineCache, null);
     }
 
     // ===== Descriptor =====

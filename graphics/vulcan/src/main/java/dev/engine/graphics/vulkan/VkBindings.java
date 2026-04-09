@@ -216,6 +216,7 @@ public interface VkBindings {
      * @param dynamicStates          VK_DYNAMIC_STATE_xxx values
      */
     long createGraphicsPipeline(long device, long renderPass, long pipelineLayout,
+                                long pipelineCache,
                                 long[] shaderModules, int[] shaderStages,
                                 int[] vertexAttribLocations, int[] vertexAttribFormats,
                                 int[] vertexAttribOffsets, int vertexStride,
@@ -223,9 +224,15 @@ public interface VkBindings {
                                 int srcAlphaFactor, int dstAlphaFactor,
                                 boolean wireframe, int[] dynamicStates);
 
-    long createComputePipeline(long device, long pipelineLayout, long shaderModule);
+    long createComputePipeline(long device, long pipelineLayout, long pipelineCache, long shaderModule);
 
     void destroyPipeline(long device, long pipeline);
+
+    // ===== Pipeline Cache =====
+
+    long createPipelineCache(long device, byte[] initialData);
+    byte[] getPipelineCacheData(long device, long pipelineCache);
+    void destroyPipelineCache(long device, long pipelineCache);
 
     // ===== Descriptor =====
 

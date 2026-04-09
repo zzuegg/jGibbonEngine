@@ -55,10 +55,17 @@ public final class VulkanConfig extends GraphicsConfig {
             case MAILBOX -> VkBindings.VK_PRESENT_MODE_MAILBOX_KHR;
             case FIFO -> VkBindings.VK_PRESENT_MODE_FIFO_KHR;
         };
+        // Auto-select sRGB surface format when srgb is enabled and no explicit SRGB format was chosen
+        int format = surfaceFormat.vkValue;
+        if (srgb() && surfaceFormat == SurfaceFormat.BGRA8_UNORM) {
+            format = SurfaceFormat.BGRA8_SRGB.vkValue;
+        } else if (srgb() && surfaceFormat == SurfaceFormat.RGBA8_UNORM) {
+            format = SurfaceFormat.RGBA8_SRGB.vkValue;
+        }
         return new VkRenderDevice(vk, extensions,
                 instance -> surfaceCreator.createSurface(instance, windowHandle),
                 window.width(), window.height(),
-                surfaceFormat.vkValue, vkPresentMode);
+                format, vkPresentMode, this);
     }
 
     public static Builder builder(WindowToolkit toolkit, VkBindings vk, VulkanBackend.SurfaceCreator surfaceCreator) {

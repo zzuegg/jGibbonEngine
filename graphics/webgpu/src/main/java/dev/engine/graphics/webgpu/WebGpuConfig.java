@@ -23,6 +23,6 @@ public final class WebGpuConfig extends GraphicsConfig {
 
     @Override
     protected RenderDevice createDevice(WindowHandle window) {
-        return new WgpuRenderDevice(window, gpu, !headless());
+        return new WgpuRenderDevice(window, gpu, !headless(), this);
     }
 }

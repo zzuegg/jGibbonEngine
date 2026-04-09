@@ -19,4 +19,33 @@ public record Vec3(float x, float y, float z) {
     public float length() { return (float) Math.sqrt(lengthSquared()); }
     public Vec3 normalize() { float len = length(); return len == 0f ? ZERO : new Vec3(x / len, y / len, z / len); }
     public Vec3 lerp(Vec3 o, float t) { return new Vec3(x + (o.x - x) * t, y + (o.y - y) * t, z + (o.z - z) * t); }
+
+    public float distance(Vec3 o) { return sub(o).length(); }
+    public float distanceSquared(Vec3 o) { return sub(o).lengthSquared(); }
+
+    public Vec3 reflect(Vec3 normal) {
+        float d = 2f * dot(normal);
+        return new Vec3(x - d * normal.x, y - d * normal.y, z - d * normal.z);
+    }
+
+    public Vec3 abs() { return new Vec3(Math.abs(x), Math.abs(y), Math.abs(z)); }
+
+    public Vec3 min(Vec3 o) { return new Vec3(Math.min(x, o.x), Math.min(y, o.y), Math.min(z, o.z)); }
+    public Vec3 max(Vec3 o) { return new Vec3(Math.max(x, o.x), Math.max(y, o.y), Math.max(z, o.z)); }
+
+    public Vec3 clamp(Vec3 min, Vec3 max) {
+        return new Vec3(
+                Math.max(min.x, Math.min(max.x, x)),
+                Math.max(min.y, Math.min(max.y, y)),
+                Math.max(min.z, Math.min(max.z, z))
+        );
+    }
+
+    public Vec3 clamp(float min, float max) {
+        return new Vec3(
+                Math.max(min, Math.min(max, x)),
+                Math.max(min, Math.min(max, y)),
+                Math.max(min, Math.min(max, z))
+        );
+    }
 }

@@ -53,7 +53,7 @@ public final class VulkanBackend {
             var device = new VkRenderDevice(vk, extensions,
                     instance -> surfaceCreator.createSurface(instance, windowHandle),
                     window.width(), window.height(),
-                    VkBindings.VK_FORMAT_B8G8R8A8_UNORM, presentMode);
+                    VkBindings.VK_FORMAT_B8G8R8A8_UNORM, presentMode, null);
             return new GraphicsBackend(toolkit, window, device);
         };
     }
