@@ -145,9 +145,9 @@ description: "Cross-backend visual regression test results"
     font-weight: 700; color: var(--text-muted, #8b949e); font-size: 0.65rem; }
   .report-cross-self { background: var(--bg-surface, #161b22);
     color: var(--text-subtle, #6e7681); }
-  .report-cross-pass { background: rgba(34,197,94,0.1); color: #22c55e; cursor: default; }
-  .report-cross-fail { background: rgba(248,113,113,0.15); color: #f87171; cursor: default; }
-  .report-cross-known { background: rgba(249,115,22,0.12); color: #fb923c; cursor: default; }
+  .report-cross-matrix.compact { margin-top: 0.5rem; }
+  .report-cross-matrix.compact .report-cross-cell { padding: 2px 3px; font-size: 0.6rem; min-width: 32px; }
+  .report-cross-matrix.compact .report-cross-hdr { font-size: 0.55rem; }
 
   .report-known-callout { background: rgba(249,115,22,0.15);
     border: 1px solid rgba(249,115,22,0.3); border-left: 3px solid var(--orange, #f97316);
@@ -330,6 +330,12 @@ function renderReport(r) {
       }
       html += '</div>';
 
+      // Compact cross-backend matrix
+      const cross = r.comparisons.filter(c => c.scene === scene.name && c.type === 'cross_backend');
+      if (cross.length) {
+        html += buildCrossMatrix(cross, sceneBackends, true);
+      }
+
       html += '</div></div>'; // card-body, card
     }
     html += '</div></div>'; // grid, category
@@ -389,42 +395,7 @@ function showSceneDetail(name) {
   const cross = r.comparisons.filter(c => c.scene === name && c.type === 'cross_backend');
   if (cross.length) {
     html += '<div class="report-detail-section">Cross-Backend Comparison</div>';
-
-    // Build lookup: key "a|b" -> comparison
-    const crossMap = {};
-    for (const c of cross) {
-      crossMap[c.backendA + '|' + c.backendB] = c;
-      crossMap[c.backendB + '|' + c.backendA] = c;
-    }
-
-    const cols = sceneBackends.length + 1;
-    html += `<div class="report-cross-matrix" style="grid-template-columns: repeat(${cols}, auto)">`;
-    // Header row
-    html += '<div class="report-cross-cell report-cross-hdr"></div>';
-    for (const be of sceneBackends) {
-      html += `<div class="report-cross-cell report-cross-hdr">${BACKEND_SHORT[be] || be}</div>`;
-    }
-    // Data rows
-    for (const beA of sceneBackends) {
-      html += `<div class="report-cross-cell report-cross-hdr">${BACKEND_SHORT[beA] || beA}</div>`;
-      for (const beB of sceneBackends) {
-        if (beA === beB) {
-          html += '<div class="report-cross-cell report-cross-self">\u2014</div>';
-        } else {
-          const c = crossMap[beA + '|' + beB];
-          if (c) {
-            const pct = c.diffPercent || 0;
-            const diff = pct.toFixed(2) + '%';
-            const tip = c.reason || diff;
-            const color = diffColor(pct);
-            html += `<div class="report-cross-cell" style="color:${color}" title="${esc(tip)}">${diff}</div>`;
-          } else {
-            html += '<div class="report-cross-cell report-cross-self">\u2014</div>';
-          }
-        }
-      }
-    }
-    html += '</div>';
+    html += buildCrossMatrix(cross, sceneBackends, false);
   }
 
   // Errors
@@ -493,6 +464,49 @@ function statusClass(s) {
 function statusLabel(s) {
   return { pass:'Pass', fail:'Fail', known_limitation:'Known Limitation',
            no_reference:'No Reference', skipped:'Skipped' }[s] || s;
+}
+
+function buildCrossMatrix(cross, backends, compact) {
+  const crossMap = {};
+  for (const c of cross) {
+    crossMap[c.backendA + '|' + c.backendB] = c;
+    crossMap[c.backendB + '|' + c.backendA] = c;
+  }
+  const cols = backends.length + 1;
+  const cls = compact ? 'report-cross-matrix compact' : 'report-cross-matrix';
+  let h = `<div class="${cls}" style="grid-template-columns: repeat(${cols}, auto)">`;
+  // Header row
+  h += '<div class="report-cross-cell report-cross-hdr"></div>';
+  for (const be of backends) {
+    h += `<div class="report-cross-cell report-cross-hdr">${BACKEND_SHORT[be] || be}</div>`;
+  }
+  // Data rows — only lower triangle for compact, full for detail
+  for (let i = 0; i < backends.length; i++) {
+    const beA = backends[i];
+    h += `<div class="report-cross-cell report-cross-hdr">${BACKEND_SHORT[beA] || beA}</div>`;
+    for (let j = 0; j < backends.length; j++) {
+      const beB = backends[j];
+      if (i === j) {
+        h += '<div class="report-cross-cell report-cross-self">\u2014</div>';
+      } else if (compact && j > i) {
+        // Upper triangle: empty in compact mode
+        h += '<div class="report-cross-cell report-cross-self"></div>';
+      } else {
+        const c = crossMap[beA + '|' + beB];
+        if (c) {
+          const pct = c.diffPercent || 0;
+          const diff = pct.toFixed(compact ? 1 : 2) + '%';
+          const tip = c.reason || diff;
+          const color = diffColor(pct);
+          h += `<div class="report-cross-cell" style="color:${color}" title="${esc(tip)}">${diff}</div>`;
+        } else {
+          h += '<div class="report-cross-cell report-cross-self">\u2014</div>';
+        }
+      }
+    }
+  }
+  h += '</div>';
+  return h;
 }
 
 function diffColor(pct) {
