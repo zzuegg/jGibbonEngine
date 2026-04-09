@@ -7,10 +7,8 @@ import dev.engine.graphics.texture.TextureKeys;
 import dev.engine.graphics.texture.SampledTexture;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
-import dev.engine.graphics.common.engine.Engine;
 import dev.engine.graphics.common.mesh.PrimitiveMeshes;
 import dev.engine.tests.screenshot.scenes.RenderTestScene;
-import dev.engine.tests.screenshot.scenes.SceneConfig;
 
 import java.nio.ByteBuffer;
 
@@ -50,33 +48,21 @@ public class MixedMaterialScenes {
     };
 
     /** Many entities with same material — tests batching / no per-entity state leak. */
-    public static final RenderTestScene MANY_SAME_MATERIAL = new RenderTestScene() {
-        @Override
-        public SceneConfig config() {
-            return SceneConfig.defaults()
-                    .withKnownLimitation("teavm-webgpu",
-                            "Web renderer (SwiftShader) produces minor floating-point differences vs Mesa in CI")
-                    .withKnownLimitation("graalwasm-webgpu",
-                            "Web renderer (SwiftShader) produces minor floating-point differences vs Mesa in CI");
-        }
+    public static final RenderTestScene MANY_SAME_MATERIAL = engine -> {
+        var renderer = engine.renderer();
+        var scene = engine.scene();
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 8, 12), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), 1f, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
 
-        @Override
-        public void setup(Engine engine) {
-            var renderer = engine.renderer();
-            var scene = engine.scene();
-            var cam = renderer.createCamera();
-            cam.lookAt(new Vec3(0, 8, 12), Vec3.ZERO, Vec3.UNIT_Y);
-            cam.setPerspective((float) Math.toRadians(60), 1f, 0.1f, 100f);
-            renderer.setActiveCamera(cam);
-
-            var mat = MaterialData.unlit(new Vec3(0.3f, 0.6f, 0.9f));
-            for (int z = -2; z <= 2; z++) {
-                for (int x = -2; x <= 2; x++) {
-                    var cube = scene.createEntity();
-                    cube.add(PrimitiveMeshes.cube());
-                    cube.add(mat);
-                    cube.add(Transform.at(x * 2f, 0, z * 2f));
-                }
+        var mat = MaterialData.unlit(new Vec3(0.3f, 0.6f, 0.9f));
+        for (int z = -2; z <= 2; z++) {
+            for (int x = -2; x <= 2; x++) {
+                var cube = scene.createEntity();
+                cube.add(PrimitiveMeshes.cube());
+                cube.add(mat);
+                cube.add(Transform.at(x * 2f, 0, z * 2f));
             }
         }
     };

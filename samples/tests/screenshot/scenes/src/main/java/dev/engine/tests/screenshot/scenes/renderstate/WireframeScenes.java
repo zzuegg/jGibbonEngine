@@ -21,8 +21,6 @@ public class WireframeScenes {
         @Override
         public SceneConfig config() {
             return SceneConfig.defaults()
-                    .withKnownLimitation("vulkan",
-                            "Vulkan line rasterization differs from OpenGL (different fill conventions)")
                     .withKnownLimitation("webgpu", "Wireframe not supported on WebGPU")
                     .withKnownLimitation("teavm-webgpu", "Wireframe not supported on WebGPU")
                     .withKnownLimitation("graalwasm-webgpu", "Wireframe not supported on WebGPU");

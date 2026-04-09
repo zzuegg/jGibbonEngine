@@ -17,42 +17,30 @@ import dev.engine.graphics.common.engine.Engine;
 @Discoverable
 public class RenderStateScenes {
 
-    public static final RenderTestScene MIXED_RENDER_STATES = new RenderTestScene() {
-        @Override
-        public SceneConfig config() {
-            return SceneConfig.defaults()
-                    .withKnownLimitation("teavm-webgpu",
-                            "Web renderer (SwiftShader) produces minor floating-point differences vs Mesa in CI")
-                    .withKnownLimitation("graalwasm-webgpu",
-                            "Web renderer (SwiftShader) produces minor floating-point differences vs Mesa in CI");
-        }
+    public static final RenderTestScene MIXED_RENDER_STATES = engine -> {
+        var renderer = engine.renderer();
+        var scene = engine.scene();
+        var cam = renderer.createCamera();
+        cam.lookAt(new Vec3(0, 3, 8), Vec3.ZERO, Vec3.UNIT_Y);
+        cam.setPerspective((float) Math.toRadians(60), 256f / 256f, 0.1f, 100f);
+        renderer.setActiveCamera(cam);
 
-        @Override
-        public void setup(Engine engine) {
-            var renderer = engine.renderer();
-            var scene = engine.scene();
-            var cam = renderer.createCamera();
-            cam.lookAt(new Vec3(0, 3, 8), Vec3.ZERO, Vec3.UNIT_Y);
-            cam.setPerspective((float) Math.toRadians(60), 256f / 256f, 0.1f, 100f);
-            renderer.setActiveCamera(cam);
+        var opaque = scene.createEntity();
+        opaque.add(PrimitiveMeshes.cube());
+        opaque.add(MaterialData.unlit(new Vec3(0.8f, 0.2f, 0.2f)));
+        opaque.add(Transform.at(-2, 0, 0));
 
-            var opaque = scene.createEntity();
-            opaque.add(PrimitiveMeshes.cube());
-            opaque.add(MaterialData.unlit(new Vec3(0.8f, 0.2f, 0.2f)));
-            opaque.add(Transform.at(-2, 0, 0));
+        var frontCull = scene.createEntity();
+        frontCull.add(PrimitiveMeshes.cube());
+        frontCull.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f))
+                .withRenderState(RenderState.CULL_MODE, CullMode.FRONT));
+        frontCull.add(Transform.IDENTITY);
 
-            var frontCull = scene.createEntity();
-            frontCull.add(PrimitiveMeshes.cube());
-            frontCull.add(MaterialData.unlit(new Vec3(0.2f, 0.8f, 0.2f))
-                    .withRenderState(RenderState.CULL_MODE, CullMode.FRONT));
-            frontCull.add(Transform.IDENTITY);
-
-            var noCull = scene.createEntity();
-            noCull.add(PrimitiveMeshes.cube());
-            noCull.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f))
-                    .withRenderState(RenderState.CULL_MODE, CullMode.NONE));
-            noCull.add(Transform.at(2, 0, 0));
-        }
+        var noCull = scene.createEntity();
+        noCull.add(PrimitiveMeshes.cube());
+        noCull.add(MaterialData.unlit(new Vec3(0.2f, 0.2f, 0.8f))
+                .withRenderState(RenderState.CULL_MODE, CullMode.NONE));
+        noCull.add(Transform.at(2, 0, 0));
     };
 
     public static final RenderTestScene DEPTH_WRITE_OFF = engine -> {
