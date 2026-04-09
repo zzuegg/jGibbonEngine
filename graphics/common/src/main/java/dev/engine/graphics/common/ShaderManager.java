@@ -426,20 +426,14 @@ public class ShaderManager {
     }
 
     private String loadShaderFile(String path) {
-        if (assetManager != null) {
-            try {
-                return assetManager.loadSync(path, SlangShaderSource.class).source();
-            } catch (Exception ignored) {}
+        if (assetManager == null) {
+            log.error("Cannot load shader '{}': no AssetManager configured", path);
+            return null;
         }
-        try (var reader = new java.io.BufferedReader(new java.io.FileReader(path))) {
-            var sb = new StringBuilder();
-            char[] buf = new char[4096];
-            int n;
-            while ((n = reader.read(buf)) != -1) {
-                sb.append(buf, 0, n);
-            }
-            return sb.toString();
+        try {
+            return assetManager.loadSync(path, SlangShaderSource.class).source();
         } catch (Exception e) {
+            log.error("Failed to load shader '{}' via AssetManager", path, e);
             return null;
         }
     }
