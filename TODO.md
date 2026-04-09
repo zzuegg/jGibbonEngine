@@ -75,9 +75,9 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 - [x] **GraphicsConfig missing graphics settings** — Added msaaSamples, srgb, maxAnisotropy, presentMode. Backends can read these during device creation.
 - [x] **Wire new GraphicsConfig settings into backends** — Partial: GraphicsConfig passed to all backend constructors. maxAnisotropy caps sampler anisotropy across all backends. sRGB partially wired (GL default framebuffer, VK swapchain auto-select) but not fully tested — custom render targets and WebGPU still missing. MSAA deferred to render pipeline.
 - [x] **Wire WindowDescriptor fields into window toolkits** — Fixed: GLFW applies resizable, decorated, highDpi, fullscreen. SDL3 applies resizable, borderless, fullscreen, highDpi.
-- [ ] **Wire presentMode into WebGPU/OpenGL backends** — VulkanConfig reads it, but OpenGlConfig and WebGpuBackend still hardcode their present mode. OpenGL should set swapInterval, WebGPU should call setPresentMode.
+- [x] **Wire presentMode into WebGPU/OpenGL backends** — Fixed: GraphicsConfig.create() sets SWAP_INTERVAL on window for GL (works with GLFW + SDL3). WebGPU calls setPresentMode() before configureSurface().
 - [x] **WindowDescriptor too minimal** — Added resizable, decorated, fullscreen, highDpi fields with builder pattern. Backward-compatible 3-arg constructor preserved.
-- [ ] **VulkanConfig.Builder doesn't forward GraphicsConfig settings** — `VulkanConfig.Builder` copies `headless`, `validation`, `presentMode` but doesn't copy `msaaSamples`, `srgb`, or `maxAnisotropy`. Users building via the builder pattern can't set these. Builder should expose setters for all inherited config or chain through the base class setters.
+- [x] **VulkanConfig.Builder doesn't forward GraphicsConfig settings** — Fixed: Builder now exposes msaaSamples, srgb, maxAnisotropy setters and forwards them to GraphicsConfig.
 
 ## Designed but Not Implemented (from NOTES.md)
 
