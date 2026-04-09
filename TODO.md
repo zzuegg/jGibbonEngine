@@ -16,13 +16,13 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 
 ## New Bugs Found (2026-04-06 deep review)
 
-- [ ] **NPE in BaseApplication when debugOverlay=false** — `BaseApplication.java:134` unconditionally calls `engine.debugUi().input()`, but `Engine.debugUi()` returns `null` when `config.debugOverlay()` is false. Crashes any app that disables the debug overlay.
-- [ ] **UniformManager material write loop skips Vec4/Mat4/Vec2 alignment** — `UniformManager.java:145-160`. The UBO size calculation correctly aligns Vec4/Mat4 to 16 and Vec2 to 8 bytes, but the write loop only aligns Vec3. Vec4, Mat4, and Vec2 values are written at wrong offsets, causing GPU data corruption for any material with mixed types.
+- [x] **NPE in BaseApplication when debugOverlay=false** — Fixed: Engine no longer allocates DebugUiOverlay when disabled (set to null), BaseApplication already null-checks debugUi().
+- [x] **UniformManager material write loop skips Vec4/Mat4/Vec2 alignment** — Fixed: write loop now aligns Vec4/Mat4 to 16 bytes and Vec2 to 8 bytes, matching the size calculation.
 - [ ] **TransactionBus.drain() returns list that gets cleared on next swap** — `TransactionBus.SubscriberState.swap()` returns the raw ArrayList and stores it as `readBuffer`. On the next `swap()`, this same list becomes `writeBuffer` and is cleared. If the consumer hasn't finished iterating, the list is mutated under it. Works in practice (single drain per frame) but fragile — should return a copy or use triple buffering.
-- [ ] **Vec2/Vec3/Vec4/Quat normalize() division by zero** — All math types divide by `length()` without checking for zero. Normalizing a zero vector silently produces NaN/Infinity. Should return ZERO or throw, especially since normalize() is called from lookAt(), fromAxisAngle(), Transform.lookingAt().
-- [ ] **Transform.lookingAt() NaN when target == position** — `Transform.java:49`. `target.sub(position).normalize()` divides by zero when target equals position, propagating NaN through the entire transform.
-- [ ] **ZipAssetSource never closes ZipFile** — No `close()` method. The `ZipFile` opened in the constructor is never closed, leaking native file handles. Should implement `AutoCloseable`.
-- [ ] **EventBus.Subscription.unsubscribe() race condition** — `EventBus.java:46`. Uses volatile `active` flag with check-then-act pattern that isn't atomic. Concurrent calls can both pass the `if (active)` check. Should use `AtomicBoolean.compareAndSet()`.
+- [x] **Vec2/Vec3/Vec4/Quat normalize() division by zero** — Fixed: normalize() returns ZERO (or IDENTITY for Quat) when length is zero.
+- [x] **Transform.lookingAt() NaN when target == position** — Fixed: early return `this` when target equals position.
+- [x] **ZipAssetSource never closes ZipFile** — Fixed: implements AutoCloseable with close() that closes the ZipFile.
+- [x] **EventBus.Subscription.unsubscribe() race condition** — Fixed: uses AtomicBoolean.compareAndSet() for thread-safe unsubscribe.
 - [ ] **FileWatcher only watches one directory level** — `FileWatcher.java:38`. `WatchService.register()` only watches the given directory, not subdirectories. Shader files in `shaders/subdir/` won't trigger hot-reload. Need `RECURSIVE` flag or register all subdirectories.
 - [ ] **ResourceStats frame counters not thread-safe** — `ResourceStats.Entry` uses plain `int` for `created`/`destroyed`/`used`/`updated`, but `recordCreate`/`recordDestroy` can be called from the Cleaner thread (via GpuResourceManager cleanup actions) while `newFrame()` runs on the render thread. Only `liveTotal` is atomic. Should use AtomicIntegers or ensure single-thread access.
 - [ ] **Hierarchy mutations don't emit transactions** — `Hierarchy.java` has mutable `setParent()`/`addChild()`/`removeChild()` that bypass the transaction system. Parent/child changes are invisible to the renderer and any other transaction consumers.
@@ -30,7 +30,7 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 
 ## Security / Robustness
 
-- [ ] **FileSystemAssetSource path traversal** — `FileSystemAssetSource.java:19`. `root.resolve(path)` doesn't validate that the resolved path stays within `root`. Paths like `../../etc/passwd` escape the root directory. Should check `resolved.startsWith(root)` after normalization.
+- [x] **FileSystemAssetSource path traversal** — Fixed: root normalized at construction, resolved paths checked with `startsWith(root)` after normalization. SecurityException on traversal attempts.
 - [ ] **ZipAssetSource suffix search is O(n)** — `ZipAssetSource.findEntry()` iterates all zip entries on every lookup when exact match fails. For large archives, this is slow. Could build a lookup map at construction time.
 - [ ] **AssetManager.sources/loaders are unsynchronized ArrayLists** — `AssetManager.java:21-22`. `addSource()` and `registerLoader()` modify plain ArrayLists that `loadSync()` iterates. Concurrent modification is possible if loading happens while registering new loaders/sources.
 - [ ] **ShaderManager falls back to raw FileReader** — `ShaderManager.java:412`. `loadShaderFile()` falls back to `new FileReader(path)` bypassing the asset source system entirely. Breaks the abstraction and could read arbitrary files.
@@ -48,7 +48,7 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 - [ ] **UniformManager.objectUbos never shrinks** — `UniformManager.java:33`. UBO handles keyed by `"obj_" + entity.index()` grow unboundedly. Destroyed entities leave orphaned UBOs. Index reuse means some get overwritten, but the map never shrinks. Same issue with `materialUbos`.
 - [ ] **MeshManager.createMeshFromData() duplicates uploadMeshData()** — `MeshManager.java:57-64` and `MeshManager.java:94-119` contain nearly identical buffer creation and upload code. Should reuse.
 - [ ] **ImageLoader incompatible with TeaVM** — `ImageLoader.java` uses `javax.imageio.ImageIO` and `java.awt.image.BufferedImage`, which don't exist in TeaVM. Web platform needs an alternative image loading path.
-- [ ] **DebugUiOverlay allocated when disabled** — `Engine.java:100`. Creates `new DebugUiOverlay(device)` even when `debugOverlay=false`. Minor waste but confusing intent.
+- [x] **DebugUiOverlay allocated when disabled** — Fixed: set to null when debugOverlay=false, null-check on shutdown.
 
 ## Hardcoded Values (should be configurable/dynamic)
 
