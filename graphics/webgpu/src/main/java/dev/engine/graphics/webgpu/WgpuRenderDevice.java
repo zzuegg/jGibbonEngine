@@ -257,6 +257,14 @@ public class WgpuRenderDevice implements RenderDevice {
             // Configure presentation surface if requested
             if (presentToSurface) {
                 try {
+                    if (config != null) {
+                        int wgpuPresentMode = switch (config.presentMode()) {
+                            case FIFO -> WgpuBindings.PRESENT_MODE_FIFO;
+                            case IMMEDIATE -> WgpuBindings.PRESENT_MODE_IMMEDIATE;
+                            case MAILBOX -> WgpuBindings.PRESENT_MODE_MAILBOX;
+                        };
+                        gpu.setPresentMode(wgpuPresentMode);
+                    }
                     surfaceHandle = gpu.configureSurface(wgpuInstance, wgpuDevice, window);
                 } catch (Throwable t) {
                     log.warn("WebGPU surface creation failed: {} — rendering offscreen", t.getMessage());

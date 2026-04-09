@@ -1,6 +1,7 @@
 package dev.engine.graphics;
 
 import dev.engine.graphics.window.WindowDescriptor;
+import dev.engine.graphics.window.WindowProperty;
 import dev.engine.graphics.window.WindowToolkit;
 
 /**
@@ -71,6 +72,13 @@ public abstract class GraphicsConfig {
     public final GraphicsBackend create(WindowDescriptor window) {
         var win = toolkit.createWindow(window);
         var device = createDevice(win);
+        // Apply present mode via swap interval on the window
+        int swapInterval = switch (presentMode) {
+            case FIFO -> 1;
+            case IMMEDIATE -> 0;
+            case MAILBOX -> -1;
+        };
+        win.set(WindowProperty.SWAP_INTERVAL, swapInterval);
         return new GraphicsBackend(toolkit, win, device);
     }
 

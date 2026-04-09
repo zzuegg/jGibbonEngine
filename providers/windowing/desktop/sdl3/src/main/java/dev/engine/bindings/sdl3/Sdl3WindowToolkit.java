@@ -271,7 +271,10 @@ public class Sdl3WindowToolkit implements WindowToolkit {
                 if (glContext != 0) {
                     SDL_GL_SetSwapInterval((Boolean) value ? 1 : 0);
                 }
-                // For Vulkan, vsync is controlled by present mode — ignore silently
+            } else if (key == dev.engine.graphics.window.WindowProperty.SWAP_INTERVAL) {
+                if (glContext != 0) {
+                    SDL_GL_SetSwapInterval((Integer) value);
+                }
             } else if (key == dev.engine.graphics.window.WindowProperty.TITLE) {
                 if (ptr != 0) SDLVideo.SDL_SetWindowTitle(ptr, (String) value);
             } else {

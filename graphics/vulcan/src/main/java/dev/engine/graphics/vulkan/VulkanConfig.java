@@ -41,6 +41,9 @@ public final class VulkanConfig extends GraphicsConfig {
         headless(builder.headless);
         validation(builder.validation);
         presentMode(builder.presentMode);
+        msaaSamples(builder.msaaSamples);
+        srgb(builder.srgb);
+        maxAnisotropy(builder.maxAnisotropy);
     }
 
     public SurfaceFormat surfaceFormat() { return surfaceFormat; }
@@ -80,6 +83,9 @@ public final class VulkanConfig extends GraphicsConfig {
         private SurfaceFormat surfaceFormat = SurfaceFormat.BGRA8_UNORM;
         private boolean headless;
         private boolean validation;
+        private int msaaSamples = 1;
+        private boolean srgb = false;
+        private float maxAnisotropy = 1f;
 
         Builder(WindowToolkit toolkit, VkBindings vk, VulkanBackend.SurfaceCreator surfaceCreator) {
             this.toolkit = toolkit;
@@ -91,6 +97,9 @@ public final class VulkanConfig extends GraphicsConfig {
         public Builder surfaceFormat(SurfaceFormat format) { this.surfaceFormat = format; return this; }
         public Builder headless(boolean headless) { this.headless = headless; return this; }
         public Builder validation(boolean validation) { this.validation = validation; return this; }
+        public Builder msaaSamples(int samples) { this.msaaSamples = samples; return this; }
+        public Builder srgb(boolean srgb) { this.srgb = srgb; return this; }
+        public Builder maxAnisotropy(float aniso) { this.maxAnisotropy = aniso; return this; }
 
         public VulkanConfig build() { return new VulkanConfig(this); }
     }
