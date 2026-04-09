@@ -50,9 +50,14 @@ public class HierarchicalScene extends AbstractScene {
         if (child.has(Hierarchy.class)) {
             var h = child.get(Hierarchy.class);
             if (h.parent() != null) {
-                var parentH = h.parent().get(Hierarchy.class);
-                if (parentH != null) parentH.removeChild(child);
+                var parent = h.parent();
+                var parentH = parent.get(Hierarchy.class);
+                if (parentH != null) {
+                    parentH.removeChild(child);
+                    componentChanged(parent, parentH);
+                }
                 h.setParent(null);
+                componentChanged(child, h);
             }
         }
     }

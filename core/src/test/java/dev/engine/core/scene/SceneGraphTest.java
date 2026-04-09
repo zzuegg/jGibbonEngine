@@ -132,6 +132,62 @@ class SceneGraphTest {
     }
 
     @Nested
+    class HierarchyTransactions {
+        @Test void setParentEmitsHierarchyTransactions() {
+            var parent = scene.createEntity();
+            var child = scene.createEntity();
+            drainTransactions(scene); // clear entity-added transactions
+
+            child.setParent(parent);
+            var txns = drainTransactions(scene);
+
+            // Should emit ComponentChanged for Hierarchy on both child and parent
+            var hierarchyChanges = txns.stream()
+                    .filter(t -> t instanceof Transaction.ComponentChanged cc
+                            && cc.component() instanceof dev.engine.core.scene.component.Hierarchy)
+                    .toList();
+            assertTrue(hierarchyChanges.size() >= 2,
+                    "Expected at least 2 Hierarchy transactions (child + parent), got " + hierarchyChanges.size());
+        }
+
+        @Test void removeParentEmitsHierarchyTransactions() {
+            var parent = scene.createEntity();
+            var child = scene.createEntity();
+            child.setParent(parent);
+            drainTransactions(scene); // clear
+
+            scene.removeParent(child);
+            var txns = drainTransactions(scene);
+
+            var hierarchyChanges = txns.stream()
+                    .filter(t -> t instanceof Transaction.ComponentChanged cc
+                            && cc.component() instanceof dev.engine.core.scene.component.Hierarchy)
+                    .toList();
+            assertTrue(hierarchyChanges.size() >= 2,
+                    "Expected at least 2 Hierarchy transactions (child + parent), got " + hierarchyChanges.size());
+        }
+
+        @Test void reparentEmitsTransactionsForOldAndNewParent() {
+            var parent1 = scene.createEntity();
+            var parent2 = scene.createEntity();
+            var child = scene.createEntity();
+            child.setParent(parent1);
+            drainTransactions(scene); // clear
+
+            child.setParent(parent2);
+            var txns = drainTransactions(scene);
+
+            // Should emit for: old parent (removeChild), child (setParent), new parent (addChild)
+            var hierarchyChanges = txns.stream()
+                    .filter(t -> t instanceof Transaction.ComponentChanged cc
+                            && cc.component() instanceof dev.engine.core.scene.component.Hierarchy)
+                    .toList();
+            assertTrue(hierarchyChanges.size() >= 3,
+                    "Expected at least 3 Hierarchy transactions (old parent + child + new parent), got " + hierarchyChanges.size());
+        }
+    }
+
+    @Nested
     class MaterialProperties {
         static final PropertyKey<MaterialData, Float> ROUGHNESS = PropertyKey.of("roughness", Float.class);
 

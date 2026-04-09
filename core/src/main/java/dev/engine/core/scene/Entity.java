@@ -91,12 +91,18 @@ public class Entity {
         var parentH = parent.get(Hierarchy.class);
 
         if (myH.parent() != null) {
-            var oldH = myH.parent().get(Hierarchy.class);
-            if (oldH != null) oldH.removeChild(this);
+            var oldParent = myH.parent();
+            var oldH = oldParent.get(Hierarchy.class);
+            if (oldH != null) {
+                oldH.removeChild(this);
+                scene.componentChanged(oldParent, oldH);
+            }
         }
 
         myH.setParent(parent);
         parentH.addChild(this);
+        scene.componentChanged(this, myH);
+        scene.componentChanged(parent, parentH);
         return this;
     }
 
