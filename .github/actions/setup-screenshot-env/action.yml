@@ -11,12 +11,29 @@ runs:
         java-version: '25'
         cache: gradle
 
-    - name: Setup GraalVM 26 (for GraalWasm modules)
-      uses: graalvm/setup-graalvm@v1
-      with:
-        java-version: '26'
-        distribution: 'oracle'
-        set-java-home: false
+    - name: Setup GraalVM 26 EA (for GraalWasm modules)
+      shell: bash
+      run: |
+        # Install GraalVM 26 EA via SDKMAN for the separate GraalWasm toolchain.
+        # Gradle auto-detects it via JVM_TOOLCHAIN_PATHS.
+        curl -s "https://get.sdkman.io" | bash
+        source "$HOME/.sdkman/bin/sdkman-init.sh"
+        sdk install java 26.ea.13-graal || true
+        GRAAL_HOME="$HOME/.sdkman/candidates/java/26.ea.13-graal"
+        if [ ! -d "$GRAAL_HOME" ]; then
+          echo "::warning::GraalVM 26 EA not available via SDKMAN, trying latest EA"
+          LATEST=$(sdk list java 2>/dev/null | grep -oP '\d+\.ea\.\d+-graal' | sort -V | tail -1)
+          if [ -n "$LATEST" ]; then
+            sdk install java "$LATEST" || true
+            GRAAL_HOME="$HOME/.sdkman/candidates/java/$LATEST"
+          fi
+        fi
+        if [ -d "$GRAAL_HOME" ]; then
+          echo "GraalVM installed at: $GRAAL_HOME"
+          echo "ORG_GRADLE_PROJECT_org.gradle.java.installations.paths=$GRAAL_HOME" >> $GITHUB_ENV
+        else
+          echo "::warning::GraalVM 26 EA not available, GraalWasm tests will be skipped"
+        fi
 
     - name: Grant Gradle wrapper execute permission
       shell: bash

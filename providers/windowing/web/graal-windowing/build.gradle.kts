@@ -6,7 +6,6 @@ val graalJavaVersion = rootProject.extensions
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(graalJavaVersion)
-        vendor = JvmVendorSpec.ORACLE
     }
 }
 
