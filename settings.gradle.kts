@@ -91,3 +91,6 @@ project(":samples:tests:screenshot:analysis").projectDir = file("samples/tests/s
 
 include("samples:tests:screenshot:web-runner")
 project(":samples:tests:screenshot:web-runner").projectDir = file("samples/tests/screenshot/web")
+
+include("samples:tests:screenshot:graalwasm-runner")
+project(":samples:tests:screenshot:graalwasm-runner").projectDir = file("samples/tests/screenshot/graalwasm")

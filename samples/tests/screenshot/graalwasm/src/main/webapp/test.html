@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GraalWasm Screenshot Test</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { background: #000; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="256" height="256"></canvas>
+    <script>
+        window._testStatus = 'loading';
+        window._testMessage = '';
+        window._screenshotData = null;
+        window._allLogs = [];
+
+        // Console capture
+        (function() {
+            var orig = {log: console.log, warn: console.warn, error: console.error};
+            ['log','warn','error'].forEach(function(t) {
+                console[t] = function() {
+                    window._allLogs.push({t:t, m: Array.from(arguments).join(' ')});
+                    orig[t].apply(console, arguments);
+                };
+            });
+        })();
+        window.onerror = function(msg, src, line) {
+            window._testStatus = 'error';
+            window._testMessage = msg + ' at ' + src + ':' + line;
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+            window._testStatus = 'error';
+            window._testMessage = String(e.reason);
+        });
+    </script>
+    <script>
+        // Initialize WebGPU before loading WASM
+        async function initWebGPU() {
+            if (!navigator.gpu) throw new Error('WebGPU not available');
+            if (!globalThis._wgpu) {
+                globalThis._wgpu = {};
+                globalThis._wgpuNextId = 1;
+            }
+            var reg = function(obj) {
+                var id = globalThis._wgpuNextId++;
+                globalThis._wgpu[id] = obj;
+                return id;
+            };
+            var adapter = await navigator.gpu.requestAdapter({powerPreference: 'high-performance'});
+            if (!adapter) throw new Error('No WebGPU adapter');
+            globalThis._wgpuAdapter = reg(adapter);
+
+            var device = await adapter.requestDevice();
+            if (!device) throw new Error('No WebGPU device');
+            globalThis._wgpuDevice = reg(device);
+            device.lost.then(function(info) {
+                console.error('[GraalWasm] Device lost: ' + info.message);
+            });
+            console.log('[GraalWasm] WebGPU initialized, device=' + globalThis._wgpuDevice);
+        }
+
+        // Load Slang WASM module
+        async function initSlang() {
+            try {
+                var SlangModule = (await import('./slang/slang-wasm.mjs')).default;
+                var slang = await SlangModule({
+                    locateFile: function(p) {
+                        return p.endsWith('.wasm') ? 'slang/slang-wasm.wasm' : p;
+                    }
+                });
+                globalThis._slangModule = slang;
+                console.log('[GraalWasm] Slang WASM loaded');
+            } catch(e) {
+                console.warn('[GraalWasm] Slang WASM unavailable:', e.message);
+            }
+        }
+
+        // Init, load WASM module, then render the requested scene
+        (async function() {
+            try {
+                await initWebGPU();
+                await initSlang();
+
+                // Load the GraalVM WASM module
+                var script = document.createElement('script');
+                script.src = 'main.js';
+                document.body.appendChild(script);
+                await new Promise(function(resolve, reject) {
+                    script.onload = resolve;
+                    script.onerror = function() { reject(new Error('Failed to load main.js')); };
+                });
+
+                // Boot the GraalVM WASM module (runs main() which exports _renderScene)
+                await GraalVM.run([]);
+
+                // Parse URL parameters
+                var url = new URL(window.location.href);
+                var scene = url.searchParams.get('scene') || '';
+                var frames = url.searchParams.get('frames') || '3';
+                var width = url.searchParams.get('width') || '256';
+                var height = url.searchParams.get('height') || '256';
+
+                if (!scene) {
+                    window._testStatus = 'error';
+                    window._testMessage = 'No scene parameter';
+                    return;
+                }
+
+                // Setup the scene (creates engine, configures rendering)
+                var params = scene + '|' + frames + '|' + width + '|' + height;
+                var setupResult = globalThis._setupScene(params, 0);
+
+                if (typeof setupResult === 'string' && setupResult.startsWith('ERROR:')) {
+                    window._testStatus = 'error';
+                    window._testMessage = setupResult;
+                    return;
+                }
+
+                // Render frames one at a time, yielding to browser between each
+                // so the WebGPU compositor can present to the canvas.
+                // On the last frame, do the readback BEFORE returning from the
+                // rAF callback so we read the rendered texture, not a new one.
+                var maxFrames = parseInt(frames) + 1;
+                var capturedData = null;
+
+                // Use setTimeout instead of requestAnimationFrame for headless/background
+                // tab compatibility. rAF doesn't fire in hidden tabs or headless Chrome.
+                var scheduleFrame = function(cb) { setTimeout(cb, 0); };
+                for (var i = 0; i < maxFrames; i++) {
+                    var isLast = (i === maxFrames - 1);
+                    capturedData = await new Promise(function(resolve) {
+                        scheduleFrame(function() {
+                            var done = globalThis._tickFrame(0, 0);
+                            if (done < 0) { resolve('ERROR'); return; }
+                            if (!isLast) { resolve(null); return; }
+                            // Last frame — do readback NOW
+                            try {
+                                var deviceId = globalThis._wgpuDevice;
+                                var device = globalThis._wgpu[deviceId];
+                                var canvas = document.getElementById('canvas');
+                                var ctx = canvas.getContext('webgpu');
+                                var texture = ctx.getCurrentTexture();
+                                resolve({device:device, texture:texture, w:texture.width, h:texture.height});
+                            } catch(e) { resolve('ERROR:' + e.message); }
+                        });
+                    });
+                    if (capturedData === 'ERROR') {
+                        window._testStatus = 'error';
+                        window._testMessage = 'Tick error at frame ' + i;
+                        return;
+                    }
+                }
+
+                // Now do the async mapAsync outside rAF (texture ref is captured)
+                try {
+                    var device = capturedData.device;
+                    var texture = capturedData.texture;
+                    var w = capturedData.w, h = capturedData.h;
+                    var bytesPerRow = Math.ceil(w * 4 / 256) * 256;
+                    var bufSize = bytesPerRow * h;
+
+                    var buf = device.createBuffer({
+                        size: bufSize,
+                        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+                    });
+                    var encoder = device.createCommandEncoder();
+                    encoder.copyTextureToBuffer(
+                        { texture: texture },
+                        { buffer: buf, bytesPerRow: bytesPerRow },
+                        { width: w, height: h }
+                    );
+                    device.queue.submit([encoder.finish()]);
+
+                    await buf.mapAsync(GPUMapMode.READ);
+                    var data = new Uint8Array(buf.getMappedRange());
+
+                    // Encode to PNG via temporary canvas
+                    var imgCanvas = document.createElement('canvas');
+                    imgCanvas.width = w; imgCanvas.height = h;
+                    var imgCtx = imgCanvas.getContext('2d');
+                    var imgData = imgCtx.createImageData(w, h);
+                    for (var y = 0; y < h; y++) {
+                        var srcOff = y * bytesPerRow;
+                        var dstOff = y * w * 4;
+                        for (var x = 0; x < w * 4; x++) {
+                            imgData.data[dstOff + x] = data[srcOff + x];
+                        }
+                    }
+                    imgCtx.putImageData(imgData, 0, 0);
+                    buf.unmap(); buf.destroy();
+
+                    // Replace the WebGPU canvas with the 2D readback canvas so CDP
+                    // captureScreenshot can capture it. We can't getContext('2d')
+                    // on a canvas that already has a WebGPU context.
+                    imgCanvas.id = 'canvas';
+                    imgCanvas.style.display = 'block';
+                    var oldCanvas = document.getElementById('canvas');
+                    oldCanvas.parentNode.replaceChild(imgCanvas, oldCanvas);
+
+                    window._testStatus = 'done';
+                    window._testMessage = 'scene=' + scene + ' method=readback';
+                } catch(readbackErr) {
+                    console.warn('Readback failed, falling back to rAF:', readbackErr);
+                    await new Promise(function(r) { requestAnimationFrame(r); });
+                    await new Promise(function(r) { requestAnimationFrame(r); });
+                    window._testStatus = 'done';
+                    window._testMessage = 'scene=' + scene + ' method=compositor';
+                }
+            } catch(e) {
+                window._testStatus = 'error';
+                window._testMessage = String(e);
+                console.error('[GraalWasm] Fatal:', e);
+            }
+        })();
+    </script>
+</body>
+</html>

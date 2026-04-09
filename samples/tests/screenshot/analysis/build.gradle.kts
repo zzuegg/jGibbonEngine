@@ -25,6 +25,10 @@ tasks.register<JavaExec>("compare") {
     if (project.findProperty("screenshot.web")?.toString() == "true") {
         dependsOn(":samples:tests:screenshot:web-runner:runWeb")
     }
+    // GraalWasm runner is opt-in: pass -Pscreenshot.graalwasm=true to include.
+    if (project.findProperty("screenshot.graalwasm")?.toString() == "true") {
+        dependsOn(":samples:tests:screenshot:graalwasm-runner:runGraalWasm")
+    }
 }
 
 // ── Pipeline Pass 4: Report ─────────────────────────────────────────

@@ -86,6 +86,12 @@ tasks.register<JavaExec>("runWeb") {
 }
 
 // ── Save references ─────────────────────────────────────────────────
+tasks.test {
+    // No JUnit tests here — test classpath is only used by JavaExec runners
+    useJUnitPlatform()
+    failOnNoDiscoveredTests = false
+}
+
 tasks.register<JavaExec>("saveReferences") {
     group = "verification"
     description = "Render all web scenes and save as reference screenshots"

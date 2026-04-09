@@ -1,108 +1,65 @@
 package dev.engine.providers.graal.windowing;
 
+import dev.engine.core.input.InputProvider;
 import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.graphics.window.WindowHandle;
 import dev.engine.graphics.window.WindowToolkit;
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.Value;
-
-import java.io.IOException;
+import org.graalvm.webimage.api.JS;
+import org.graalvm.webimage.api.JSNumber;
+import org.graalvm.webimage.api.JSString;
 
 /**
- * Browser canvas-based {@link WindowToolkit} for GraalJS.
+ * Browser canvas-based {@link WindowToolkit} for GraalVM Web Image.
  *
- * <p>{@link #pollEvents()} yields to the browser event loop by awaiting
- * {@code requestAnimationFrame}, matching the pattern used by the TeaVM
- * canvas toolkit. This allows the standard {@code while (window.isOpen())}
- * game loop in {@code BaseApplication} to work on the web.
- *
- * <p>Requires a shared GraalJS {@link Context} with DOM access.
+ * <p>Uses {@code @JS} annotations to call DOM APIs. The game loop frame pacing
+ * is handled by the host HTML page (not by pollEvents), since Web Image
+ * {@code @JS} methods are synchronous.
  */
 public class GraalCanvasWindowToolkit implements WindowToolkit {
 
-    private final Context context;
-    private final Value bridge;
-
-    public GraalCanvasWindowToolkit(Context context) {
-        this.context = context;
-        this.bridge = context.eval("js", BRIDGE_JS);
-    }
-
     @Override
     public WindowHandle createWindow(WindowDescriptor descriptor) {
-        bridge.getMember("setTitle").executeVoid(descriptor.title());
-        return new GraalCanvasWindowHandle(bridge);
+        setDocumentTitle(descriptor.title());
+        return new GraalCanvasWindowHandle();
     }
 
     @Override
     public void pollEvents() {
-        // Yield to browser via requestAnimationFrame.
-        // Evaluated as ES module to support top-level await.
-        try {
-            Source raf = Source.newBuilder("js", RAF_JS, "raf.mjs")
-                    .mimeType("application/javascript+module")
-                    .build();
-            context.eval(raf);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to yield to requestAnimationFrame", e);
-        }
+        // In Web Image, yielding to the browser is handled by the host page.
+        // For screenshot tests, frames are driven synchronously from Java.
+    }
+
+    @Override
+    public InputProvider createInputProvider(WindowHandle window) {
+        return new GraalInputProvider();
     }
 
     @Override
     public void close() {}
 
-    // =====================================================================
+    @JS(args = "title", value = "document.title = title;")
+    private static native void setDocumentTitle(String title);
+
+    // --- Window handle ---
 
     private static final class GraalCanvasWindowHandle implements WindowHandle {
-
-        private final Value bridge;
         private boolean open = true;
 
-        GraalCanvasWindowHandle(Value bridge) {
-            this.bridge = bridge;
-        }
+        @Override public boolean isOpen() { return open; }
+        @Override public int width() { return getCanvasWidth().asInt(); }
+        @Override public int height() { return getCanvasHeight().asInt(); }
+        @Override public String title() { return getDocTitle().asString(); }
+        @Override public void show() {}
+        @Override public long nativeHandle() { return 0; }
+        @Override public void close() { open = false; }
 
-        @Override
-        public boolean isOpen() { return open; }
+        @JS(value = "return document.getElementById('canvas').width;")
+        private static native JSNumber getCanvasWidth();
 
-        @Override
-        public int width() { return bridge.getMember("getWidth").execute().asInt(); }
+        @JS(value = "return document.getElementById('canvas').height;")
+        private static native JSNumber getCanvasHeight();
 
-        @Override
-        public int height() { return bridge.getMember("getHeight").execute().asInt(); }
-
-        @Override
-        public String title() { return bridge.getMember("getTitle").execute().asString(); }
-
-        @Override
-        public void show() {}
-
-        @Override
-        public long nativeHandle() { return 0; }
-
-        @Override
-        public void close() { open = false; }
+        @JS(value = "return document.title;")
+        private static native JSString getDocTitle();
     }
-
-    // =====================================================================
-
-    private static final String BRIDGE_JS = """
-            (function() {
-                return {
-                    setTitle: function(title) { document.title = title; },
-                    getTitle: function() { return document.title; },
-                    getWidth: function() { return document.getElementById('canvas').width; },
-                    getHeight: function() { return document.getElementById('canvas').height; }
-                };
-            })()
-            """;
-
-    /** Top-level await on requestAnimationFrame — yields to the browser event loop. */
-    private static final String RAF_JS = """
-            await new Promise(function(resolve) {
-                if (document.hidden) { setTimeout(resolve, 16); }
-                else { requestAnimationFrame(function() { resolve(); }); }
-            });
-            """;
 }
