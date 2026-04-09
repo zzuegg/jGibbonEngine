@@ -139,14 +139,19 @@ public final class ReflectiveLayoutBuilder {
                 catch (Throwable t) { throw new RuntimeException(t); }
             };
         }
+        // Use invokeWithArguments to avoid MethodHandle.invoke's signature polymorphism.
+        // MethodHandle.invoke triggers a GraalVM Web Image codegen bug where the Unbox
+        // lowering omits ref.cast in the generated WASM (see docs/bugs/graalvm-wasm-missing-ref-cast.md).
+        // invokeWithArguments always returns Object, and the explicit Number cast
+        // generates the correct ref.cast in the WAT.
         if (type == double.class || type == Double.class)
-            return (mem, base, rec) -> { try { mem.putDouble(base + offset, (double) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
+            return (mem, base, rec) -> { try { mem.putDouble(base + offset, ((Number) accessor.invokeWithArguments(rec)).doubleValue()); } catch (Throwable t) { throw new RuntimeException(t); } };
         if (type == long.class || type == Long.class)
-            return (mem, base, rec) -> { try { mem.putLong(base + offset, (long) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
+            return (mem, base, rec) -> { try { mem.putLong(base + offset, ((Number) accessor.invokeWithArguments(rec)).longValue()); } catch (Throwable t) { throw new RuntimeException(t); } };
         if (type == short.class || type == Short.class)
-            return (mem, base, rec) -> { try { mem.putShort(base + offset, (short) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
+            return (mem, base, rec) -> { try { mem.putShort(base + offset, ((Number) accessor.invokeWithArguments(rec)).shortValue()); } catch (Throwable t) { throw new RuntimeException(t); } };
         if (type == byte.class || type == Byte.class)
-            return (mem, base, rec) -> { try { mem.putByte(base + offset, (byte) accessor.invoke(rec)); } catch (Throwable t) { throw new RuntimeException(t); } };
+            return (mem, base, rec) -> { try { mem.putByte(base + offset, ((Number) accessor.invokeWithArguments(rec)).byteValue()); } catch (Throwable t) { throw new RuntimeException(t); } };
         throw new IllegalArgumentException("Unsupported: " + type);
     }
 

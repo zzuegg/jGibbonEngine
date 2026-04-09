@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.renderstate;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
@@ -12,6 +13,7 @@ import dev.engine.graphics.common.engine.Engine;
 /**
  * Tests for wireframe rendering.
  */
+@Discoverable
 public class WireframeScenes {
 
     /** Sphere rendered in wireframe mode via forced property. */
@@ -19,7 +21,9 @@ public class WireframeScenes {
         @Override
         public SceneConfig config() {
             return SceneConfig.defaults()
-                    .withKnownLimitation("webgpu", "Wireframe not supported on WebGPU");
+                    .withKnownLimitation("webgpu", "Wireframe not supported on WebGPU")
+                    .withKnownLimitation("teavm-webgpu", "Wireframe not supported on WebGPU")
+                    .withKnownLimitation("graalwasm-webgpu", "Wireframe not supported on WebGPU");
         }
 
         @Override

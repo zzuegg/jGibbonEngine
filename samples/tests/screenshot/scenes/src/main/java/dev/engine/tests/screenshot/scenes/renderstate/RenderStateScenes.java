@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.renderstate;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
@@ -13,6 +14,7 @@ import dev.engine.tests.screenshot.scenes.SceneConfig;
 import dev.engine.tests.screenshot.scenes.Tolerance;
 import dev.engine.graphics.common.engine.Engine;
 
+@Discoverable
 public class RenderStateScenes {
 
     public static final RenderTestScene MIXED_RENDER_STATES = engine -> {

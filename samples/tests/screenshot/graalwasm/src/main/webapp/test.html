@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GraalWasm Screenshot Test</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { background: #000; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="256" height="256"></canvas>
+    <script>
+        window._testStatus = 'loading';
+        window._testMessage = '';
+        window._screenshotData = null;
+        window._allLogs = [];
+
+        // Console capture
+        (function() {
+            var orig = {log: console.log, warn: console.warn, error: console.error};
+            ['log','warn','error'].forEach(function(t) {
+                console[t] = function() {
+                    window._allLogs.push({t:t, m: Array.from(arguments).join(' ')});
+                    orig[t].apply(console, arguments);
+                };
+            });
+        })();
+        window.onerror = function(msg, src, line) {
+            window._testStatus = 'error';
+            window._testMessage = msg + ' at ' + src + ':' + line;
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+            window._testStatus = 'error';
+            window._testMessage = String(e.reason);
+        });
+    </script>
+    <script>
+        // Initialize WebGPU before loading WASM
+        async function initWebGPU() {
+            if (!navigator.gpu) throw new Error('WebGPU not available');
+            if (!globalThis._wgpu) {
+                globalThis._wgpu = {};
+                globalThis._wgpuNextId = 1;
+            }
+            var reg = function(obj) {
+                var id = globalThis._wgpuNextId++;
+                globalThis._wgpu[id] = obj;
+                return id;
+            };
+            var adapter = await navigator.gpu.requestAdapter({powerPreference: 'high-performance'});
+            if (!adapter) throw new Error('No WebGPU adapter');
+            globalThis._wgpuAdapter = reg(adapter);
+
+            var device = await adapter.requestDevice();
+            if (!device) throw new Error('No WebGPU device');
+            globalThis._wgpuDevice = reg(device);
+            device.lost.then(function(info) {
+                console.error('[GraalWasm] Device lost: ' + info.message);
+            });
+            console.log('[GraalWasm] WebGPU initialized, device=' + globalThis._wgpuDevice);
+        }
+
+        // Load Slang WASM module
+        async function initSlang() {
+            try {
+                var SlangModule = (await import('./slang/slang-wasm.mjs')).default;
+                var slang = await SlangModule({
+                    locateFile: function(p) {
+                        return p.endsWith('.wasm') ? 'slang/slang-wasm.wasm' : p;
+                    }
+                });
+                globalThis._slangModule = slang;
+                console.log('[GraalWasm] Slang WASM loaded');
+            } catch(e) {
+                console.warn('[GraalWasm] Slang WASM unavailable:', e.message);
+            }
+        }
+
+        // Init, load WASM module, then render the requested scene
+        (async function() {
+            try {
+                await initWebGPU();
+                await initSlang();
+
+                // Load the GraalVM WASM module
+                var script = document.createElement('script');
+                script.src = 'main.js';
+                document.body.appendChild(script);
+                await new Promise(function(resolve, reject) {
+                    script.onload = resolve;
+                    script.onerror = function() { reject(new Error('Failed to load main.js')); };
+                });
+
+                // Boot the GraalVM WASM module (runs main() which exports _setupScene/_tickFrame)
+                await GraalVM.run([]);
+
+                // Parse URL parameters
+                var url = new URL(window.location.href);
+                var scene = url.searchParams.get('scene') || '';
+                var frames = url.searchParams.get('frames') || '3';
+                var width = url.searchParams.get('width') || '256';
+                var height = url.searchParams.get('height') || '256';
+
+                if (!scene) {
+                    window._testStatus = 'error';
+                    window._testMessage = 'No scene parameter';
+                    return;
+                }
+
+                // Setup the scene (creates engine, configures rendering)
+                var params = scene + '|' + frames + '|' + width + '|' + height;
+                var setupResult = globalThis._setupScene(params, 0);
+
+                if (typeof setupResult === 'string' && setupResult.startsWith('ERROR:')) {
+                    window._testStatus = 'error';
+                    window._testMessage = setupResult;
+                    return;
+                }
+
+                // Render frames. The Java _tickFrame handles readback on the last
+                // frame via device.readFramebuffer() — same path as TeaVM.
+                // _tickFrame sets window._screenshotData with the PNG data URL.
+                var maxFrames = parseInt(frames) + 1;
+                for (var i = 0; i < maxFrames; i++) {
+                    // Use setTimeout to yield to browser between frames.
+                    // Cannot use requestAnimationFrame — doesn't fire in hidden
+                    // tabs or headless Chrome.
+                    await new Promise(function(resolve) {
+                        setTimeout(function() {
+                            var done = globalThis._tickFrame(0, 0);
+                            if (done < 0) {
+                                window._testStatus = 'error';
+                                window._testMessage = 'Tick error at frame ' + i;
+                            }
+                            resolve();
+                        }, 0);
+                    });
+                    if (window._testStatus === 'error') return;
+                }
+
+                // _tickFrame already set _screenshotData via readFramebuffer.
+                // Report method based on whether data was captured.
+                var method = window._screenshotData ? 'readFramebuffer' : 'no-data';
+                window._testStatus = 'done';
+                window._testMessage = 'scene=' + scene + ' method=' + method;
+            } catch(e) {
+                window._testStatus = 'error';
+                window._testMessage = String(e);
+                console.error('[GraalWasm] Fatal:', e);
+            }
+        })();
+    </script>
+</body>
+</html>

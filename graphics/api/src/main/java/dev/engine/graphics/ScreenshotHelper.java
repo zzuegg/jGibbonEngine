@@ -12,17 +12,16 @@ public final class ScreenshotHelper {
 
     private ScreenshotHelper() {}
 
-    /** Saves RGBA8 byte array as a PNG file. */
+    /** Saves RGBA8 byte array as a PNG file. Alpha is forced to opaque. */
     public static void save(byte[] rgba, int width, int height, String path) throws IOException {
-        var img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        var img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 int i = (y * width + x) * 4;
                 int r = rgba[i] & 0xFF;
                 int g = rgba[i + 1] & 0xFF;
                 int b = rgba[i + 2] & 0xFF;
-                int a = rgba[i + 3] & 0xFF;
-                img.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
+                img.setRGB(x, y, (r << 16) | (g << 8) | b);
             }
         }
         ImageIO.write(img, "png", new File(path));

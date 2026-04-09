@@ -11,17 +11,24 @@ runs:
         java-version: '25'
         cache: gradle
 
+    - name: Setup GraalVM 26 (for GraalWasm modules)
+      uses: graalvm/setup-graalvm@v1
+      with:
+        java-version: '26'
+        distribution: 'oracle'
+        set-java-home: false
+
     - name: Grant Gradle wrapper execute permission
       shell: bash
       run: chmod +x gradlew
 
-    - name: Install Mesa and virtual display
+    - name: Install Mesa, virtual display, and Binaryen
       shell: bash
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           mesa-utils libegl-mesa0 libgl1-mesa-dri libglx-mesa0 \
-          libvulkan1 mesa-vulkan-drivers xvfb libjemalloc2
+          libvulkan1 mesa-vulkan-drivers xvfb libjemalloc2 binaryen
 
     - name: Configure Vulkan ICD
       shell: bash

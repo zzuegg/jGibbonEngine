@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.input;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.input.*;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
@@ -18,6 +19,7 @@ import java.util.Set;
 /**
  * Tests that verify input events affect rendering correctly.
  */
+@Discoverable
 public class InputTestScenes {
 
     private static final DeviceId KB = new DeviceId(DeviceType.KEYBOARD, 0);

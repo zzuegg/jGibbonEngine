@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.materials;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.asset.TextureData;
 import dev.engine.core.material.MaterialData;
 import dev.engine.graphics.texture.TextureKeys;
@@ -14,6 +15,7 @@ import java.nio.ByteBuffer;
 /**
  * Tests multiple different materials and shaders in the same frame.
  */
+@Discoverable
 public class MixedMaterialScenes {
 
     /** Unlit + PBR + textured in same frame — tests shader/material switching per entity. */

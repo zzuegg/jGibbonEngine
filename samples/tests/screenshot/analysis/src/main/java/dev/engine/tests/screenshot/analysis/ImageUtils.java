@@ -36,15 +36,16 @@ public final class ImageUtils {
 
     /** Saves RGBA8 byte array as a PNG file. */
     public static void savePng(byte[] rgba, int width, int height, Path path) throws IOException {
-        var img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        var img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 int i = (y * width + x) * 4;
                 int r = rgba[i] & 0xFF;
                 int g = rgba[i + 1] & 0xFF;
                 int b = rgba[i + 2] & 0xFF;
-                int a = rgba[i + 3] & 0xFF;
-                img.setRGB(x, y, (a << 24) | (r << 16) | (g << 8) | b);
+                // Force opaque — alpha from readFramebuffer is unreliable
+                // (varies by backend/blend state) and not meaningful for screenshots
+                img.setRGB(x, y, 0xFF000000 | (r << 16) | (g << 8) | b);
             }
         }
         ImageIO.write(img, "png", path.toFile());
@@ -62,7 +63,7 @@ public final class ImageUtils {
                 pixels[idx]     = (byte) ((argb >> 16) & 0xFF); // R
                 pixels[idx + 1] = (byte) ((argb >> 8) & 0xFF);  // G
                 pixels[idx + 2] = (byte) (argb & 0xFF);          // B
-                pixels[idx + 3] = (byte) ((argb >> 24) & 0xFF); // A
+                pixels[idx + 3] = (byte) 0xFF; // A — force opaque, alpha varies by capture method
             }
         }
         return pixels;

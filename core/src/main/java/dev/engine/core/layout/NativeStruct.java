@@ -1,5 +1,7 @@
 package dev.engine.core.layout;
 
+import dev.engine.core.Discoverable;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -17,8 +19,10 @@ import java.lang.annotation.Target;
  * </ul>
  *
  * <p>This enables the full engine pipeline (StructLayout, SlangParamsBlock)
- * to work on platforms without reflection support.
+ * to work on platforms without reflection support. Implicitly
+ * {@link Discoverable} — the generated companion class survives TeaVM DCE.
  */
+@Discoverable
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface NativeStruct {}

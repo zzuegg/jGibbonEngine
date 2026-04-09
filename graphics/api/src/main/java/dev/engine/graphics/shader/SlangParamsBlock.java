@@ -73,10 +73,8 @@ public final class SlangParamsBlock {
      * falling back to native reflection for unregistered types (desktop only).
      */
     public static SlangParamsBlock fromRecord(String name, Class<?> recordType) {
-        // Try loading generated metadata class (triggers RecordRegistry registration)
-        try {
-            Class.forName(recordType.getName() + "_NativeStruct");
-        } catch (ClassNotFoundException ignored) {}
+        // Ensure all @Discoverable/@NativeStruct registries are initialized
+        dev.engine.core.Discovery.ensureInitialized();
 
         // Check RecordRegistry first (works on all platforms)
         var components = RecordRegistry.getComponents(recordType);

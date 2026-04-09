@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.textures;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
@@ -11,6 +12,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 /**
  * Tests for texture API features (3D textures, array textures).
  */
+@Discoverable
 public class TextureApiScenes {
 
     /** Creates a 4x4x4 3D texture (verifies API), renders an orange cube alongside. */

@@ -1,5 +1,6 @@
 package dev.engine.tests.screenshot.scenes.renderstate;
 
+import dev.engine.core.Discoverable;
 import dev.engine.core.material.MaterialData;
 import dev.engine.core.math.Vec3;
 import dev.engine.core.scene.component.Transform;
@@ -11,6 +12,7 @@ import dev.engine.tests.screenshot.scenes.RenderTestScene;
 /**
  * Tests for depth function configuration.
  */
+@Discoverable
 public class DepthFuncScenes {
 
     /**
