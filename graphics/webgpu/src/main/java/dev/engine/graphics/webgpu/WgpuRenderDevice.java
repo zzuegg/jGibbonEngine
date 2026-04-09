@@ -5,6 +5,7 @@ import dev.engine.core.mesh.ComponentType;
 import dev.engine.core.mesh.VertexAttribute;
 import dev.engine.core.mesh.VertexFormat;
 import dev.engine.graphics.BufferResource;
+import dev.engine.graphics.CapabilityRegistry;
 import dev.engine.graphics.DeviceCapability;
 import dev.engine.graphics.PipelineResource;
 import dev.engine.graphics.RenderDevice;
@@ -110,6 +111,7 @@ public class WgpuRenderDevice implements RenderDevice {
     private long wgpuAdapter;
     private long wgpuDevice;
     private long wgpuQueue;
+    private final CapabilityRegistry capabilities = new CapabilityRegistry();
     private WgpuBindings.DeviceLimits deviceLimits;
 
     // ── Per-frame state ───────────────────────────────────────────────
@@ -283,6 +285,36 @@ public class WgpuRenderDevice implements RenderDevice {
             wgpuQueue = 0;
             log.warn("WebGPU not available; WebGPU device running without native backend");
         }
+        registerCapabilities();
+    }
+
+    private void registerCapabilities() {
+        // Limits — deviceGetLimits is broken in jwebgpu (SIGABRT), so use safe defaults
+        capabilities.register(DeviceCapability.MAX_TEXTURE_SIZE, () ->
+                deviceLimits != null ? deviceLimits.maxTextureDimension2D() : 8192);
+        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_WIDTH, () ->
+                deviceLimits != null ? deviceLimits.maxTextureDimension2D() : 8192);
+        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_HEIGHT, () ->
+                deviceLimits != null ? deviceLimits.maxTextureDimension2D() : 8192);
+        capabilities.register(DeviceCapability.MAX_ANISOTROPY, () ->
+                deviceLimits != null ? deviceLimits.maxSamplerAnisotropy() : 16.0f);
+        capabilities.register(DeviceCapability.MAX_UNIFORM_BUFFER_SIZE, () ->
+                deviceLimits != null ? deviceLimits.maxUniformBufferBindingSize() : 65536);
+        capabilities.register(DeviceCapability.MAX_STORAGE_BUFFER_SIZE, () ->
+                deviceLimits != null ? deviceLimits.maxStorageBufferBindingSize() : 134217728);
+
+        // Features
+        capabilities.registerStatic(DeviceCapability.COMPUTE_SHADERS, false);
+        capabilities.registerStatic(DeviceCapability.GEOMETRY_SHADERS, false);
+        capabilities.registerStatic(DeviceCapability.TESSELLATION, false);
+        capabilities.registerStatic(DeviceCapability.ANISOTROPIC_FILTERING, true);
+        capabilities.registerStatic(DeviceCapability.BINDLESS_TEXTURES, false);
+
+        // Device info
+        capabilities.registerStatic(DeviceCapability.BACKEND_NAME, "WebGPU");
+        capabilities.registerStatic(DeviceCapability.SHADER_TARGET, 28); // ShaderCompiler.TARGET_WGSL
+        capabilities.registerStatic(DeviceCapability.DEVICE_NAME, "WebGPU");
+        capabilities.registerStatic(DeviceCapability.API_VERSION, "WebGPU");
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1445,29 +1477,8 @@ public class WgpuRenderDevice implements RenderDevice {
     // ═══════════════════════════════════════════════════════════════════
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> T queryCapability(DeviceCapability<T> capability) {
-        int texSize = deviceLimits != null ? deviceLimits.maxTextureDimension2D() : 8192;
-        int maxUbo = deviceLimits != null ? deviceLimits.maxUniformBufferBindingSize() : 65536;
-        int maxSsbo = deviceLimits != null ? deviceLimits.maxStorageBufferBindingSize() : 134217728;
-
-        if (capability == DeviceCapability.MAX_TEXTURE_SIZE) return (T) Integer.valueOf(texSize);
-        if (capability == DeviceCapability.MAX_FRAMEBUFFER_WIDTH) return (T) Integer.valueOf(texSize);
-        if (capability == DeviceCapability.MAX_FRAMEBUFFER_HEIGHT) return (T) Integer.valueOf(texSize);
-        if (capability == DeviceCapability.BACKEND_NAME) return (T) "WebGPU";
-        if (capability == DeviceCapability.SHADER_TARGET) return (T) Integer.valueOf(28); // ShaderCompiler.TARGET_WGSL
-        if (capability == DeviceCapability.DEVICE_NAME) return (T) "WebGPU";
-        if (capability == DeviceCapability.API_VERSION) return (T) "WebGPU";
-        if (capability == DeviceCapability.COMPUTE_SHADERS) return (T) Boolean.FALSE;
-        if (capability == DeviceCapability.GEOMETRY_SHADERS) return (T) Boolean.FALSE;
-        if (capability == DeviceCapability.TESSELLATION) return (T) Boolean.FALSE;
-        if (capability == DeviceCapability.ANISOTROPIC_FILTERING) return (T) Boolean.TRUE;
-        if (capability == DeviceCapability.BINDLESS_TEXTURES) return (T) Boolean.FALSE;
-        if (capability == DeviceCapability.MAX_UNIFORM_BUFFER_SIZE) return (T) Integer.valueOf(maxUbo);
-        if (capability == DeviceCapability.MAX_STORAGE_BUFFER_SIZE) return (T) Integer.valueOf(maxSsbo);
-        if (capability == DeviceCapability.MAX_ANISOTROPY) return (T) Float.valueOf(
-                deviceLimits != null ? deviceLimits.maxSamplerAnisotropy() : 16.0f);
-        return null;
+        return capabilities.query(capability);
     }
 
     // ═══════════════════════════════════════════════════════════════════
