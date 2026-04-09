@@ -85,7 +85,6 @@ public class TransactionBus {
     private static class SubscriberState {
         final Set<Class<? extends Component>> componentTypes;
         List<Transaction> writeBuffer = new ArrayList<>();
-        List<Transaction> readBuffer = new ArrayList<>();
 
         SubscriberState(Set<Class<? extends Component>> componentTypes) {
             this.componentTypes = componentTypes;
@@ -96,11 +95,9 @@ public class TransactionBus {
         }
 
         synchronized List<Transaction> swap() {
-            var result = writeBuffer;
-            writeBuffer = readBuffer;
-            writeBuffer.clear();
-            readBuffer = result;
-            return result;
+            var snapshot = writeBuffer;
+            writeBuffer = new ArrayList<>();
+            return snapshot;
         }
     }
 }

@@ -58,11 +58,11 @@ public class ResourceStats {
     static final class Entry {
         final AtomicInteger liveTotal = new AtomicInteger();
 
-        // Current (in-progress) frame counters
-        int created;
-        int destroyed;
-        int used;
-        int updated;
+        // Current (in-progress) frame counters — atomic for cross-thread safety
+        final AtomicInteger created = new AtomicInteger();
+        final AtomicInteger destroyed = new AtomicInteger();
+        final AtomicInteger used = new AtomicInteger();
+        final AtomicInteger updated = new AtomicInteger();
 
         // Last (completed) frame counters — safe to read from any thread
         volatile int lastCreated;
@@ -71,14 +71,10 @@ public class ResourceStats {
         volatile int lastUpdated;
 
         void swapFrame() {
-            lastCreated = created;
-            lastDestroyed = destroyed;
-            lastUsed = used;
-            lastUpdated = updated;
-            created = 0;
-            destroyed = 0;
-            used = 0;
-            updated = 0;
+            lastCreated = created.getAndSet(0);
+            lastDestroyed = destroyed.getAndSet(0);
+            lastUsed = used.getAndSet(0);
+            lastUpdated = updated.getAndSet(0);
         }
     }
 
@@ -102,26 +98,26 @@ public class ResourceStats {
     public void recordCreate(String resourceType) {
         var entry = entries.computeIfAbsent(resourceType, k -> new Entry());
         entry.liveTotal.incrementAndGet();
-        entry.created++;
+        entry.created.incrementAndGet();
     }
 
     /** Records a resource destruction. Decrements live total and increments current frame destroyed counter. */
     public void recordDestroy(String resourceType) {
         var entry = entries.computeIfAbsent(resourceType, k -> new Entry());
         entry.liveTotal.decrementAndGet();
-        entry.destroyed++;
+        entry.destroyed.incrementAndGet();
     }
 
     /** Records a resource being used (bound/read) this frame. */
     public void recordUse(String resourceType) {
         var entry = entries.computeIfAbsent(resourceType, k -> new Entry());
-        entry.used++;
+        entry.used.incrementAndGet();
     }
 
     /** Records a resource being updated (written/uploaded) this frame. */
     public void recordUpdate(String resourceType) {
         var entry = entries.computeIfAbsent(resourceType, k -> new Entry());
-        entry.updated++;
+        entry.updated.incrementAndGet();
     }
 
     // --- Frame swap ---
@@ -203,22 +199,22 @@ public class ResourceStats {
 
     public int currentFrameCreated(String resourceType) {
         var entry = entries.get(resourceType);
-        return entry != null ? entry.created : 0;
+        return entry != null ? entry.created.get() : 0;
     }
 
     public int currentFrameDestroyed(String resourceType) {
         var entry = entries.get(resourceType);
-        return entry != null ? entry.destroyed : 0;
+        return entry != null ? entry.destroyed.get() : 0;
     }
 
     public int currentFrameUsed(String resourceType) {
         var entry = entries.get(resourceType);
-        return entry != null ? entry.used : 0;
+        return entry != null ? entry.used.get() : 0;
     }
 
     public int currentFrameUpdated(String resourceType) {
         var entry = entries.get(resourceType);
-        return entry != null ? entry.updated : 0;
+        return entry != null ? entry.updated.get() : 0;
     }
 
     @Override

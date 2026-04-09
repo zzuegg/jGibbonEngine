@@ -35,7 +35,14 @@ public class FileWatcher {
         if (running) return;
         try {
             watchService = directory.getFileSystem().newWatchService();
-            directory.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+            // Register the root directory and all subdirectories
+            Files.walkFileTree(directory, new java.nio.file.SimpleFileVisitor<Path>() {
+                @Override
+                public java.nio.file.FileVisitResult preVisitDirectory(Path dir, java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
+                    dir.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+            });
         } catch (IOException e) {
             throw new RuntimeException("Failed to start file watcher on " + directory, e);
         }
@@ -89,7 +96,8 @@ public class FileWatcher {
 
                 @SuppressWarnings("unchecked")
                 WatchEvent<Path> pathEvent = (WatchEvent<Path>) event;
-                String changedFile = pathEvent.context().toString();
+                Path watchedDir = (Path) key.watchable();
+                String changedFile = directory.relativize(watchedDir.resolve(pathEvent.context())).toString();
 
                 var callbacks = listeners.get(changedFile);
                 if (callbacks != null) {

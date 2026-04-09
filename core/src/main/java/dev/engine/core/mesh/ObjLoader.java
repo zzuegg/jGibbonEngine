@@ -61,17 +61,30 @@ public class ObjLoader implements AssetLoader<MeshData> {
                         var floats = new ArrayList<Float>();
                         floats.add(pos[0]); floats.add(pos[1]); floats.add(pos[2]);
 
-                        if (hasTexCoords && indices.length > 1 && !indices[1].isEmpty()) {
-                            int ti = Integer.parseInt(indices[1]) - 1;
-                            float[] tc = texCoords.get(ti);
-                            floats.add(tc[0]);
-                            floats.add(tc.length > 1 ? tc[1] : 0f);
+                        // Check per-vertex whether texcoords/normals are present in this face
+                        boolean vertexHasTC = indices.length > 1 && !indices[1].isEmpty();
+                        boolean vertexHasN = indices.length > 2 && !indices[2].isEmpty();
+
+                        if (hasTexCoords) {
+                            if (vertexHasTC) {
+                                int ti = Integer.parseInt(indices[1]) - 1;
+                                float[] tc = texCoords.get(ti);
+                                floats.add(tc[0]);
+                                floats.add(tc.length > 1 ? tc[1] : 0f);
+                            } else {
+                                floats.add(0f);
+                                floats.add(0f);
+                            }
                         }
 
-                        if (hasNormals && indices.length > 2 && !indices[2].isEmpty()) {
-                            int ni = Integer.parseInt(indices[2]) - 1;
-                            float[] n = normals.get(ni);
-                            floats.add(n[0]); floats.add(n[1]); floats.add(n[2]);
+                        if (hasNormals) {
+                            if (vertexHasN) {
+                                int ni = Integer.parseInt(indices[2]) - 1;
+                                float[] n = normals.get(ni);
+                                floats.add(n[0]); floats.add(n[1]); floats.add(n[2]);
+                            } else {
+                                floats.add(0f); floats.add(0f); floats.add(1f);
+                            }
                         }
 
                         float[] arr = new float[floats.size()];
