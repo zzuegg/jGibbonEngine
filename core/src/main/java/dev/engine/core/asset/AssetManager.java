@@ -17,8 +17,8 @@ public class AssetManager {
 
     private static final Logger log = LoggerFactory.getLogger(AssetManager.class);
 
-    private final List<AssetSource> sources = new ArrayList<>();
-    private final List<AssetLoader<?>> loaders = new ArrayList<>();
+    private final List<AssetSource> sources = new CopyOnWriteArrayList<>();
+    private final List<AssetLoader<?>> loaders = new CopyOnWriteArrayList<>();
     private final Map<String, Object> cache = new ConcurrentHashMap<>();
     private final Map<String, List<ReloadCallback<?>>> reloadCallbacks = new ConcurrentHashMap<>();
     private final Executor executor;
