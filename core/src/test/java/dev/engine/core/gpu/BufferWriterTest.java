@@ -134,38 +134,4 @@ class BufferWriterTest {
                     () -> BufferWriter.sizeOf(String.class));
         }
     }
-
-    @Nested
-    class Reading {
-        @Test void readFloat() {
-            memory.putFloat(0, 3.14f);
-            assertEquals(3.14f, BufferReader.readFloat(memory, 0));
-        }
-
-        @Test void readInt() {
-            memory.putInt(0, 42);
-            assertEquals(42, BufferReader.readInt(memory, 0));
-        }
-
-        @Test void readVec3() {
-            memory.putFloat(0, 1f);
-            memory.putFloat(4, 2f);
-            memory.putFloat(8, 3f);
-            assertEquals(new Vec3(1, 2, 3), BufferReader.readVec3(memory, 0));
-        }
-
-        @Test void readMat4ColumnMajor() {
-            BufferWriter.write(memory, 0, Mat4.translation(5, 6, 7));
-            var m = BufferReader.readMat4(memory, 0);
-            assertEquals(5f, m.m03()); // translation x
-            assertEquals(6f, m.m13()); // translation y
-            assertEquals(7f, m.m23()); // translation z
-        }
-
-        @Test void readTextureHandle() {
-            long handle = 0xDEADBEEFCAFEL;
-            BufferWriter.writeTextureHandle(memory, 0, handle);
-            assertEquals(handle, BufferReader.readTextureHandle(memory, 0));
-        }
-    }
 }

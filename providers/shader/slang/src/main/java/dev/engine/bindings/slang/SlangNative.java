@@ -38,7 +38,6 @@ public final class SlangNative {
     private static volatile MethodHandle spReflectionVariableLayout_GetVariable;
     private static volatile MethodHandle spReflectionVariableLayout_GetOffset;
     private static volatile MethodHandle spReflectionVariableLayout_GetSpace;
-    private static volatile MethodHandle spReflectionVariableLayout_GetTypeLayout;
 
     private SlangNative() {}
 
@@ -140,9 +139,6 @@ public final class SlangNative {
                 spReflectionVariableLayout_GetSpace = linker.downcallHandle(sym, FunctionDescriptor.of(
                         ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.JAVA_INT)));
 
-        library.find("spReflectionVariableLayout_GetTypeLayout").ifPresent(sym ->
-                spReflectionVariableLayout_GetTypeLayout = linker.downcallHandle(sym, FunctionDescriptor.of(
-                        ValueLayout.ADDRESS, ValueLayout.ADDRESS)));
     }
 
     /**

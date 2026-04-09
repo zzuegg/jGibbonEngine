@@ -66,19 +66,6 @@ public class ComPtr implements AutoCloseable {
     }
 
     /**
-     * Calls {@code addRef()} — vtable index 1 for ISlangUnknown.
-     */
-    public int addRef() {
-        try {
-            var handle = methodHandle(1, FunctionDescriptor.of(
-                    ValueLayout.JAVA_INT, ValueLayout.ADDRESS));
-            return (int) handle.invoke(ptr);
-        } catch (Throwable t) {
-            throw new SlangException("addRef failed", t);
-        }
-    }
-
-    /**
      * Calls {@code release()} — vtable index 2 for ISlangUnknown.
      */
     public int release() {
