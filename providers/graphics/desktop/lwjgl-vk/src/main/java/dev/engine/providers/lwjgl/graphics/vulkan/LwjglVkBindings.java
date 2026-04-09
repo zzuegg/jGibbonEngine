@@ -1750,4 +1750,43 @@ public class LwjglVkBindings implements VkBindings {
             props.free();
         }
     }
+
+    @Override
+    public float getMaxSamplerAnisotropy(long instanceHandle, long physicalDeviceHandle) {
+        var instance = instanceCache.get(instanceHandle);
+        var physicalDevice = new VkPhysicalDevice(physicalDeviceHandle, instance);
+        var props = VkPhysicalDeviceProperties.calloc();
+        try {
+            vkGetPhysicalDeviceProperties(physicalDevice, props);
+            return props.limits().maxSamplerAnisotropy();
+        } finally {
+            props.free();
+        }
+    }
+
+    @Override
+    public int getMaxUniformBufferRange(long instanceHandle, long physicalDeviceHandle) {
+        var instance = instanceCache.get(instanceHandle);
+        var physicalDevice = new VkPhysicalDevice(physicalDeviceHandle, instance);
+        var props = VkPhysicalDeviceProperties.calloc();
+        try {
+            vkGetPhysicalDeviceProperties(physicalDevice, props);
+            return props.limits().maxUniformBufferRange();
+        } finally {
+            props.free();
+        }
+    }
+
+    @Override
+    public int getMaxStorageBufferRange(long instanceHandle, long physicalDeviceHandle) {
+        var instance = instanceCache.get(instanceHandle);
+        var physicalDevice = new VkPhysicalDevice(physicalDeviceHandle, instance);
+        var props = VkPhysicalDeviceProperties.calloc();
+        try {
+            vkGetPhysicalDeviceProperties(physicalDevice, props);
+            return props.limits().maxStorageBufferRange();
+        } finally {
+            props.free();
+        }
+    }
 }

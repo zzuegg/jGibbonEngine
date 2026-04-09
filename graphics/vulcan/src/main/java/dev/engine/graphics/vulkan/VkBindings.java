@@ -428,6 +428,12 @@ public interface VkBindings {
 
     int getMaxFramebufferHeight(long instance, long physicalDevice);
 
+    float getMaxSamplerAnisotropy(long instance, long physicalDevice);
+
+    int getMaxUniformBufferRange(long instance, long physicalDevice);
+
+    int getMaxStorageBufferRange(long instance, long physicalDevice);
+
     // ===== Vulkan Constants =====
 
     // Null handle

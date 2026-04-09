@@ -30,6 +30,7 @@ public class VkRenderDevice implements RenderDevice {
 
     private static final Logger log = LoggerFactory.getLogger(VkRenderDevice.class);
 
+    private final CapabilityRegistry capabilities = new CapabilityRegistry();
     private final VkBindings vk;
     private final long instance;
     private final long physicalDevice;
@@ -199,6 +200,36 @@ public class VkRenderDevice implements RenderDevice {
         };
         log.info("Vulkan render device initialized (swapchain: {}x{}, {} images, {})",
                 swapchain.width(), swapchain.height(), swapchain.imageCount(), presentModeName);
+
+        registerCapabilities();
+    }
+
+    private void registerCapabilities() {
+        // Limits
+        capabilities.register(DeviceCapability.MAX_TEXTURE_SIZE, () -> vk.getMaxImageDimension2D(instance, physicalDevice));
+        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_WIDTH, () -> vk.getMaxFramebufferWidth(instance, physicalDevice));
+        capabilities.register(DeviceCapability.MAX_FRAMEBUFFER_HEIGHT, () -> vk.getMaxFramebufferHeight(instance, physicalDevice));
+        capabilities.register(DeviceCapability.MAX_ANISOTROPY, () -> vk.getMaxSamplerAnisotropy(instance, physicalDevice));
+        capabilities.register(DeviceCapability.MAX_UNIFORM_BUFFER_SIZE, () -> vk.getMaxUniformBufferRange(instance, physicalDevice));
+        capabilities.register(DeviceCapability.MAX_STORAGE_BUFFER_SIZE, () -> vk.getMaxStorageBufferRange(instance, physicalDevice));
+
+        // Features
+        capabilities.registerStatic(DeviceCapability.COMPUTE_SHADERS, true);
+        capabilities.registerStatic(DeviceCapability.GEOMETRY_SHADERS, true);
+        capabilities.registerStatic(DeviceCapability.TESSELLATION, true);
+        capabilities.registerStatic(DeviceCapability.ANISOTROPIC_FILTERING, true);
+
+        // Device info
+        capabilities.registerStatic(DeviceCapability.BACKEND_NAME, "Vulkan");
+        capabilities.registerStatic(DeviceCapability.SHADER_TARGET, 6); // ShaderCompiler.TARGET_SPIRV
+        capabilities.register(DeviceCapability.DEVICE_NAME, () -> vk.getDeviceName(instance, physicalDevice));
+        capabilities.register(DeviceCapability.API_VERSION, () -> {
+            int[] ver = vk.getApiVersion(instance, physicalDevice);
+            return ver[0] + "." + ver[1] + "." + ver[2];
+        });
+        capabilities.registerStatic(DeviceCapability.TEXTURE_BINDING_OFFSET, VkDescriptorManager.TEXTURE_BINDING_OFFSET);
+        capabilities.registerStatic(DeviceCapability.SSBO_BINDING_OFFSET, VkDescriptorManager.SSBO_BINDING_OFFSET);
+        capabilities.registerStatic(DeviceCapability.FRAMES_IN_FLIGHT, MAX_FRAMES_IN_FLIGHT);
     }
 
     // --- Buffer operations ---
@@ -1191,28 +1222,8 @@ public class VkRenderDevice implements RenderDevice {
     // --- Capabilities ---
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> T queryCapability(DeviceCapability<T> capability) {
-        return switch (capability.name()) {
-            case "MAX_TEXTURE_SIZE" -> (T) Integer.valueOf(vk.getMaxImageDimension2D(instance, physicalDevice));
-            case "MAX_FRAMEBUFFER_WIDTH" -> (T) Integer.valueOf(vk.getMaxFramebufferWidth(instance, physicalDevice));
-            case "MAX_FRAMEBUFFER_HEIGHT" -> (T) Integer.valueOf(vk.getMaxFramebufferHeight(instance, physicalDevice));
-            case "BACKEND_NAME" -> (T) "Vulkan";
-            case "SHADER_TARGET" -> (T) Integer.valueOf(6); // ShaderCompiler.TARGET_SPIRV
-            case "DEVICE_NAME" -> (T) vk.getDeviceName(instance, physicalDevice);
-            case "TEXTURE_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.TEXTURE_BINDING_OFFSET);
-            case "SSBO_BINDING_OFFSET" -> (T) Integer.valueOf(VkDescriptorManager.SSBO_BINDING_OFFSET);
-            case "FRAMES_IN_FLIGHT" -> (T) Integer.valueOf(MAX_FRAMES_IN_FLIGHT);
-            case "COMPUTE_SHADERS" -> (T) Boolean.TRUE;
-            case "GEOMETRY_SHADERS" -> (T) Boolean.TRUE;
-            case "TESSELLATION" -> (T) Boolean.TRUE;
-            case "ANISOTROPIC_FILTERING" -> (T) Boolean.TRUE;
-            case "API_VERSION" -> {
-                int[] ver = vk.getApiVersion(instance, physicalDevice);
-                yield (T) (ver[0] + "." + ver[1] + "." + ver[2]);
-            }
-            default -> null;
-        };
+        return capabilities.query(capability);
     }
 
     // --- Cleanup ---
