@@ -291,7 +291,7 @@ Cross-backend audit performed 2026-04-06. ✅ = implemented, ⚠️ = partial/fa
 - [ ] **WebGPU: no PushConstants** — Could be emulated via UBO (like GL does at binding 15).
 - [ ] **Vulkan: CopyTexture/BlitTexture stubs** — Requires pausing the render pass. GL fully implements both.
 - [ ] **Vulkan: no BindImage** — Blocks compute shaders that write to textures. Needs storage image descriptor pool.
-- [x] **Vulkan: missing DeviceCapability queries** — Added COMPUTE_SHADERS, GEOMETRY_SHADERS, TESSELLATION, ANISOTROPIC_FILTERING, API_VERSION. Still missing: MAX_ANISOTROPY, MAX_UNIFORM/STORAGE_BUFFER_SIZE (need new VkBindings methods).
+- [x] **Vulkan: missing DeviceCapability queries** — Fixed: all three backends (GL, VK, WebGPU) now use CapabilityRegistry pattern. VK queries MAX_ANISOTROPY, MAX_UNIFORM_BUFFER_SIZE, MAX_STORAGE_BUFFER_SIZE from VkPhysicalDeviceLimits. WebGPU still uses hardcoded defaults (jwebgpu deviceGetLimits SIGABRT bug).
 - [ ] **All backends: primitive topology hardcoded** — Cannot draw lines, points, or triangle strips. Should be part of PipelineDescriptor.
 - [ ] **All backends: UINT16 index buffers unsupported** — Wastes memory for small meshes. VK has constant defined but unused.
 - [ ] **GL: buffer CPU readback** — glMapNamedBufferRange declared in GlBindings but never called. No staging readback path.
