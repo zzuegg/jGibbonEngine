@@ -61,15 +61,24 @@ public class GraalWasmRunner extends AbstractTestRunner {
                         "Timeout waiting for scene '" + sceneName + "'", "Message: " + msg);
             }
 
-            // Capture via CDP screenshot. The test.html reads the WebGPU framebuffer
-            // via copyTextureToBuffer+mapAsync, then draws it onto the visible canvas
-            // with a 2D context. CDP captureScreenshot reads the visible canvas.
-            cdp.setViewportSize(256, 256);
-            Thread.sleep(100);
-            byte[] pngBytes = cdp.captureScreenshot(true, 256, 256);
+            // Read screenshot data — try readFramebuffer data URL first (set by Java
+            // code via device.readFramebuffer()), fall back to CDP screenshot.
+            // This mirrors the TeaVM WebRunner pattern.
+            byte[] pngBytes = cdp.readCanvasScreenshot();
+            boolean usedCdpFallback = false;
+            if (pngBytes == null || pngBytes.length == 0 || isBlankImage(pngBytes)) {
+                // readFramebuffer failed or returned blank — use CDP screenshot
+                cdp.setViewportSize(256, 256);
+                Thread.sleep(200);
+                pngBytes = cdp.captureScreenshot(true, 256, 256);
+                usedCdpFallback = true;
+            }
             if (pngBytes == null || pngBytes.length == 0) {
                 return new SceneResult.ExceptionResult(
                         "No screenshot data for scene '" + sceneName + "'", "");
+            }
+            if (usedCdpFallback) {
+                System.out.println("  Used CDP screenshot fallback for " + sceneName);
             }
 
             var dir = outputDir.resolve(BACKEND);

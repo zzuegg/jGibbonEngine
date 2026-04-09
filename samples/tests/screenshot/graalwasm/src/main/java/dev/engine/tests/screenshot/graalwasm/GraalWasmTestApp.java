@@ -29,8 +29,11 @@ import java.util.function.BiFunction;
 public class GraalWasmTestApp {
 
     private static Engine activeEngine;
+    private static dev.engine.graphics.RenderDevice activeDevice;
     private static int activeFrame;
     private static int targetFrame;
+    private static int sceneWidth;
+    private static int sceneHeight;
 
     public static void main(String[] args) {
         // Register discovery registries (no reflection in WASM)
@@ -55,12 +58,43 @@ public class GraalWasmTestApp {
                 activeEngine.setInputEvents(List.of());
                 activeEngine.tick(1.0 / 60.0);
                 activeFrame++;
-                return JSNumber.of(activeFrame >= targetFrame ? 1 : 0);
+                if (activeFrame >= targetFrame) {
+                    captureScreenshot();
+                    return JSNumber.of(1);
+                }
+                return JSNumber.of(0);
             } catch (Exception e) {
                 System.err.println("ERROR in tick: " + e.getMessage());
                 return JSNumber.of(-1);
             }
         });
+    }
+
+    /**
+     * Captures the rendered frame via device.readFramebuffer() — the same path
+     * TeaVM uses. Falls back to canvas.toDataURL() if readback fails.
+     * Sets window._screenshotData with the PNG data URL.
+     */
+    private static void captureScreenshot() {
+        try {
+            byte[] pixels = activeDevice.readFramebuffer(sceneWidth, sceneHeight);
+            if (pixels != null && pixels.length > 0) {
+                String dataUrl = encodePixelsToDataUrl(pixels, sceneWidth, sceneHeight);
+                setScreenshotData(JSString.of(dataUrl));
+                System.out.println("[GraalWasm] Screenshot captured via readFramebuffer, pixels=" + pixels.length);
+                return;
+            }
+        } catch (Exception e) {
+            System.err.println("[GraalWasm] readFramebuffer failed: " + e.getMessage());
+        }
+        // Fallback: canvas.toDataURL()
+        try {
+            String dataUrl = canvasToDataURL("canvas");
+            setScreenshotData(JSString.of(dataUrl));
+            System.out.println("[GraalWasm] Screenshot captured via canvasFallback");
+        } catch (Exception e) {
+            System.err.println("[GraalWasm] canvasFallback failed: " + e.getMessage());
+        }
     }
 
     private static String setupScene(String params) {
@@ -112,7 +146,10 @@ public class GraalWasmTestApp {
                 .platform(platform)
                 .build();
 
-        activeEngine = new Engine(engineConfig, platform, backend.device());
+        activeDevice = backend.device();
+        sceneWidth = width;
+        sceneHeight = height;
+        activeEngine = new Engine(engineConfig, platform, activeDevice);
         activeEngine.renderer().setViewport(width, height);
         entry.scene().setup(activeEngine);
 
@@ -125,6 +162,9 @@ public class GraalWasmTestApp {
 
     @JS(args = "fn", value = "globalThis._tickFrame = fn;")
     private static native void exportTickFrame(BiFunction<JSNumber, JSNumber, JSNumber> fn);
+
+    @JS(args = "data", value = "window._screenshotData = data;")
+    private static native void setScreenshotData(JSString data);
 
     private static void setCanvasSize(int width, int height) {
         setCanvasSizeJS(JSNumber.of(width), JSNumber.of(height));

@@ -93,7 +93,7 @@
                     script.onerror = function() { reject(new Error('Failed to load main.js')); };
                 });
 
-                // Boot the GraalVM WASM module (runs main() which exports _renderScene)
+                // Boot the GraalVM WASM module (runs main() which exports _setupScene/_tickFrame)
                 await GraalVM.run([]);
 
                 // Parse URL parameters
@@ -119,96 +119,32 @@
                     return;
                 }
 
-                // Render frames one at a time, yielding to browser between each
-                // so the WebGPU compositor can present to the canvas.
-                // On the last frame, do the readback BEFORE returning from the
-                // rAF callback so we read the rendered texture, not a new one.
+                // Render frames. The Java _tickFrame handles readback on the last
+                // frame via device.readFramebuffer() — same path as TeaVM.
+                // _tickFrame sets window._screenshotData with the PNG data URL.
                 var maxFrames = parseInt(frames) + 1;
-                var capturedData = null;
-
-                // Use setTimeout instead of requestAnimationFrame for headless/background
-                // tab compatibility. rAF doesn't fire in hidden tabs or headless Chrome.
-                var scheduleFrame = function(cb) { setTimeout(cb, 0); };
                 for (var i = 0; i < maxFrames; i++) {
-                    var isLast = (i === maxFrames - 1);
-                    capturedData = await new Promise(function(resolve) {
-                        scheduleFrame(function() {
+                    // Use setTimeout to yield to browser between frames.
+                    // Cannot use requestAnimationFrame — doesn't fire in hidden
+                    // tabs or headless Chrome.
+                    await new Promise(function(resolve) {
+                        setTimeout(function() {
                             var done = globalThis._tickFrame(0, 0);
-                            if (done < 0) { resolve('ERROR'); return; }
-                            if (!isLast) { resolve(null); return; }
-                            // Last frame — do readback NOW
-                            try {
-                                var deviceId = globalThis._wgpuDevice;
-                                var device = globalThis._wgpu[deviceId];
-                                var canvas = document.getElementById('canvas');
-                                var ctx = canvas.getContext('webgpu');
-                                var texture = ctx.getCurrentTexture();
-                                resolve({device:device, texture:texture, w:texture.width, h:texture.height});
-                            } catch(e) { resolve('ERROR:' + e.message); }
-                        });
+                            if (done < 0) {
+                                window._testStatus = 'error';
+                                window._testMessage = 'Tick error at frame ' + i;
+                            }
+                            resolve();
+                        }, 0);
                     });
-                    if (capturedData === 'ERROR') {
-                        window._testStatus = 'error';
-                        window._testMessage = 'Tick error at frame ' + i;
-                        return;
-                    }
+                    if (window._testStatus === 'error') return;
                 }
 
-                // Now do the async mapAsync outside rAF (texture ref is captured)
-                try {
-                    var device = capturedData.device;
-                    var texture = capturedData.texture;
-                    var w = capturedData.w, h = capturedData.h;
-                    var bytesPerRow = Math.ceil(w * 4 / 256) * 256;
-                    var bufSize = bytesPerRow * h;
-
-                    var buf = device.createBuffer({
-                        size: bufSize,
-                        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-                    });
-                    var encoder = device.createCommandEncoder();
-                    encoder.copyTextureToBuffer(
-                        { texture: texture },
-                        { buffer: buf, bytesPerRow: bytesPerRow },
-                        { width: w, height: h }
-                    );
-                    device.queue.submit([encoder.finish()]);
-
-                    await buf.mapAsync(GPUMapMode.READ);
-                    var data = new Uint8Array(buf.getMappedRange());
-
-                    // Encode to PNG via temporary canvas
-                    var imgCanvas = document.createElement('canvas');
-                    imgCanvas.width = w; imgCanvas.height = h;
-                    var imgCtx = imgCanvas.getContext('2d');
-                    var imgData = imgCtx.createImageData(w, h);
-                    for (var y = 0; y < h; y++) {
-                        var srcOff = y * bytesPerRow;
-                        var dstOff = y * w * 4;
-                        for (var x = 0; x < w * 4; x++) {
-                            imgData.data[dstOff + x] = data[srcOff + x];
-                        }
-                    }
-                    imgCtx.putImageData(imgData, 0, 0);
-                    buf.unmap(); buf.destroy();
-
-                    // Replace the WebGPU canvas with the 2D readback canvas so CDP
-                    // captureScreenshot can capture it. We can't getContext('2d')
-                    // on a canvas that already has a WebGPU context.
-                    imgCanvas.id = 'canvas';
-                    imgCanvas.style.display = 'block';
-                    var oldCanvas = document.getElementById('canvas');
-                    oldCanvas.parentNode.replaceChild(imgCanvas, oldCanvas);
-
-                    window._testStatus = 'done';
-                    window._testMessage = 'scene=' + scene + ' method=readback';
-                } catch(readbackErr) {
-                    console.warn('Readback failed, falling back to rAF:', readbackErr);
-                    await new Promise(function(r) { requestAnimationFrame(r); });
-                    await new Promise(function(r) { requestAnimationFrame(r); });
-                    window._testStatus = 'done';
-                    window._testMessage = 'scene=' + scene + ' method=compositor';
-                }
+                // _tickFrame already set _screenshotData via readFramebuffer.
+                // Report method based on whether data was captured.
+                var method = window._screenshotData ? 'readFramebuffer' : 'no-data';
+                window._testStatus = 'done';
+                window._testMessage = 'scene=' + scene + ' method=' + method;
             } catch(e) {
                 window._testStatus = 'error';
                 window._testMessage = String(e);
