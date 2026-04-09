@@ -43,11 +43,11 @@ public interface WindowHandle extends AutoCloseable {
     default void swapBuffers() {}
 
     default <T> void set(PropertyKey<WindowHandle, T> key, T value) {
-        throw new UnsupportedOperationException("Property not supported: " + key.name());
+        // Ignored by default — toolkits override for supported properties
     }
 
     default <T> T get(PropertyKey<WindowHandle, T> key) {
-        throw new UnsupportedOperationException("Property not supported: " + key.name());
+        return null;
     }
 
     @Override
