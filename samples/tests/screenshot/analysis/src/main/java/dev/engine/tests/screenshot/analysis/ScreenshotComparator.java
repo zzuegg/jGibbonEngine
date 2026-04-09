@@ -110,8 +110,9 @@ public final class ScreenshotComparator {
                         byte[] pixelsB = ImageUtils.loadPng(
                                 screenshotDir.resolve(screenshotB.path()),
                                 scene.width, scene.height);
+                        var cbTol = scene.crossBackendTolerance;
                         double diff = ImageUtils.diffPercentage(pixelsA, pixelsB,
-                                scene.tolerance.maxChannelDiff());
+                                cbTol.maxChannelDiff());
 
                         var comp = new Manifest.Comparison();
                         comp.scene = scene.name;
@@ -119,9 +120,9 @@ public final class ScreenshotComparator {
                         comp.type = "cross_backend";
                         comp.backendA = backendA;
                         comp.backendB = backendB;
-                        comp.tolerance = scene.tolerance;
+                        comp.tolerance = cbTol;
                         comp.diffPercent = diff;
-                        if (diff <= scene.tolerance.maxDiffPercent()) {
+                        if (diff <= cbTol.maxDiffPercent()) {
                             comp.status = "pass";
                         } else {
                             // Check if this failure matches a known limitation
@@ -136,7 +137,7 @@ public final class ScreenshotComparator {
                             } else {
                                 comp.status = "fail";
                                 comp.reason = String.format("Diff %.2f%% exceeds threshold %.2f%%",
-                                        diff, scene.tolerance.maxDiffPercent());
+                                        diff, cbTol.maxDiffPercent());
                             }
                         }
                         manifest.comparisons.add(comp);
