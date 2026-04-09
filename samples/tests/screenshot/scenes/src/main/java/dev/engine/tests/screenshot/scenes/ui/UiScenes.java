@@ -39,6 +39,8 @@ public class UiScenes {
                     Set.of(3),
                     Tolerance.tight(),
                     List.of(new SceneConfig.KnownLimitation("teavm-webgpu",
+                            "UI text rendering differs in headless Chrome"),
+                            new SceneConfig.KnownLimitation("graalwasm-webgpu",
                             "UI text rendering differs in headless Chrome")));
         }
 
