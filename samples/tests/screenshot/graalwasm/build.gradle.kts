@@ -114,19 +114,30 @@ fun findOnPath(name: String): String? {
     return pathDirs.map { File(it, name) }.firstOrNull { it.exists() && it.canExecute() }?.absolutePath
 }
 
-// Copy test.html and assets next to compiled WASM
-tasks.register<Copy>("assembleWasmTest") {
+// Copy test.html and assets next to compiled WASM.
+// Uses Sync instead of Copy to avoid wiping the wasmCompile output (main.js/main.js.wasm).
+// Sync only adds/updates files from the source, preserving existing files in the dest.
+tasks.register("assembleWasmTest") {
     dependsOn("wasmCompile")
-    from("src/main/webapp")
-    into(layout.buildDirectory.dir("wasm"))
-    // Copy shader files from graphics:common
-    from(project(":graphics:common").file("src/main/resources")) {
-        into("assets")
-    }
-    // Copy Slang WASM
-    if (rootProject.file("platforms/web/src/main/webapp/slang").exists()) {
-        from(rootProject.file("platforms/web/src/main/webapp/slang")) {
-            into("slang")
+    val wasmDir = layout.buildDirectory.dir("wasm")
+    doLast {
+        // Copy webapp files
+        copy {
+            from("src/main/webapp")
+            into(wasmDir)
+        }
+        // Copy shader files
+        copy {
+            from(project(":graphics:common").file("src/main/resources"))
+            into(wasmDir.get().dir("assets"))
+        }
+        // Copy Slang WASM
+        val slangDir = rootProject.file("platforms/web/src/main/webapp/slang")
+        if (slangDir.exists()) {
+            copy {
+                from(slangDir)
+                into(wasmDir.get().dir("slang"))
+            }
         }
     }
 }
