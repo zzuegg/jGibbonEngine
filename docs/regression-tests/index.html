@@ -69,7 +69,8 @@ description: "Cross-backend visual regression test results"
     border-bottom: 1px solid var(--border-subtle, #21262d); }
   .report-card-thumb img { width: 100%; height: 100%; object-fit: contain;
     image-rendering: pixelated; }
-  .report-card-body { padding: 0.875rem 1rem; }
+
+  .report-card-body { padding: 0.75rem 1rem; }
   .report-card-title { font-family: 'Space Grotesk', sans-serif;
     font-size: 0.9rem; font-weight: 600; margin-bottom: 0.5rem;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -97,7 +98,7 @@ description: "Cross-backend visual regression test results"
   .report-overlay.hidden { display: none; }
   .report-detail { background: var(--bg-surface, #161b22);
     border: 1px solid var(--border, #30363d); border-radius: 1rem;
-    max-width: 900px; width: 100%; max-height: 85vh; overflow-y: auto;
+    max-width: 1000px; width: 100%; max-height: 85vh; overflow-y: auto;
     position: relative; box-shadow: 0 4px 16px rgba(0,0,0,0.5); }
   .report-detail-close { position: sticky; top: 0; float: right; margin: 0.75rem;
     background: var(--bg-elevated, #1c2128); border: 1px solid var(--border, #30363d);
@@ -116,6 +117,37 @@ description: "Cross-backend visual regression test results"
     text-transform: uppercase; letter-spacing: 0.1em;
     color: var(--orange, #f97316); margin-bottom: 0.75rem; margin-top: 1.5rem; }
   .report-detail-section:first-child { margin-top: 0; }
+
+  /* Detail: reference image gallery */
+  .report-ref-gallery { display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.75rem;
+    margin-bottom: 1rem; }
+  .report-ref-item { background: var(--bg-primary, #0d1117);
+    border: 1px solid var(--border-subtle, #21262d); border-radius: 0.5rem;
+    overflow: hidden; text-align: center; }
+  .report-ref-item img { width: 100%; aspect-ratio: 1; object-fit: contain;
+    image-rendering: pixelated; display: block; }
+  .report-ref-label { font-size: 0.7rem; font-family: 'JetBrains Mono', monospace;
+    font-weight: 600; padding: 4px 0; color: var(--text-muted, #8b949e); }
+  .report-ref-status { font-size: 0.65rem; padding-bottom: 4px; }
+  .report-ref-noimg { aspect-ratio: 1; display: flex; align-items: center;
+    justify-content: center; color: var(--text-subtle); font-size: 0.8rem;
+    font-style: italic; }
+
+  /* Detail: cross-backend matrix grid */
+  .report-cross-matrix { display: inline-grid; gap: 1px;
+    background: var(--border-subtle, #21262d); border-radius: 0.5rem;
+    overflow: hidden; margin-bottom: 1rem; }
+  .report-cross-cell { padding: 0.35rem 0.5rem; font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace; text-align: center;
+    min-width: 50px; background: var(--bg-primary, #0d1117); }
+  .report-cross-hdr { background: var(--bg-elevated, #1c2128);
+    font-weight: 700; color: var(--text-muted, #8b949e); font-size: 0.65rem; }
+  .report-cross-self { background: var(--bg-surface, #161b22);
+    color: var(--text-subtle, #6e7681); }
+  .report-cross-pass { background: rgba(34,197,94,0.1); color: #22c55e; cursor: default; }
+  .report-cross-fail { background: rgba(248,113,113,0.15); color: #f87171; cursor: default; }
+  .report-cross-known { background: rgba(249,115,22,0.12); color: #fb923c; cursor: default; }
 
   .report-known-callout { background: rgba(249,115,22,0.15);
     border: 1px solid rgba(249,115,22,0.3); border-left: 3px solid var(--orange, #f97316);
@@ -185,6 +217,14 @@ const REPORT_PATH = 'docs/regression-tests/screenshot-report.json';
 const REF_BASE = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/samples/tests/screenshot/references/ci`;
 
 const BACKEND_SHORT = { opengl: 'GL', vulkan: 'VK', webgpu: 'WG', 'teavm-webgpu': 'Web', 'graalwasm-webgpu': 'Graal' };
+const BACKEND_ORDER = ['opengl', 'vulkan', 'webgpu', 'teavm-webgpu', 'graalwasm-webgpu'];
+
+function sortBackends(list) {
+  return [...list].sort((a, b) => {
+    const ai = BACKEND_ORDER.indexOf(a), bi = BACKEND_ORDER.indexOf(b);
+    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+  });
+}
 
 async function loadReport() {
   const loading = document.getElementById('report-loading');
@@ -216,6 +256,9 @@ function renderReport(r) {
   const counts = { passed: 0, partial: 0, failed: 0 };
   Object.values(statuses).forEach(s => counts[s]++);
 
+  // Collect all backends that appear in runs
+  const allBackends = sortBackends([...new Set(r.runs.map(run => run.backend))]);
+
   let html = '';
 
   // Metadata
@@ -223,6 +266,7 @@ function renderReport(r) {
   html += `<span class="report-meta-item"><span class="report-meta-label">Branch</span>${esc(r.branch)}</span>`;
   html += `<span class="report-meta-item"><span class="report-meta-label">Commit</span>${esc(r.commit)}</span>`;
   html += `<span class="report-meta-item"><span class="report-meta-label">Profile</span>${esc(r.profile)}</span>`;
+  html += `<span class="report-meta-item"><span class="report-meta-label">Backends</span>${allBackends.map(b => BACKEND_SHORT[b] || b).join(', ')}</span>`;
   html += `<span class="report-meta-item"><span class="report-meta-label">Time</span>${esc((r.timestamp||'').substring(0,19))}</span>`;
   html += '</div>';
 
@@ -259,17 +303,21 @@ function renderReport(r) {
     for (const scene of scenes) {
       const status = statuses[scene.name];
       const frame = Math.max(...scene.captureFrames);
-      const thumbUrl = `${REF_BASE}/opengl/${scene.name}_f${frame}.png`;
+      const sceneBackends = sortBackends([...new Set(r.runs.filter(run => run.scene === scene.name && run.status === 'success').map(run => run.backend))]);
 
       html += `<div class="report-card" data-status="${status}" data-scene="${esc(scene.name)}" onclick="showSceneDetail('${esc(scene.name)}')">`;
+
+      // Single thumbnail (first available backend)
+      const thumbBe = sceneBackends[0] || 'opengl';
+      const thumbUrl = `${REF_BASE}/${thumbBe}/${scene.name}_f${frame}.png`;
       html += `<div class="report-card-thumb"><img src="${thumbUrl}" onerror="this.parentElement.innerHTML='<div class=report-no-thumb>No reference</div>'" loading="lazy"></div>`;
+
       html += '<div class="report-card-body">';
       html += `<div class="report-card-title">${formatName(scene.name)}</div>`;
 
       // Backend badges
       html += '<div class="report-badges">';
-      const backends = [...new Set(r.runs.filter(run => run.scene === scene.name).map(run => run.backend))].sort();
-      for (const be of backends) {
+      for (const be of sceneBackends) {
         const ref = r.comparisons.find(c => c.scene === scene.name && c.type === 'reference' && c.backend === be);
         const run = r.runs.find(run => run.scene === scene.name && run.backend === be);
         let cls = 'report-badge-skip';
@@ -281,17 +329,6 @@ function renderReport(r) {
         html += `<span class="report-badge ${cls}">${BACKEND_SHORT[be] || be}</span>`;
       }
       html += '</div>';
-
-      // Cross-backend matrix
-      const cross = r.comparisons.filter(c => c.scene === scene.name && c.type === 'cross_backend');
-      if (cross.length) {
-        html += '<div class="report-matrix">';
-        for (const c of cross) {
-          const cls = c.status === 'fail' ? 'report-mx-fail' : c.status === 'known_limitation' ? 'report-mx-known' : 'report-mx-pass';
-          html += `<span class="report-mx ${cls}" title="${esc(c.reason || `${(c.diffPercent||0).toFixed(2)}%`)}">${BACKEND_SHORT[c.backendA]||c.backendA}\u2194${BACKEND_SHORT[c.backendB]||c.backendB}</span>`;
-        }
-        html += '</div>';
-      }
 
       html += '</div></div>'; // card-body, card
     }
@@ -308,6 +345,8 @@ function showSceneDetail(name) {
   const r = window._report;
   const scene = r.scenes.find(s => s.name === name);
   if (!scene) return;
+  const frame = Math.max(...scene.captureFrames);
+  const sceneBackends = sortBackends([...new Set(r.runs.filter(run => run.scene === name).map(run => run.backend))]);
 
   let html = '';
   html += '<div class="report-detail-header">';
@@ -325,36 +364,67 @@ function showSceneDetail(name) {
     html += '</div>';
   }
 
-  // Reference comparisons
-  const refs = r.comparisons.filter(c => c.scene === name && c.type === 'reference');
-  if (refs.length) {
-    html += '<div class="report-detail-section">Reference Comparisons</div>';
-    html += '<table class="report-detail-table"><tr><th>Backend</th><th>Status</th><th>Diff</th><th>Threshold</th></tr>';
-    for (const c of refs) {
-      const cls = statusClass(c.status);
-      const label = statusLabel(c.status);
-      const hasDiff = ['pass','fail','known_limitation'].includes(c.status);
-      html += `<tr><td>${esc(c.backend||'')}</td><td class="${cls}">${label}</td>`;
-      html += `<td>${hasDiff ? (c.diffPercent||0).toFixed(4)+'%' : '\u2014'}</td>`;
-      html += `<td>${c.tolerance ? c.tolerance.maxDiffPercent.toFixed(4)+'%' : '\u2014'}</td></tr>`;
-    }
-    html += '</table>';
-  }
+  // Reference images gallery
+  html += '<div class="report-detail-section">Reference Images</div>';
+  html += '<div class="report-ref-gallery">';
+  for (const be of sceneBackends) {
+    const run = r.runs.find(run => run.scene === name && run.backend === be);
+    const ref = r.comparisons.find(c => c.scene === name && c.type === 'reference' && c.backend === be);
+    const imgUrl = `${REF_BASE}/${be}/${name}_f${frame}.png`;
+    const refStatus = ref ? ref.status : (run && run.status === 'success' ? 'no_reference' : 'error');
 
-  // Cross-backend
+    html += '<div class="report-ref-item">';
+    if (run && run.status === 'success') {
+      html += `<img src="${imgUrl}" onerror="this.outerHTML='<div class=report-ref-noimg>No image</div>'" loading="lazy">`;
+    } else {
+      html += `<div class="report-ref-noimg">${run ? esc(run.status) : 'not run'}</div>`;
+    }
+    html += `<div class="report-ref-label">${BACKEND_SHORT[be] || be}</div>`;
+    html += `<div class="report-ref-status ${statusClass(refStatus)}">${statusLabel(refStatus)}</div>`;
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Cross-backend comparison matrix
   const cross = r.comparisons.filter(c => c.scene === name && c.type === 'cross_backend');
   if (cross.length) {
     html += '<div class="report-detail-section">Cross-Backend Comparison</div>';
-    html += '<table class="report-detail-table"><tr><th>Backends</th><th>Status</th><th>Diff</th><th>Threshold</th><th>Reason</th></tr>';
+
+    // Build lookup: key "a|b" -> comparison
+    const crossMap = {};
     for (const c of cross) {
-      const cls = statusClass(c.status);
-      const label = c.status === 'known_limitation' ? 'Known' : c.status === 'fail' ? 'Fail' : 'Pass';
-      html += `<tr><td>${esc(c.backendA)} \u2194 ${esc(c.backendB)}</td><td class="${cls}">${label}</td>`;
-      html += `<td>${(c.diffPercent||0).toFixed(4)}%</td>`;
-      html += `<td>${c.tolerance ? c.tolerance.maxDiffPercent.toFixed(4)+'%' : '\u2014'}</td>`;
-      html += `<td class="${cls}">${c.reason ? esc(c.reason) : '\u2014'}</td></tr>`;
+      crossMap[c.backendA + '|' + c.backendB] = c;
+      crossMap[c.backendB + '|' + c.backendA] = c;
     }
-    html += '</table>';
+
+    const cols = sceneBackends.length + 1;
+    html += `<div class="report-cross-matrix" style="grid-template-columns: repeat(${cols}, auto)">`;
+    // Header row
+    html += '<div class="report-cross-cell report-cross-hdr"></div>';
+    for (const be of sceneBackends) {
+      html += `<div class="report-cross-cell report-cross-hdr">${BACKEND_SHORT[be] || be}</div>`;
+    }
+    // Data rows
+    for (const beA of sceneBackends) {
+      html += `<div class="report-cross-cell report-cross-hdr">${BACKEND_SHORT[beA] || beA}</div>`;
+      for (const beB of sceneBackends) {
+        if (beA === beB) {
+          html += '<div class="report-cross-cell report-cross-self">\u2014</div>';
+        } else {
+          const c = crossMap[beA + '|' + beB];
+          if (c) {
+            const pct = c.diffPercent || 0;
+            const diff = pct.toFixed(2) + '%';
+            const tip = c.reason || diff;
+            const color = diffColor(pct);
+            html += `<div class="report-cross-cell" style="color:${color}" title="${esc(tip)}">${diff}</div>`;
+          } else {
+            html += '<div class="report-cross-cell report-cross-self">\u2014</div>';
+          }
+        }
+      }
+    }
+    html += '</div>';
   }
 
   // Errors
@@ -378,7 +448,7 @@ function showSceneDetail(name) {
     html += '<div class="report-detail-section">Run Times</div>';
     html += '<table class="report-detail-table"><tr><th>Backend</th><th>Status</th><th>Duration</th></tr>';
     for (const run of runs) {
-      html += `<tr><td>${esc(run.backend)}</td><td>${esc(run.status)}</td><td>${run.durationMs}ms</td></tr>`;
+      html += `<tr><td>${BACKEND_SHORT[run.backend] || esc(run.backend)}</td><td>${esc(run.status)}</td><td>${run.durationMs}ms</td></tr>`;
     }
     html += '</table>';
   }
@@ -423,6 +493,12 @@ function statusClass(s) {
 function statusLabel(s) {
   return { pass:'Pass', fail:'Fail', known_limitation:'Known Limitation',
            no_reference:'No Reference', skipped:'Skipped' }[s] || s;
+}
+
+function diffColor(pct) {
+  if (pct <= 0.01) return '#22c55e';  // green: within threshold
+  if (pct <= 1.0)  return '#fb923c';  // orange: minor diff
+  return '#f87171';                    // red: significant diff
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
