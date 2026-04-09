@@ -33,7 +33,7 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 - [x] **FileSystemAssetSource path traversal** — Fixed: root normalized at construction, resolved paths checked with `startsWith(root)` after normalization. SecurityException on traversal attempts.
 - [ ] **ZipAssetSource suffix search is O(n)** — `ZipAssetSource.findEntry()` iterates all zip entries on every lookup when exact match fails. For large archives, this is slow. Could build a lookup map at construction time.
 - [ ] **AssetManager.sources/loaders are unsynchronized ArrayLists** — `AssetManager.java:21-22`. `addSource()` and `registerLoader()` modify plain ArrayLists that `loadSync()` iterates. Concurrent modification is possible if loading happens while registering new loaders/sources.
-- [ ] **ShaderManager falls back to raw FileReader** — `ShaderManager.java:412`. `loadShaderFile()` falls back to `new FileReader(path)` bypassing the asset source system entirely. Breaks the abstraction and could read arbitrary files.
+- [x] **ShaderManager falls back to raw FileReader** — Fixed: removed FileReader fallback. Now only loads through AssetManager with error logging.
 
 ## Missing Math Functionality
 
