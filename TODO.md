@@ -49,6 +49,7 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 - [ ] **MeshManager.createMeshFromData() duplicates uploadMeshData()** — `MeshManager.java:57-64` and `MeshManager.java:94-119` contain nearly identical buffer creation and upload code. Should reuse.
 - [ ] **ImageLoader incompatible with TeaVM** — `ImageLoader.java` uses `javax.imageio.ImageIO` and `java.awt.image.BufferedImage`, which don't exist in TeaVM. Web platform needs an alternative image loading path.
 - [x] **DebugUiOverlay allocated when disabled** — Fixed: set to null when debugOverlay=false, null-check on shutdown.
+- [ ] **WgpuRenderDevice.memoryFactory unused externally** — The `IntFunction<NativeMemory> memoryFactory` constructor parameter was only used internally (defaulting to `createDefaultMemory`). No external caller ever passed a custom factory. Dead parameter — remove or document intended use for TeaVM.
 
 ## Hardcoded Values (should be configurable/dynamic)
 
@@ -73,6 +74,7 @@ Deep in-depth review performed 2026-04-06 across all 497 source files.
 - [x] **Wire WindowDescriptor fields into window toolkits** — Fixed: GLFW applies resizable, decorated, highDpi, fullscreen. SDL3 applies resizable, borderless, fullscreen, highDpi.
 - [ ] **Wire presentMode into WebGPU/OpenGL backends** — VulkanConfig reads it, but OpenGlConfig and WebGpuBackend still hardcode their present mode. OpenGL should set swapInterval, WebGPU should call setPresentMode.
 - [x] **WindowDescriptor too minimal** — Added resizable, decorated, fullscreen, highDpi fields with builder pattern. Backward-compatible 3-arg constructor preserved.
+- [ ] **VulkanConfig.Builder doesn't forward GraphicsConfig settings** — `VulkanConfig.Builder` copies `headless`, `validation`, `presentMode` but doesn't copy `msaaSamples`, `srgb`, or `maxAnisotropy`. Users building via the builder pattern can't set these. Builder should expose setters for all inherited config or chain through the base class setters.
 
 ## Designed but Not Implemented (from NOTES.md)
 
@@ -314,6 +316,9 @@ Cross-backend audit performed 2026-04-06. ✅ = implemented, ⚠️ = partial/fa
 Features that modern game engines require and that each API supports natively, but are not yet exposed.
 
 ### Across All Backends
+
+- [ ] **WebGPU sRGB framebuffer not wired** — GL enables `GL_FRAMEBUFFER_SRGB`, VK auto-selects sRGB surface format, but WebGPU still uses `bgra8unorm`. Needs `bgra8unorm-srgb` surface format constant and wiring through config.
+- [ ] **Vulkan pipeline cache not persisted to disk** — Cache is created in-memory and speeds up pipeline creation within a session, but data is not saved/loaded across runs. Add save on close + load on init via `getPipelineCacheData`/`createPipelineCache(initialData)`.
 
 - [ ] **No MSAA (multisample anti-aliasing)** — GraphicsConfig declares `msaaSamples` but no backend reads it. GL needs `glTextureStorage2DMultisample` + `glBlitNamedFramebuffer` resolve. VK needs multisampled images + resolve attachments in render pass. WebGPU needs `multisample` in pipeline descriptor + resolve target. Critical for visual quality.
 - [ ] **No sRGB framebuffer support** — GraphicsConfig declares `srgb` but no backend creates sRGB swapchain/framebuffer formats. GL needs `GL_FRAMEBUFFER_SRGB`. VK needs `VK_FORMAT_B8G8R8A8_SRGB`. WebGPU needs `bgra8unorm-srgb`. Without this, all rendering is in linear space with no gamma correction.
