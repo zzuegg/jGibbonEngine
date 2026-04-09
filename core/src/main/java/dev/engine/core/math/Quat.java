@@ -27,7 +27,7 @@ public record Quat(float x, float y, float z, float w) {
 
     public Quat normalize() {
         float len = length();
-        return new Quat(x / len, y / len, z / len, w / len);
+        return len == 0f ? IDENTITY : new Quat(x / len, y / len, z / len, w / len);
     }
 
     public Vec3 rotate(Vec3 v) {

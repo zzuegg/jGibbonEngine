@@ -152,6 +152,14 @@ public class UniformManager {
                     offset = align(offset, 16);
                     BufferWriter.write(w.memory(), offset, value);
                     offset += 16;
+                } else if (key.type() == dev.engine.core.math.Vec4.class || key.type() == dev.engine.core.math.Mat4.class) {
+                    offset = align(offset, 16);
+                    BufferWriter.write(w.memory(), offset, value);
+                    offset += BufferWriter.sizeOf(key.type());
+                } else if (key.type() == Vec2.class) {
+                    offset = align(offset, 8);
+                    BufferWriter.write(w.memory(), offset, value);
+                    offset += BufferWriter.sizeOf(key.type());
                 } else {
                     BufferWriter.write(w.memory(), offset, value);
                     offset += BufferWriter.sizeOf(key.type());

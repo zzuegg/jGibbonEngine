@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class EventBus {
@@ -37,15 +38,14 @@ public class EventBus {
 
     public static class Subscription {
         private final Runnable unsubscribeAction;
-        private volatile boolean active = true;
+        private final AtomicBoolean active = new AtomicBoolean(true);
 
         Subscription(Runnable unsubscribeAction) {
             this.unsubscribeAction = unsubscribeAction;
         }
 
         public void unsubscribe() {
-            if (active) {
-                active = false;
+            if (active.compareAndSet(true, false)) {
                 unsubscribeAction.run();
             }
         }

@@ -46,7 +46,9 @@ public record Transform(Vec3 position, Quat rotation, Vec3 scale) implements Com
 
     /** Orients to look at a target from current position. */
     public Transform lookingAt(Vec3 target, Vec3 up) {
-        var dir = target.sub(position).normalize();
+        var diff = target.sub(position);
+        if (diff.lengthSquared() == 0f) return this;
+        var dir = diff.normalize();
         var forward = new Vec3(0, 0, -1);
         var dot = forward.dot(dir);
         if (dot < -0.9999f) {

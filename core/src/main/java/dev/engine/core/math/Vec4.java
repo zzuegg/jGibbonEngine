@@ -14,6 +14,6 @@ public record Vec4(float x, float y, float z, float w) {
     public float dot(Vec4 o) { return x * o.x + y * o.y + z * o.z + w * o.w; }
     public float lengthSquared() { return x * x + y * y + z * z + w * w; }
     public float length() { return (float) Math.sqrt(lengthSquared()); }
-    public Vec4 normalize() { float len = length(); return new Vec4(x / len, y / len, z / len, w / len); }
+    public Vec4 normalize() { float len = length(); return len == 0f ? ZERO : new Vec4(x / len, y / len, z / len, w / len); }
     public Vec3 xyz() { return new Vec3(x, y, z); }
 }

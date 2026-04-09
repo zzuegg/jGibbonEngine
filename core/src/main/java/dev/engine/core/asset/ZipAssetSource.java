@@ -13,7 +13,7 @@ import java.util.zip.ZipFile;
  * a ZIP entry "textures/albedo.png" or "model/textures/albedo.png" with
  * an optional strip prefix.
  */
-public class ZipAssetSource implements AssetSource {
+public class ZipAssetSource implements AssetSource, AutoCloseable {
 
     private final ZipFile zipFile;
     private final String stripPrefix;
@@ -49,6 +49,11 @@ public class ZipAssetSource implements AssetSource {
     @Override
     public boolean exists(String path) {
         return findEntry(path) != null;
+    }
+
+    @Override
+    public void close() throws IOException {
+        zipFile.close();
     }
 
     private ZipEntry findEntry(String path) {

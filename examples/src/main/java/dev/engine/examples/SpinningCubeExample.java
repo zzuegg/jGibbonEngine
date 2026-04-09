@@ -6,7 +6,6 @@ import dev.engine.core.math.Vec3;
 import dev.engine.graphics.buffer.AccessPattern;
 import dev.engine.graphics.buffer.BufferDescriptor;
 import dev.engine.graphics.buffer.BufferUsage;
-import dev.engine.core.property.PropertyMap;
 import dev.engine.graphics.command.CommandRecorder;
 import dev.engine.graphics.renderstate.RenderState;
 import dev.engine.graphics.opengl.GlRenderDevice;

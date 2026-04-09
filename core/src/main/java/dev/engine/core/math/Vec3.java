@@ -17,6 +17,6 @@ public record Vec3(float x, float y, float z) {
     public Vec3 cross(Vec3 o) { return new Vec3(y * o.z - z * o.y, z * o.x - x * o.z, x * o.y - y * o.x); }
     public float lengthSquared() { return x * x + y * y + z * z; }
     public float length() { return (float) Math.sqrt(lengthSquared()); }
-    public Vec3 normalize() { float len = length(); return new Vec3(x / len, y / len, z / len); }
+    public Vec3 normalize() { float len = length(); return len == 0f ? ZERO : new Vec3(x / len, y / len, z / len); }
     public Vec3 lerp(Vec3 o, float t) { return new Vec3(x + (o.x - x) * t, y + (o.y - y) * t, z + (o.z - z) * t); }
 }

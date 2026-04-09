@@ -97,7 +97,7 @@ public class Engine {
             });
         } else {
             this.debugUi = null;
-            this.debugUiOverlay = new DebugUiOverlay(device); // no-op overlay (not initialized)
+            this.debugUiOverlay = null;
         }
 
         log.info("Engine initialized (headless={}, threaded={}, debugOverlay={})",
@@ -213,7 +213,7 @@ public class Engine {
         stop();
         modules.shutdown();
         assets.shutdown();
-        debugUiOverlay.close();
+        if (debugUiOverlay != null) debugUiOverlay.close();
         renderer.close();
         log.info("Engine shut down");
     }

@@ -15,6 +15,6 @@ public record Vec2(float x, float y) {
     public float dot(Vec2 o) { return x * o.x + y * o.y; }
     public float lengthSquared() { return x * x + y * y; }
     public float length() { return (float) Math.sqrt(lengthSquared()); }
-    public Vec2 normalize() { float len = length(); return new Vec2(x / len, y / len); }
+    public Vec2 normalize() { float len = length(); return len == 0f ? ZERO : new Vec2(x / len, y / len); }
     public Vec2 lerp(Vec2 o, float t) { return new Vec2(x + (o.x - x) * t, y + (o.y - y) * t); }
 }
