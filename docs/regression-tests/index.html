@@ -480,7 +480,9 @@ function buildCrossMatrix(cross, backends, compact) {
   for (const be of backends) {
     h += `<div class="report-cross-cell report-cross-hdr">${BACKEND_SHORT[be] || be}</div>`;
   }
-  // Data rows — only lower triangle for compact, full for detail
+  // Data rows — full symmetric matrix. crossMap is populated with both
+  // (A|B) and (B|A) keys (see above), so every non-diagonal cell has
+  // a value to render in either compact or detail mode.
   for (let i = 0; i < backends.length; i++) {
     const beA = backends[i];
     h += `<div class="report-cross-cell report-cross-hdr">${BACKEND_SHORT[beA] || beA}</div>`;
@@ -488,9 +490,6 @@ function buildCrossMatrix(cross, backends, compact) {
       const beB = backends[j];
       if (i === j) {
         h += '<div class="report-cross-cell report-cross-self">\u2014</div>';
-      } else if (compact && j > i) {
-        // Upper triangle: empty in compact mode
-        h += '<div class="report-cross-cell report-cross-self"></div>';
       } else {
         const c = crossMap[beA + '|' + beB];
         if (c) {
