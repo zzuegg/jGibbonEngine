@@ -1,3 +1,5 @@
+import java.io.File as JFile
+
 plugins {
     java
 }
@@ -9,6 +11,46 @@ allprojects {
     repositories {
         mavenCentral()
     }
+}
+
+// ── GraalVM installation detection ──────────────────────────────────────
+// Gradle's toolchain selection cannot distinguish Oracle GraalVM from regular
+// Oracle JDK when both have the same language version — both report
+// vendor=Oracle. To let graal-* modules compile reliably regardless of which
+// Java 26 JDK is SDKMAN's current default, we scan the filesystem here and
+// expose the detected GraalVM install path to subprojects via
+// rootProject.extra["graalVmHome"]. Subprojects then use it to override
+// JavaCompile.forkOptions.javaHome, bypassing the toolchain-picked javac.
+//
+// Priority order:
+//   1. $GRAALVM_HOME environment variable
+//   2. Latest ~/.sdkman/candidates/java/*-graal with a valid bin/javac
+// Returns null if no GraalVM was found — subprojects fall back to default.
+//
+// See docs/graalwasm-toolchain.md for the full rationale.
+val detectedGraalVmHome: String? = run {
+    val envHome = System.getenv("GRAALVM_HOME")
+    if (envHome != null && JFile(envHome, "bin/javac").exists()) {
+        return@run envHome
+    }
+    val sdkman = JFile(System.getProperty("user.home"), ".sdkman/candidates/java")
+    if (!sdkman.isDirectory) return@run null
+    val entries: Array<JFile> = sdkman.listFiles() ?: return@run null
+    val graalDirs: List<JFile> = entries
+        .filter { f: JFile -> f.isDirectory && f.name.endsWith("-graal") }
+        .sortedByDescending { f: JFile -> f.name }
+    for (dir in graalDirs) {
+        if (JFile(dir, "bin/javac").exists()) {
+            return@run dir.absolutePath
+        }
+    }
+    null
+}
+rootProject.extra["graalVmHome"] = detectedGraalVmHome
+if (detectedGraalVmHome != null) {
+    logger.lifecycle("GraalVM detected at: $detectedGraalVmHome")
+} else {
+    logger.info("No GraalVM detected — graal-* modules will fall back to default toolchain selection")
 }
 
 // ── Aggregated Javadoc ──────────────────────────────────────────────────

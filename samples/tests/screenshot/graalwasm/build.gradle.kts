@@ -3,6 +3,8 @@ val graalJavaVersion = rootProject.extensions
     .named("libs")
     .findVersion("graalvm-java").orElseThrow().requiredVersion
 
+val graalVmHome = rootProject.extra["graalVmHome"] as String?
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(graalJavaVersion)
@@ -11,6 +13,12 @@ java {
 
 tasks.withType<JavaCompile> {
     options.compilerArgs.addAll(listOf("--add-modules", "org.graalvm.webimage.api"))
+    if (graalVmHome != null) {
+        // Override Gradle's toolchain-picked javac with the detected GraalVM
+        // install (see root build.gradle.kts / docs/graalwasm-toolchain.md).
+        options.isFork = true
+        options.forkOptions.javaHome = file(graalVmHome)
+    }
 }
 
 dependencies {
@@ -41,11 +49,17 @@ tasks.test {
 
 // ── WASM compilation via native-image --tool:svm-wasm ───────────────
 
-// Resolve native-image from the GraalVM toolchain
-val graalHome: Provider<String> = javaToolchains.launcherFor {
-    languageVersion = JavaLanguageVersion.of(graalJavaVersion)
-    vendor = JvmVendorSpec.ORACLE
-}.map { it.executablePath.asFile.parentFile.parentFile.absolutePath }
+// Resolve native-image from the detected GraalVM install. Prefer the path
+// picked by root build.gradle.kts (which distinguishes GraalVM from other
+// Oracle Java 26 JDKs); fall back to Gradle's toolchain if absent.
+val graalHome: Provider<String> = if (graalVmHome != null) {
+    providers.provider { graalVmHome }
+} else {
+    javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(graalJavaVersion)
+        vendor = JvmVendorSpec.ORACLE
+    }.map { it.executablePath.asFile.parentFile.parentFile.absolutePath }
+}
 
 tasks.register<Exec>("wasmCompile") {
     dependsOn(tasks.jar)
