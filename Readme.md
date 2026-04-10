@@ -1,3 +1,5 @@
+**NOTE: CURRENTLY THIS IS A TESTBED. NOT USABLE IN ANY MEANINGFULL WAY BESIDE TESTING.**
+
 <div align="center">
   <img src="docs/assets/img/mascot.svg" alt="jGibbonEngine mascot — Gibby" width="120" />
 
