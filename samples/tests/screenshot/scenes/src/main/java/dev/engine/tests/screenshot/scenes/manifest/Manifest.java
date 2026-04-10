@@ -36,6 +36,7 @@ public class Manifest {
         public String fieldName = "";
         public Set<Integer> captureFrames = Set.of(3);
         public Tolerance tolerance = Tolerance.loose();
+        public Tolerance crossBackendTolerance = Tolerance.wide();
         public int width = 256;
         public int height = 256;
         public List<KnownLimitation> knownLimitations = List.of();
@@ -142,6 +143,8 @@ public class Manifest {
         sb.append("],");
         sb.append("\"tolerance\":{\"maxChannelDiff\":").append(s.tolerance.maxChannelDiff())
           .append(",\"maxDiffPercent\":").append(s.tolerance.maxDiffPercent()).append("},");
+        sb.append("\"crossBackendTolerance\":{\"maxChannelDiff\":").append(s.crossBackendTolerance.maxChannelDiff())
+          .append(",\"maxDiffPercent\":").append(s.crossBackendTolerance.maxDiffPercent()).append("},");
         sb.append("\"width\":").append(s.width).append(",");
         sb.append("\"height\":").append(s.height).append(",");
         sb.append("\"knownLimitations\":[");
@@ -303,6 +306,7 @@ public class Manifest {
                     case "fieldName" -> s.fieldName = readString();
                     case "captureFrames" -> s.captureFrames = parseIntSet();
                     case "tolerance" -> s.tolerance = parseTolerance();
+                    case "crossBackendTolerance" -> s.crossBackendTolerance = parseTolerance();
                     case "width" -> s.width = readInt();
                     case "height" -> s.height = readInt();
                     case "knownLimitations" -> s.knownLimitations = parseKnownLimitations();

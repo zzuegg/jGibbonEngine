@@ -97,6 +97,80 @@ class ComparatorTest {
     }
 
     @Test
+    void crossBackendToleranceIsUsedForCrossBackendComparisons(@TempDir Path tmp) throws Exception {
+        // Backend A: all pixels = 200. Backend B: all pixels = 100.
+        // Pixels differ by 100 per channel. This test uses Tolerance.exact() as the
+        // crossBackendTolerance (0 diff allowed) to verify the comparator uses
+        // crossBackendTolerance, not the reference tolerance, for cross-backend comparisons.
+        byte[] pixelsA = new byte[4 * 4 * 4];
+        Arrays.fill(pixelsA, (byte) 200);
+        byte[] pixelsB = new byte[4 * 4 * 4];
+        Arrays.fill(pixelsB, (byte) 100);
+        writeScreenshot(tmp, "opengl", "scene_f3.png", pixelsA, 4, 4);
+        writeScreenshot(tmp, "vulkan", "scene_f3.png", pixelsB, 4, 4);
+
+        var manifest = createMinimalManifest();
+        // Scene with exact cross-backend tolerance (only 0% diff passes)
+        var scene = new Manifest.Scene();
+        scene.name = "scene";
+        scene.category = "basic";
+        scene.className = "Test";
+        scene.fieldName = "SCENE";
+        scene.captureFrames = Set.of(3);
+        scene.tolerance = Tolerance.loose();
+        scene.crossBackendTolerance = Tolerance.exact();
+        scene.width = 4;
+        scene.height = 4;
+        manifest.scenes.add(scene);
+        addSuccessfulRun(manifest, "scene", "opengl", 3, "opengl/scene_f3.png");
+        addSuccessfulRun(manifest, "scene", "vulkan", 3, "vulkan/scene_f3.png");
+
+        var manifestPath = tmp.resolve("manifest.json");
+        manifest.writeTo(manifestPath);
+
+        ScreenshotComparator.compare(manifestPath, tmp.resolve("screenshots"), tmp.resolve("references"));
+
+        var loaded = Manifest.readFrom(manifestPath);
+        var cross = loaded.comparisons.stream().filter(c -> "cross_backend".equals(c.type)).toList();
+        assertEquals(1, cross.size());
+        // Pixels differ by 100 channels with exact tolerance — must fail
+        assertEquals("fail", cross.get(0).status);
+        // The tolerance reported in the comparison must be the crossBackendTolerance
+        assertEquals(0, cross.get(0).tolerance.maxChannelDiff());
+        assertEquals(0.0, cross.get(0).tolerance.maxDiffPercent());
+    }
+
+    @Test
+    void crossBackendWideTolerancePassesMinorDifferences(@TempDir Path tmp) throws Exception {
+        // Pixels differ by exactly 3 per channel on all pixels.
+        // Tolerance.wide() uses maxChannelDiff=3, so the diffPercentage check uses
+        // threshold=3: the check is `Math.abs(a[i]-b[i]) > 3` which is false for diff=3,
+        // so 0% of pixels are counted as "differing" → passes the 0.5% maxDiffPercent.
+        byte[] pixelsA = new byte[4 * 4 * 4];
+        Arrays.fill(pixelsA, (byte) 100);
+        byte[] pixelsB = new byte[4 * 4 * 4];
+        Arrays.fill(pixelsB, (byte) 103);  // diff = 3 exactly
+        writeScreenshot(tmp, "opengl", "wscene_f3.png", pixelsA, 4, 4);
+        writeScreenshot(tmp, "vulkan", "wscene_f3.png", pixelsB, 4, 4);
+
+        var manifest = createMinimalManifest();
+        addScene(manifest, "wscene", 4, 4); // uses wide crossBackendTolerance by default
+        addSuccessfulRun(manifest, "wscene", "opengl", 3, "opengl/wscene_f3.png");
+        addSuccessfulRun(manifest, "wscene", "vulkan", 3, "vulkan/wscene_f3.png");
+
+        var manifestPath = tmp.resolve("manifest.json");
+        manifest.writeTo(manifestPath);
+
+        ScreenshotComparator.compare(manifestPath, tmp.resolve("screenshots"), tmp.resolve("references"));
+
+        var loaded = Manifest.readFrom(manifestPath);
+        var cross = loaded.comparisons.stream().filter(c -> "cross_backend".equals(c.type)).toList();
+        assertEquals(1, cross.size());
+        // Wide tolerance: channel diff threshold is 3, so a diff of exactly 3 does not exceed it (> 3 required)
+        assertEquals("pass", cross.get(0).status);
+    }
+
+    @Test
     void failedRunProducesSkippedComparison(@TempDir Path tmp) throws Exception {
         var manifest = createMinimalManifest();
         addScene(manifest, "crash_scene", 4, 4);

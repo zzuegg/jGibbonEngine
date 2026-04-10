@@ -43,6 +43,7 @@ public class CollectScenes {
             var config = discovered.scene().config();
             scene.captureFrames = config.captureFrames();
             scene.tolerance = config.tolerance();
+            scene.crossBackendTolerance = config.crossBackendTolerance();
             scene.width = config.width();
             scene.height = config.height();
             scene.knownLimitations = config.knownLimitations().stream()
