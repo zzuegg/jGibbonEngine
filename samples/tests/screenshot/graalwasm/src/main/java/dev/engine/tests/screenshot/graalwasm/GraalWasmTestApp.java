@@ -63,12 +63,21 @@ public class GraalWasmTestApp {
                     return JSNumber.of(1);
                 }
                 return JSNumber.of(0);
-            } catch (Exception e) {
-                System.err.println("ERROR in tick: " + e.getMessage());
+            } catch (Throwable e) {
+                // Catch Throwable so that SVM-level errors (e.g.
+                // UnsupportedOperationException from unimplemented features)
+                // surface in the test runner manifest via window._tickError.
+                System.err.println("ERROR in tick: " + e.getClass().getName() + ": " + e.getMessage());
+                e.printStackTrace();
+                exposeTickError(JSString.of(e.getClass().getName() + ": " + String.valueOf(e.getMessage())));
                 return JSNumber.of(-1);
             }
         });
     }
+
+    /** Surfaces the real exception from a tick failure to the test runner via window._tickError. */
+    @JS(args = "msg", value = "window._tickError = String(msg); console.error('[tick]', msg);")
+    private static native void exposeTickError(JSString msg);
 
     /**
      * Captures the rendered frame via device.readFramebuffer() — the same path

@@ -132,7 +132,8 @@
                             var done = globalThis._tickFrame(0, 0);
                             if (done < 0) {
                                 window._testStatus = 'error';
-                                window._testMessage = 'Tick error at frame ' + i;
+                                window._testMessage = 'Tick error at frame ' + i
+                                    + (window._tickError ? ' — ' + window._tickError : '');
                             }
                             resolve();
                         }, 0);
