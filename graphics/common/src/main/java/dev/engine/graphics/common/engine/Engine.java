@@ -21,7 +21,8 @@ import dev.engine.ui.NkFont;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-// No Executors import — use Runnable::run for cross-platform compatibility
+// Executor is obtained from Platform.moduleExecutor() — desktop provides a
+// virtual-thread executor, web/graalwasm fall back to Runnable::run.
 
 /**
  * The main engine class. Owns all core systems as a coordinated whole.
@@ -80,8 +81,10 @@ public class Engine {
         this.renderer = new Renderer(device, platform.shaderCompiler());
         this.renderer.shaderManager().setAssetManager(assets);
 
-        // Module manager — synchronous executor for cross-platform compatibility
-        this.modules = new ModuleManager<>(new VariableTimestep<>(Time::new), Runnable::run);
+        // Module manager — executor is platform-provided so that desktop can run
+        // same-level modules in parallel (virtual threads) while web/graalwasm
+        // fall back to the synchronous default.
+        this.modules = new ModuleManager<>(new VariableTimestep<>(Time::new), platform.moduleExecutor());
 
         // Debug UI (skip if disabled)
         if (config.debugOverlay()) {

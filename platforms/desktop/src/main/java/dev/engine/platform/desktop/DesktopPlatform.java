@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 /**
  * Desktop platform configuration.
@@ -34,6 +35,14 @@ import java.util.List;
 public final class DesktopPlatform implements Platform {
 
     private static final Logger log = LoggerFactory.getLogger(DesktopPlatform.class);
+
+    /**
+     * Spawns each module update on a fresh virtual thread (Java 21+).
+     * No persistent pool to shut down — virtual threads are released after the
+     * {@code Runnable} completes.
+     */
+    private static final Executor VIRTUAL_THREAD_EXECUTOR =
+            runnable -> Thread.ofVirtual().start(runnable);
 
     private final List<Path> assetRoots;
     private final ShaderCompiler compiler;
@@ -60,6 +69,11 @@ public final class DesktopPlatform implements Platform {
     @Override
     public ShaderCompiler shaderCompiler() {
         return compiler;
+    }
+
+    @Override
+    public Executor moduleExecutor() {
+        return VIRTUAL_THREAD_EXECUTOR;
     }
 
     public static Builder builder() {

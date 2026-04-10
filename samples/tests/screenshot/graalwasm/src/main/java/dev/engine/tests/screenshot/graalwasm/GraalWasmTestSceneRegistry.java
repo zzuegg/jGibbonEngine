@@ -8,6 +8,7 @@ import dev.engine.tests.screenshot.scenes.basic.HierarchyScenes;
 import dev.engine.tests.screenshot.scenes.input.InputTestScenes;
 import dev.engine.tests.screenshot.scenes.materials.MaterialScenes;
 import dev.engine.tests.screenshot.scenes.materials.MixedMaterialScenes;
+import dev.engine.tests.screenshot.scenes.module.ModuleSystemScenes;
 import dev.engine.tests.screenshot.scenes.renderstate.DepthFuncScenes;
 import dev.engine.tests.screenshot.scenes.renderstate.PerEntityRenderStateScenes;
 import dev.engine.tests.screenshot.scenes.renderstate.RenderStateScenes;
@@ -57,6 +58,9 @@ public final class GraalWasmTestSceneRegistry {
         put(map, "mixed_shaders_same_frame", MixedMaterialScenes.MIXED_SHADERS_SAME_FRAME);
         put(map, "many_same_material", MixedMaterialScenes.MANY_SAME_MATERIAL);
         put(map, "pbr_roughness_gradient", MixedMaterialScenes.PBR_ROUGHNESS_GRADIENT);
+
+        // Module system
+        put(map, "parallel_modules_operational", ModuleSystemScenes.PARALLEL_MODULES_OPERATIONAL);
 
         // Render state
         put(map, "depth_func_always", DepthFuncScenes.DEPTH_FUNC_ALWAYS);
