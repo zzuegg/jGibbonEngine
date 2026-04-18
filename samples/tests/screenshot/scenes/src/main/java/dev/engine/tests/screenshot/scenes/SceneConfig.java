@@ -14,11 +14,21 @@ import java.util.Set;
  *
  * <p>The {@link #engineConfigBuilder()} provides a partially-filled EngineConfig
  * that the runner enriches with platform/backend specifics.
+ *
+ * <p>Two tolerances are supported:
+ * <ul>
+ *   <li>{@link #tolerance()} — used for reference comparisons (strict; catches regressions
+ *       within the same backend across runs)</li>
+ *   <li>{@link #crossBackendTolerance()} — used when comparing screenshots across different
+ *       backends (permissive by default; different rendering APIs and software implementations
+ *       legitimately produce small sub-pixel differences)</li>
+ * </ul>
  */
 public record SceneConfig(
         EngineConfig.Builder engineConfigBuilder,
         Set<Integer> captureFrames,
         Tolerance tolerance,
+        Tolerance crossBackendTolerance,
         List<KnownLimitation> knownLimitations
 ) {
 
@@ -38,7 +48,15 @@ public record SceneConfig(
         }
     }
 
-    /** Default: 256x256, capture frame 3, loose tolerance, no known limitations. */
+    /**
+     * Default: 256x256, capture frame 3, loose reference tolerance,
+     * wide cross-backend tolerance, no known limitations.
+     *
+     * <p>The wide default cross-backend tolerance (0.5%) reflects that different
+     * rendering APIs (OpenGL, Vulkan, WebGPU) and different software implementations
+     * used in CI (Mesa lavapipe vs Chrome SwiftShader) legitimately produce
+     * sub-pixel differences. Reference comparisons remain strict.
+     */
     public static SceneConfig defaults() {
         return new SceneConfig(
                 EngineConfig.builder()
@@ -47,15 +65,21 @@ public record SceneConfig(
                         .debugOverlay(false),
                 Set.of(3),
                 Tolerance.loose(),
+                Tolerance.wide(),
                 List.of());
     }
 
     public SceneConfig withTolerance(Tolerance tolerance) {
-        return new SceneConfig(engineConfigBuilder, captureFrames, tolerance, knownLimitations);
+        return new SceneConfig(engineConfigBuilder, captureFrames, tolerance, crossBackendTolerance, knownLimitations);
+    }
+
+    /** Overrides the tolerance used for cross-backend comparisons. */
+    public SceneConfig withCrossBackendTolerance(Tolerance crossBackendTolerance) {
+        return new SceneConfig(engineConfigBuilder, captureFrames, tolerance, crossBackendTolerance, knownLimitations);
     }
 
     public SceneConfig withCaptureFrames(Set<Integer> captureFrames) {
-        return new SceneConfig(engineConfigBuilder, captureFrames, tolerance, knownLimitations);
+        return new SceneConfig(engineConfigBuilder, captureFrames, tolerance, crossBackendTolerance, knownLimitations);
     }
 
     /**
@@ -70,7 +94,7 @@ public record SceneConfig(
     public SceneConfig withKnownLimitation(String backend, String reason) {
         var updated = new ArrayList<>(knownLimitations);
         updated.add(new KnownLimitation(backend, reason));
-        return new SceneConfig(engineConfigBuilder, captureFrames, tolerance, updated);
+        return new SceneConfig(engineConfigBuilder, captureFrames, tolerance, crossBackendTolerance, updated);
     }
 
     /** Convenience: get window width from the builder's window descriptor. */

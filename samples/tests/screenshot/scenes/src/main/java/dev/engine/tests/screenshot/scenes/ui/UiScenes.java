@@ -4,16 +4,11 @@ import dev.engine.core.Discoverable;
 import dev.engine.core.module.AbstractModule;
 import dev.engine.core.module.Time;
 import dev.engine.graphics.common.engine.Engine;
-import dev.engine.graphics.common.engine.EngineConfig;
-import dev.engine.graphics.window.WindowDescriptor;
 import dev.engine.tests.screenshot.scenes.RenderTestScene;
 import dev.engine.tests.screenshot.scenes.SceneConfig;
 import dev.engine.tests.screenshot.scenes.Tolerance;
 import dev.engine.ui.NkColor;
 import dev.engine.ui.NkContext;
-
-import java.util.List;
-import java.util.Set;
 
 /**
  * Screenshot tests for the debug UI overlay.
@@ -31,17 +26,14 @@ public class UiScenes {
     public static final RenderTestScene DEBUG_UI_WINDOW = new RenderTestScene() {
         @Override
         public SceneConfig config() {
-            return new SceneConfig(
-                    EngineConfig.builder()
-                            .window(WindowDescriptor.builder("Test").size(256, 256).build())
-                            .maxFrames(0)
-                            .debugOverlay(true),
-                    Set.of(3),
-                    Tolerance.tight(),
-                    List.of(new SceneConfig.KnownLimitation("teavm-webgpu",
-                            "UI text rendering differs in headless Chrome"),
-                            new SceneConfig.KnownLimitation("graalwasm-webgpu",
-                            "UI text rendering differs in headless Chrome")));
+            // Enable debug overlay (non-default); then apply tight reference tolerance
+            // and wide cross-backend tolerance.
+            var cfg = SceneConfig.defaults()
+                    .withTolerance(Tolerance.tight())
+                    .withKnownLimitation("teavm-webgpu", "UI text rendering differs in headless Chrome")
+                    .withKnownLimitation("graalwasm-webgpu", "UI text rendering differs in headless Chrome");
+            cfg.engineConfigBuilder().debugOverlay(true);
+            return cfg;
         }
 
         @Override
